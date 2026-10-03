@@ -1,4 +1,4 @@
---- Reads the game into the plain snapshot that core/health.lua and core/lines_table.lua work on.
+--- Reads the game into the plain snapshot that core/health.lua works on.
 -- The only module besides the GUI that touches the engine API. Runs inside timer callbacks, so it
 -- must not call GUI-thread-only APIs (not even `_`): texts stay untranslated English keys of the
 -- base game's strings and the GUI translates them with `_()` when it renders.

@@ -3,7 +3,6 @@
     "files": [
         "ui_overhaul/core/format.lua",
         "ui_overhaul/core/health.lua",
-        "ui_overhaul/core/lines_table.lua",
         "ui_overhaul/core/notification_groups.lua",
         "ui_overhaul/engine/snapshot.lua",
         "ui_overhaul/engine/store.lua",

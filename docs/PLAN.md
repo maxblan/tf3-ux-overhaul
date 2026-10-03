@@ -18,6 +18,15 @@ Done in v2:
 - Construction: merged menus, fastest track first, module tab order, bulldozer warning for stations in use.
 - Earnings tooltip; vehicle store lists the newest model first.
 
+Added later the same day at the user's request:
+- Line Manager line rows show the line's cargo types (up to three icons, as in the Statistics Lines tab).
+- Model row above the Line Manager's vehicle list: select one model, or that model from all lines, for Replace, Sell or Send to Depot; Shift+click on a vehicle selects its model. The station-click guard also covers vehicles selected from several lines.
+- Select Terminals: three buttons per terminal instead of a drop-down list (one click per change). Wraps `popover_react_util.PopoverWindowContent` as a module field, so Auto Assign Terminals keeps its replacement.
+- Notification icons of the same kind are grouped with a count; left-click visits each, right-click dismisses the group. Which notifications appear is unchanged.
+- Stops card ids are unique per line window (two line windows caused a React error).
+
+Open before release: the user's manual test pass, and reproducing the crash seen while replacing a train on a timetabled line (the log points at Timetables or the game, not this mod).
+
 The next candidates are ranked in [flows_audit_v2.md](flows_audit_v2.md).
 
 ## Original v1 plan (historical record)
