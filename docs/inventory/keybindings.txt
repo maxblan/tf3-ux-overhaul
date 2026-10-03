@@ -1,0 +1,192 @@
+ACTION_CLICK	-	-
+ACTION_REDUCE	-	-
+ACTION_SCROLL_DOWN	-	-
+ACTION_SCROLL_LEFT	-	-
+ACTION_SCROLL_RIGHT	-	-
+ACTION_SCROLL_UP	-	-
+ACTION_TAB_NEXT	-	-
+ACTION_TAB_PREV	-	-
+A_DELETE_SAVE	-	-
+IA_ABORT	-	b
+IA_APPLY	-	a
+IA_BACK	Mouse3, Mouse4	b
+IA_CAMERA_PAN	-	Left Stick
+IA_CAMERA_ROTATE_DUMMY_RADIAL	-	Right Stick
+IA_CAMERA_ROTATE_X	-	rightx
+IA_CAMERA_TILT	-	righty
+IA_CAMERA_ZOOM_IN	-	righttrigger
+IA_CAMERA_ZOOM_OUT	-	lefttrigger
+IA_CAMPAIGN_MISSION_MENU_OPEN	-	leftshoulder
+IA_CHANGE_BUILD_MODE	-	x
+IA_CLOSE_ALL_LONGPRESS	-	-
+IA_CLOSE_TOPMOST_WINDOW	Escape, Mouse3, Mouse4	b
+IA_COLOR_SELECT	-	-
+IA_CONSTRUCTION_ACTION_CANCEL	Escape, Mouse3, Mouse4	b
+IA_CONSTRUCTION_CYCLE_NEXT	-	x
+IA_CONTEXT_HELP	F1	leftstick
+IA_CYCLE_LEFT	-	-
+IA_CYCLE_RIGHT	-	-
+IA_DEBUG_CONSTRUCTION_MENU	Shift+Right Alt+B	-
+IA_DEBUG_DECREASE_FONT_SCALE	Right Alt+Keypad -	-
+IA_DEBUG_INCREASE_FONT_SCALE	Right Alt+Keypad +	-
+IA_DEBUG_OUTPUT_COMPONENT_UNDER_CURSOR	Right Alt+A	-
+IA_DEBUG_OUTPUT_FOCUSED_COMPONENT	Right Alt+F1	touchpad+y
+IA_DEBUG_RELOAD_DEFINITIONS	Right Alt+R	-
+IA_DEBUG_RELOAD_REACT_COMPONENT	Shift+Right Alt+R	-
+IA_DEBUG_RELOAD_SHADERS	Right Alt+T	touchpad+rightshoulder
+IA_DEBUG_RELOAD_STATE_PROVIDER	Right Alt+F5	-
+IA_DEBUG_TOGGLE_FORCED_INPUT_MODE	Right Alt+` (grave)	-
+IA_DOWN	-	dpdown, LeftStick Down
+IA_DOWN_2	Down	-
+IA_ENHANCED_SNAP	Alt	-
+IA_GAME_DEBUG_CYCLE_SHOW_TIMINGS	Right Alt+I	touchpad+b
+IA_GAME_DEBUG_DEVELOP_NEW_TOWN_BUILDINGS	Right Alt+Y	-
+IA_GAME_DEBUG_DEVELOP_TOWN	Right Alt+V	-
+IA_GAME_DEBUG_ENV_AUDIO_EMITTER_TOGGLE_DEBUG_RENDER	Right Alt+E	-
+IA_GAME_DEBUG_GUI_TOGGLE_VISIBILITY	Right Alt+G	-
+IA_GAME_DEBUG_SHOW_BOUNDING_BOXES	Right Alt+B	-
+IA_GAME_DEBUG_SHOW_LANES	Right Alt+L	-
+IA_GAME_DEBUG_TOGGLE_DEBUG_WINDOW	Right Alt+D	touchpad+x
+IA_GAME_PAUSE_OR_CYCLE_SPEED	-	rightstick
+IA_GAME_SCREENSHOT	F9	touchpad+rightshoulder
+IA_GAME_TOGGLE_CAMERA_MANAGER_WINDOW	Right Alt+Z	-
+IA_GUIDE	F1	leftstick
+IA_INSPECTOR	-	x
+IA_INVERT_ACTION	<	-
+IA_LEFT	-	dpleft, LeftStick Left
+IA_LEFT_2	Left	-
+IA_LEFT_OR_RIGHT	-	dpleft, dpright, LeftStick Left, LeftStick Right
+IA_MANAGEMENT_MODE	L	-
+IA_MENU	Escape	start
+IA_MENU_BACK	Escape, Mouse3, Mouse4	b
+IA_MOUSE_MIDDLE	Mouse2	-
+IA_MOVEDOWN	-	RightTrigger
+IA_MOVEUP	-	LeftTrigger
+IA_NAV_ACTIVATE	Return, Keypad Enter	-
+IA_NAV_ACTIVATE_SPACE	Space	-
+IA_NAV_DOWN	-	dpdown, LeftStick Down
+IA_NAV_END	End	-
+IA_NAV_LEFT	-	dpleft, LeftStick Left
+IA_NAV_PAGE_DOWN	PageDown	-
+IA_NAV_PAGE_UP	PageUp	-
+IA_NAV_RECURSIVE_LEFT	Shift+Tab, Ctrl+Tab	-
+IA_NAV_RECURSIVE_RIGHT	Tab	-
+IA_NAV_RIGHT	-	dpright, LeftStick Right
+IA_NAV_START	Home	-
+IA_NAV_UP	-	dpup, LeftStick Up
+IA_NEXT_VARIANT	-	leftstick
+IA_NOTIFICATIONS_OPEN	-	rightshoulder
+IA_OPTION1	-	x
+IA_OPTION1_LONG	-	x
+IA_OPTION2	-	y
+IA_OPTION2_LONG	-	y
+IA_OPTION3	-	leftshoulder
+IA_OPTION4	-	rightshoulder
+IA_PRECISION_MODE	Shift	-
+IA_QUICKSAVE	F10	-
+IA_RADIAL_MENU	-	y
+IA_RADIAL_MENU_ORIENTATION	-	Left Stick, Right Stick
+IA_REDUCE	-	rightshoulder
+IA_REMOVE	-	-
+IA_RIGHT	-	dpright, LeftStick Right
+IA_RIGHT_2	Right	-
+IA_SCROLL_DOWN	-	RightStick Down
+IA_SCROLL_RADIAL	-	Right Stick
+IA_SCROLL_UP	-	RightStick Up
+IA_SECONDARY_MODE	Ctrl	-
+IA_SELECT	-	a
+IA_SELECT_ALL	Return (long press)	a
+IA_SELECT_STATISTICS_DEPOTS	F6	-
+IA_SELECT_STATISTICS_INDUSTRIES	F8	-
+IA_SELECT_STATISTICS_LINES	F2	-
+IA_SELECT_STATISTICS_STATIONS	F4	-
+IA_SELECT_STATISTICS_TOWNS	F7	-
+IA_SELECT_STATISTICS_VEHICLES	F3	-
+IA_SELECT_STATISTICS_WAREHOUSES	F5	-
+IA_SKIP_VOICEOVER_AND_CUTSCENE	Escape	rightshoulder
+IA_TABLEFT	-	leftshoulder
+IA_TABRIGHT	-	rightshoulder
+IA_TEXT_ACCEPT	Return, Keypad Enter	-
+IA_TEXT_COPY	Ctrl+C	-
+IA_TEXT_CUT	Ctrl+X	-
+IA_TEXT_DELETE_LEFT	Backspace	-
+IA_TEXT_DELETE_RIGHT	Delete	-
+IA_TEXT_PASTE	Ctrl+V, Shift+Insert	-
+IA_TEXT_SELECTION_MOVE_BEGINNING	Home	-
+IA_TEXT_SELECTION_MOVE_DOWN	Down	-
+IA_TEXT_SELECTION_MOVE_END	End	-
+IA_TEXT_SELECTION_MOVE_LEFT	Left	-
+IA_TEXT_SELECTION_MOVE_RIGHT	Right	-
+IA_TEXT_SELECTION_MOVE_UP	Up	-
+IA_TEXT_SELECTION_MOVE_WORD_LEFT	Ctrl+Left	-
+IA_TEXT_SELECTION_MOVE_WORD_RIGHT	Ctrl+Right	-
+IA_TEXT_SELECT_ALL	Ctrl+A	-
+IA_TOGGLE_LAYER_BUTTON_RIDGE	-	-
+IA_TOGGLE_LAYER_BUTTON_RIDGE_CONSTRUCTION	-	leftshoulder+x
+IA_TOGGLE_LAYER_CARGO	Keypad 7	-
+IA_TOGGLE_LAYER_CARGO_FLOW	Keypad 6	-
+IA_TOGGLE_LAYER_CIVILIZATION	Keypad 1	-
+IA_TOGGLE_LAYER_INFRASTRUCTURE	Keypad 2	-
+IA_TOGGLE_LAYER_NOISE	Keypad 8	-
+IA_TOGGLE_LAYER_PASSENGER_FLOW	Keypad 4	-
+IA_TOGGLE_LAYER_POLLUTION	Keypad 9	-
+IA_TOGGLE_LAYER_PUBLIC_TRANSPORT	Keypad 5	-
+IA_TOGGLE_LAYER_TERRAIN	Keypad 0	-
+IA_TOGGLE_LAYER_TRAFFIC	Keypad 3	-
+IA_TOGGLE_MOD_SETTINGS_CONSTRUCTION	-	leftshoulder+y
+IA_UNDERGOUND_MODE_TOGGLE	G	leftshoulder+dpdown
+IA_UP	-	dpup, LeftStick Up
+IA_UP_2	Up	-
+camToolAddKeyframe	Insert	-
+camToolCapture	Return	-
+camToolClearKeyframes	Home	-
+camToolLoad	-	-
+camToolPause	-	-
+camToolPlay	-	-
+camToolPlayPause	Space	-
+camToolPlayStop	-	-
+camToolSave	-	-
+camToolStartRecording	Return	-
+camToolStop	Backspace	-
+cameraMoveDown	S	-
+cameraMoveLeft	A	-
+cameraMoveRight	D	-
+cameraMoveUp	W	-
+cameraRotateLeft	Q	-
+cameraRotateRight	E	-
+cameraTiltDown	F	-
+cameraTiltUp	R	-
+cameraZoomIn	X	-
+cameraZoomOut	Z	-
+cockpitCameraHorn	H	-
+cockpitCameraPosNext	PageUp	dpright
+cockpitCameraPosPrevious	PageDown	dpleft
+constructAlignToTerrain	T	leftshoulder+dpup
+constructLower	,, Keypad -	dpdown
+constructNoSnap	C	-
+constructOpt1	M	dpright
+constructOpt2	N	dpleft
+constructOpt5	O	leftshoulder+dpdown
+constructOpt6	P	leftshoulder+dpup
+constructOpt7	[	leftshoulder+dpleft
+constructOpt8	]	leftshoulder+dpright
+constructRaise	., Keypad +	dpup
+dummyModifierMultiselect	Ctrl	-
+gameCycleSpeed	Tab	-
+gamePause	Space	-
+selectAir	sc4	-
+selectBulldozer	B	b
+selectCameraTool	-	-
+selectModuleBulldozer	B	x
+selectMusicPlayer	-	-
+selectNotifications	F11	-
+selectPerks	sc8	-
+selectRail	sc2	-
+selectRoad	sc1	-
+selectRoads	sc5	-
+selectTerrain	sc9	-
+selectTracks	sc6	-
+selectWarehouse	sc7	-
+selectWater	sc3	-
+uiCloseAll	Delete	-
+uiConsole	` (grave)	-

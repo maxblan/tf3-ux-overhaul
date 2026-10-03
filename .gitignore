@@ -1,0 +1,6 @@
+node_modules/
+tools/lua/vendor/
+dist/
+spec/ingame/results/
+spec/ingame/last_run.txt
+.game/

@@ -1,0 +1,9 @@
+{
+    "archives": null,
+    "files": [
+        "ux_overhaul/logger.lua",
+        "ux_overhaul/main.gs.lua",
+        "ux_overhaul/main.script.lua",
+        "ux_overhaul/track_stats.lua"
+    ]
+}

@@ -1,0 +1,8 @@
+return {
+	default = {
+		ROOT = { "spec" },
+		pattern = "_spec",
+		helper = "spec/support/setup.lua",
+		["exclude-pattern"] = "ingame",
+	},
+}

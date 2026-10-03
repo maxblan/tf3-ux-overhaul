@@ -1,0 +1,11 @@
+{
+    "archives": null,
+    "files": [
+        "ux_overhaul_testbench/app_script.lua",
+        "ux_overhaul_testbench/scenarios.lua",
+        "ux_overhaul_testbench/site.lua",
+        "ux_overhaul_testbench/testbench.gs.lua",
+        "ux_overhaul_testbench/testbench.script.lua",
+        "ux_overhaul_testbench/track_builder.lua"
+    ]
+}

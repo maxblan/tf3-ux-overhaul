@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <title>UX Overhaul</title>
+  <!-- Placeholder preview (1920x1080, like the official mods). Replace with your own artwork;
+       make preview renders it to src/ux_overhaul/_metadata/0.png. -->
+  <defs>
+    <radialGradient id="background-fill" cx="960" cy="420" r="1150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a4c68"/><stop offset="0.55" stop-color="#173047"/><stop offset="1" stop-color="#0a1622"/>
+    </radialGradient>
+  </defs>
+  <rect id="background" width="1920" height="1080" fill="url(#background-fill)"/>
+  <g id="track" transform="translate(960 540) rotate(-30)">
+    <rect class="sleeper" x="-558" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-468" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-378" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-288" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-198" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-108" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="-18" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="72" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="162" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="252" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="342" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="432" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="sleeper" x="522" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
+    <rect class="rail" x="-640" y="-96" width="1280" height="22" rx="4" fill="#ffffff"/>
+    <rect class="rail" x="-640" y="74" width="1280" height="22" rx="4" fill="#ffffff"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+{
+  "name": "tf3-mod-lua-tools",
+  "private": true,
+  "description": "Lua tooling for TF3 mods without a native Lua: specs and luacheck on fengari.",
+  "scripts": {
+    "test": "node run_specs.js"
+  },
+  "dependencies": {
+    "fengari": "0.1.4"
+  }
+}

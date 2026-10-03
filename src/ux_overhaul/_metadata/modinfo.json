@@ -1,0 +1,15 @@
+{
+    "authors": [
+        {
+            "name": "FalconsSky",
+            "role": "CREATOR"
+        }
+    ],
+    "description": "Describe what the mod does, how, and its limits. Shown on mod.io and in the in-game mod browser.",
+    "name": "UX Overhaul",
+    "summary": "One sentence shown on mod tiles.",
+    "tags": [
+        "Script Mod"
+    ],
+    "url": ""
+}

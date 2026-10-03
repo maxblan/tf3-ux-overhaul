@@ -1,0 +1,8 @@
+{
+  "name": "tf3-mod-preview",
+  "private": true,
+  "description": "Renders assets/preview.svg to the mod's preview image.",
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2"
+  }
+}
