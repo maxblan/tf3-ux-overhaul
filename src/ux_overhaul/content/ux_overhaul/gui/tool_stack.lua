@@ -18,6 +18,16 @@ local builtin = require("::/gui/main/builtin.lua")
 
 local tool_stack = {}
 
+--- Functions called with the stack entry whenever a tool is popped (e.g. lvm_tweaks.lua).
+tool_stack.on_pop = {}
+
+local function notify_pop(entry)
+	for _i, hook in ipairs(tool_stack.on_pop) do
+		local ok, err = pcall(hook, entry)
+		if not ok then debugPrint("[ux_overhaul] tool pop hook failed: ", tostring(err)) end
+	end
+end
+
 -- UXO: tools whose windows may stay open next to each other and survive clear().
 local WINDOW_TOOLS = { Statistics = true, Manager = true, Finances = true, Company = true, NotificationLog = true }
 local ENTITY_TOOL = "EntityDetailsTool"
@@ -142,6 +152,7 @@ local function render(params)
 				shelveNonTop(newStack)
 			else
 				shelveNonTop(newStack)
+				if removed then notify_pop(removed) end
 				if removed and removed.toolDef.pop then
 					removed.toolDef.pop(removed.ctx, removed.params)
 				end
@@ -200,6 +211,7 @@ local function render(params)
 				if is_default(entry) or is_window_tool(entry) or (keep_entity_windows and is_entity_window(entry)) then
 					newStack[#newStack + 1] = entry
 				else
+					notify_pop(entry)
 					if entry.toolDef.pop then entry.toolDef.pop(entry.ctx, entry.params) end
 					dropChildIds:get()[entry.ctx.localKey] = true
 					entry.ctx.setActionFn(nil, nil)

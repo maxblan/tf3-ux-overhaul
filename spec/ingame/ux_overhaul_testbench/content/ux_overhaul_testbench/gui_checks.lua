@@ -98,9 +98,43 @@ local checks = {
 		end,
 	},
 	{
+		name = "line_manager_remembers_line",
+		act = function()
+			api.gui.fireReactEvent("closeStatisticsWindow", nil)
+			api.gui.fireReactEvent("closeVehicleManager", nil)
+		end,
+		wait = 30,
+		check = function()
+			api.gui.fireReactEvent("openVehicleManager", {}) -- like the game bar button
+			return true, "reopened without a target"
+		end,
+	},
+	{
+		name = "line_manager_remembered_shot",
+		wait = 60,
+		shot = "line_manager_remembered",
+		check = function()
+			return visible("menu.management"), "line manager visible=" .. tostring(visible("menu.management"))
+		end,
+	},
+	{
+		name = "clone_many_asks_first",
+		act = function(ctx)
+			local vehicles = ctx.card_line and line_vehicles(ctx.card_line) or {}
+			ctx.clone_before = #vehicles
+			if #vehicles >= 2 then api.gui.fireReactEvent("uxo.debug.clone", { vehicles[1], vehicles[2] }) end
+		end,
+		wait = 300,
+		check = function(ctx)
+			if (ctx.clone_before or 0) < 2 then return true, "skipped: fewer than 2 vehicles" end
+			local after = #line_vehicles(ctx.card_line)
+			return after == ctx.clone_before, string.format("vehicles %d -> %d (expect no purchase before confirming)",
+				ctx.clone_before, after)
+		end,
+	},
+	{
 		name = "line_window_card",
 		act = function(ctx)
-			api.gui.fireReactEvent("closeStatisticsWindow", nil)
 			api.gui.fireReactEvent("closeVehicleManager", nil)
 			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = false }) end
 		end,

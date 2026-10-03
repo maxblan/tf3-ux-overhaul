@@ -7,6 +7,7 @@ local react = require("::/gui/main/react.lua")
 local store = require("/ux_overhaul/engine/store.lua")
 local actions = require("/ux_overhaul/gui/actions.lua")
 local cleanup = require("/ux_overhaul/gui/cleanup.lua")
+local lvm_tweaks = require("/ux_overhaul/gui/lvm_tweaks.lua")
 local ui = require("/ux_overhaul/gui/ui.lua")
 
 local entry = {}
@@ -14,7 +15,19 @@ local entry = {}
 function entry.render()
 	react.onEvent(actions.ACTION_EVENT, function(_e, param) actions.run(param) end)
 	react.onStepTimer(store.refresh, store.REFRESH_SECONDS)
-	react.onStep(cleanup.step)
+	react.onEvent("openVehicleManager", function(_e, param) lvm_tweaks.on_open(param) end)
+	-- testbench: send a clone of `vehicles` the way the Line Manager does; expects the confirmation
+	react.onEvent("uxo.debug.clone", function(_e, vehicles)
+		react.fireEvent(nil, "duplicateVehicles", {
+			vehicleEntities = vehicles,
+			addFeedback = function(text, mode) debugPrint("[ux_overhaul] feedback ", tostring(mode), " ", tostring(text)) end,
+			onBuy = function() end,
+		})
+	end)
+	react.onStep(function()
+		cleanup.step()
+		lvm_tweaks.step()
+	end)
 	return ui.row({})
 end
 

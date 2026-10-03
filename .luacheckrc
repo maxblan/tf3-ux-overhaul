@@ -3,7 +3,7 @@ std = "lua52"
 
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
-read_globals = { "api", "app", "debugPrint", "_", "pGetText" }
+read_globals = { "api", "app", "debugPrint", "_", "pGetText", "nGetText" }
 -- Variables named with a leading underscore are intentionally unused.
 ignore = { "21./_.*" }
 
