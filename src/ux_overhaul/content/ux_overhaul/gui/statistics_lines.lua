@@ -20,20 +20,16 @@ local react = require("::/gui/main/react.lua")
 local statistics_react_util = require("::/gui/statistics/statistics_react_util.tl")
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
 local base_lines_statistic = require("::/gui/statistics/statistic_lines.tl")
+local statistics_common = require("/ux_overhaul/gui/statistics_common.lua")
 
 local statistics_lines = {}
 
 local styleClassRightAligned = "right-aligned"
 
 -- Quick filter of the tab; kept for the session so reopening the window shows the same rows.
-local QUICK_FILTERS = { "all", "losing", "problems", "empty" }
 local quick_filter = "all"
 
-local function line_balance(lineEntity)
-	local gameTime = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
-	local fromTime = math.max(gameTime - api.util.getDefaultYearDuration(), 0)
-	return api.engine.util.finance.calculateBalance({ lineEntity }, fromTime, gameTime, true)
-end
+local line_balance = statistics_common.balance
 
 local function rightAlignedText(text, tag)
 	return builtin.BoxLayout{
@@ -179,28 +175,10 @@ end
 
 -- Quick filters and totals ------------------------------------------------------------------------
 
--- getProblemsCompareValue returns { count, ids } (statistics_react_util.tl)
-local function hasProblems(notificationsState, lineEntity)
-	local value = statistics_react_util.getProblemsCompareValue(notificationsState or {}, lineEntity)
-	if type(value) == "table" then return (value[1] or 0) > 0 end
-	return type(value) == "number" and value > 0
-end
+local hasProblems = statistics_common.hasProblems
 
 -- Balances for the "Losing money" filter, refreshed at most once a second instead of every frame.
-local balance_cache = { time = -1, values = {} }
-
-local function cached_balance(lineEntity)
-	local gameTime = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
-	if gameTime - balance_cache.time > 1000 or gameTime < balance_cache.time then
-		balance_cache.time, balance_cache.values = gameTime, {}
-	end
-	local value = balance_cache.values[lineEntity]
-	if value == nil then
-		value = line_balance(lineEntity)
-		balance_cache.values[lineEntity] = value
-	end
-	return value
-end
+local cached_balance = statistics_common.makeBalanceCache()
 
 local function passesQuickFilter(filter, notificationsState, lineEntity)
 	if filter == "losing" then return cached_balance(lineEntity) < 0 end
@@ -209,33 +187,24 @@ local function passesQuickFilter(filter, notificationsState, lineEntity)
 	return true
 end
 
-local QUICK_FILTER_LABELS = { all = "All", losing = "Losing money", problems = "Problems", empty = "No vehicles" }
-
 --- Quick filters on the left, totals of the rows shown on the right, in one line above the table.
 local function QuickFilterBar(selected, onSelect, totals)
-	local buttons, selectedIndex = {}, 1
-	for i, key in ipairs(QUICK_FILTERS) do
-		buttons[i] = { content = builtin.TextView{ meta = { class = "font-scale-body" }, text = _(QUICK_FILTER_LABELS[key]) },
-			meta = { tag = "uxo.statistics.filter." .. key } }
-		if key == selected then selectedIndex = i end
-	end
-	local balanceClass = totals.balance < 0 and "font-scale-body, negative" or "font-scale-body, positive"
-	return builtin.BoxLayout{
-		meta = { class = "uxo-statistics-quick-filters" },
-		orientation = builtin.type.Orientation.Horizontal,
-		children = {
-			builtin.ToggleButtonGroup{
-				buttons = buttons,
-				selected = selectedIndex,
-				onValueChange = function(index) onSelect(QUICK_FILTERS[index]) end,
-			},
-			gui_react_util.makeHorizontalSpacer(),
-			builtin.TextView{ meta = { class = "font-scale-body", id = "uxo.statistics.totals" },
-				text = lang_util.format(_("{lines} lines, {vehicles} vehicles"),
-					{ lines = lang_util.formatInt(totals.lines), vehicles = lang_util.formatInt(totals.vehicles) }) },
-			builtin.TextView{ meta = { class = "font-scale-body" }, text = _("Balance") },
-			builtin.TextView{ meta = { class = balanceClass }, text = api.util.formatMoney(totals.balance) },
+	return statistics_common.QuickFilterBar{
+		filters = {
+			{ key = "all", label = _("All") },
+			{ key = "losing", label = _("Losing money") },
+			{ key = "problems", label = _("Problems") },
+			{ key = "empty", label = _("No vehicles") },
 		},
+		selected = selected,
+		onSelect = onSelect,
+		tagPrefix = "uxo.statistics.filter.",
+		totalsId = "uxo.statistics.totals",
+		totalsText = lang_util.format(_("{lines} lines, {vehicles} vehicles"),
+			{ lines = lang_util.formatInt(totals.lines), vehicles = lang_util.formatInt(totals.vehicles) }),
+		amountLabel = _("Balance"),
+		amount = totals.balance,
+		amountClass = statistics_common.balanceClass(totals.balance),
 	}
 end
 

@@ -69,9 +69,45 @@ local checks = {
 		check = function() return visible("uxo.statistics.totals"), "filtered table shown" end,
 	},
 	{
+		name = "statistics_vehicles_old",
+		act = function()
+			api.gui.fireReactEvent("openStatisticsWindow", "Vehicle")
+			api.gui.fireReactEvent("uxo.statistics.vehicles.filter", "old")
+		end,
+		wait = 120,
+		shot = "statistics_vehicles_old",
+		check = function()
+			return visible("uxo.statistics.vehicles.totals"),
+				"vehicles totals visible=" .. tostring(visible("uxo.statistics.vehicles.totals"))
+		end,
+	},
+	{
+		name = "statistics_stations_nolines",
+		act = function()
+			api.gui.fireReactEvent("uxo.statistics.vehicles.filter", "all")
+			api.gui.fireReactEvent("openStatisticsWindow", "Station")
+			api.gui.fireReactEvent("uxo.statistics.stations.filter", "nolines")
+		end,
+		wait = 120,
+		shot = "statistics_stations_nolines",
+		check = function()
+			return visible("uxo.statistics.stations.totals"),
+				"stations totals visible=" .. tostring(visible("uxo.statistics.stations.totals"))
+		end,
+	},
+	{
+		name = "statistics_stations_crowded",
+		act = function() api.gui.fireReactEvent("uxo.statistics.stations.filter", "crowded") end,
+		wait = 90,
+		shot = "statistics_stations_crowded",
+		check = function() return visible("uxo.statistics.stations.totals"), "crowded filter" end,
+	},
+	{
 		name = "windows_side_by_side",
 		act = function(ctx)
 			api.gui.fireReactEvent("uxo.statistics.filter", "all")
+			api.gui.fireReactEvent("uxo.statistics.stations.filter", "all")
+			api.gui.fireReactEvent("openStatisticsWindow", "Line")
 			ctx.card_line = busiest_line()
 			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line })
 		end,
@@ -260,6 +296,24 @@ local checks = {
 		wait = 120,
 		shot = "configure_modules",
 		check = function(ctx) return true, "construction=" .. tostring(ctx.configure) end,
+	},
+	{
+		name = "vehicle_store_newest_first",
+		act = function(ctx)
+			api.gui.fireReactEvent("clearToolStack", nil)
+			local depots = api.engine.getEntitiesWithComponent(api.type.ComponentType.VEHICLE_DEPOT)
+			for _i, depot in ipairs(depots) do
+				local component = api.engine.getComponent(depot, api.type.ComponentType.VEHICLE_DEPOT)
+				if component and component.carrier == api.type.enum.Carrier.ROAD then ctx.depot = depot break end
+			end
+			ctx.depot = ctx.depot or depots[1]
+			if ctx.depot then
+				api.gui.fireReactEvent("buyVehicles", { title = "Test", depot = ctx.depot, carrier = api.type.enum.Carrier.ROAD })
+			end
+		end,
+		wait = 120,
+		shot = "vehicle_store",
+		check = function(ctx) return true, "depot=" .. tostring(ctx.depot) end,
 	},
 	{
 		name = "action_add_vehicle",

@@ -2,10 +2,13 @@
 	"en": {
 		"30 days before": "30 days before",
 		"Add Vehicle": "Add Vehicle",
+		"Crowded": "Crowded",
 		"Last 30 days": "Last 30 days",
 		"Limited by {factor}": "Limited by {factor}",
 		"Losing money": "Losing money",
+		"No lines": "No lines",
 		"No vehicles": "No vehicles",
+		"Old": "Old",
 		"Profit or loss in the last 12 months": "Profit or loss in the last 12 months",
 		"Promotion pending - open the Company window to unlock": "Promotion pending - open the Company window to unlock",
 		"Remove Vehicle": "Remove Vehicle",
@@ -14,15 +17,20 @@
 		"Replace {count} vehicles for {cost}?": "Replace {count} vehicles for {cost}?",
 		"Replace {count} vehicles?": "Replace {count} vehicles?",
 		"Waiting": "Waiting",
+		"{count} stations": "{count} stations",
+		"{count} vehicles": "{count} vehicles",
 		"{lines} lines, {vehicles} vehicles": "{lines} lines, {vehicles} vehicles"
 	},
 	"de": {
 		"30 days before": "30 Tage davor",
 		"Add Vehicle": "Fahrzeug hinzufügen",
+		"Crowded": "Überfüllt",
 		"Last 30 days": "Letzte 30 Tage",
 		"Limited by {factor}": "Begrenzt durch {factor}",
 		"Losing money": "Verlust",
+		"No lines": "Keine Linien",
 		"No vehicles": "Keine Fahrzeuge",
+		"Old": "Alt",
 		"Profit or loss in the last 12 months": "Gewinn oder Verlust der letzten 12 Monate",
 		"Promotion pending - open the Company window to unlock": "Beförderung ausstehend – zum Freischalten das Unternehmensfenster öffnen",
 		"Remove Vehicle": "Fahrzeug entfernen",
@@ -31,6 +39,8 @@
 		"Replace {count} vehicles for {cost}?": "{count} Fahrzeuge für {cost} ersetzen?",
 		"Replace {count} vehicles?": "{count} Fahrzeuge ersetzen?",
 		"Waiting": "Wartend",
+		"{count} stations": "{count} Stationen",
+		"{count} vehicles": "{count} Fahrzeuge",
 		"{lines} lines, {vehicles} vehicles": "{lines} Linien, {vehicles} Fahrzeuge"
 	}
 }

@@ -1,5 +1,19 @@
 # UX Overhaul — plan
 
+> **Status 2026-10-03: direction v2.** The user decided to improve the existing vanilla screens in place
+> instead of adding new UI (status strip, launcher, Control Center and notifications were built, then
+> removed). Binding rules: vanilla look, minimal cognitive load, new UI only when unavoidable, no new
+> notifications, gameplay screens only (no save/load/menu changes). Sections 4–5 below describe the
+> original v1 plan and are kept for reference; what is built is listed in "Done (v2)" and the next
+> candidates are ranked in [flows_audit_v2.md](flows_audit_v2.md).
+>
+> **Done (v2):** Line Manager row figures, selection memory, clone/replace confirmations, safe station
+> click with several lines; line window Add/Remove Vehicle and Stops card; Statistics Lines quick
+> filters + totals + sorting fixes (Vehicles/Stations tabs in progress); side-by-side tool windows that
+> survive map clicks; remembered sections; Sell confirmation; town growth bottleneck; promotion-pending
+> reason; construction menu merges, fastest track first, module tab order, bulldozer station warning;
+> Earnings tooltip; vehicle store newest first.
+
 Goal: the player sees the state of the network **without clicking** and can act on it **where they see it**, in the fewest clicks. This plan is based on the code-level inventory in [inventory/](inventory/README.md).
 
 ## 1. Design principles

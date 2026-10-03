@@ -1,78 +1,56 @@
-# Transport Fever 3 mod template
+# UX Overhaul
 
-Starting point for Transport Fever 3 (TF3) script mods. It comes with offline specs against a mock engine, luacheck, automated in-game tests, the game's own validation, a preview image pipeline and deployment to the game's staging area. It is extracted from [Tunnel Portal Fix](https://github.com/maxblan/tunnel-portal-fix), whose README shows the tooling in use.
+A Transport Fever 3 mod that makes the game's own screens faster to read and quicker to act in. It adds no new windows or notifications: the vanilla Line Manager, Statistics, entity windows and construction menu simply show more and need fewer clicks, so there is nothing new to learn.
 
-## Start a new mod
+## What changes
 
-1. On GitHub, click **Use this template**, then clone your new repository.
-2. Rename the placeholder mod:
-   ```bash
-   tools/init.sh signal_tweaks "Signal Tweaks"
-   ```
-3. Install the tooling and check that everything passes:
-   ```bash
-   make deps
-   make lint test
-   ```
+**Line Manager**
+- Every line row shows its vehicle count and 12-month balance (red when losing money); every vehicle row shows its age (red once the lifespan is reached).
+- Reopening it selects the line you had selected before.
+- Cloning several vehicles at once, or replacing several, asks first, using the Line Manager's own prompt. With two or more lines ticked, clicking a station creates a new line without moving all their vehicles onto it.
 
-The example mod (`main.script.lua`) logs how many track edges every build adds. Replace it with your own logic.
+**Line window**
+- The Vehicles card has *Add Vehicle* (a copy of the line's newest vehicle) and *Remove Vehicle* (sends the oldest to a depot and sells it there).
+- A *Stops* card lists every stop with its waiting passengers (cargo in the tooltip).
 
-## Layout
+**Statistics**
+- Lines: quick filters *All / Losing money / Problems / No vehicles*, and the totals of the rows shown (lines, vehicles, balance). Vehicles sort by count, Balance sorts by the value it shows.
 
-```
-src/ux_overhaul/                       the mod as the game loads it
-  mod.json                        mod id (ux_overhaul_1), scripts, savegame severities
-  _metadata/modinfo.json          name, summary, description, tags, url (shown on mod.io)
-  _metadata/0.png                 preview image, 1920x1080 (make preview)
-  _content.json                   content file list (generated: make content)
-  content/ux_overhaul/
-    main.gs.lua                   game script registration
-    main.script.lua               game script (update / handleEvent / guiUpdate ...)
-    track_stats.lua, logger.lua   modules, loaded with require("/ux_overhaul/....lua")
-assets/preview.svg                source of the preview image
-spec/                             Busted specs (*_spec.lua) against spec/support/mock_engine.lua
-  ingame/run.sh                   in-game test driver (make test-ingame)
-  ingame/ux_overhaul_testbench/        dev-only mod: app script that starts a test game, scenario runner
-tools/
-  init.sh                         rename the placeholder mod (run once)
-  deploy.sh, validate.sh          staging area, the game's own validation
-  content_index.sh                regenerate _content.json
-  lua/                            fengari-based specs and luacheck for machines without native Lua
-  preview/                        SVG to PNG renderer
-```
+**Windows**
+- Statistics, Line Manager, Finances, Company and the notification log can be open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
+- Sections you opened in entity windows stay open the next time, and several can be open at once.
+- *Sell* in the vehicle window asks once more before selling.
 
-## Make targets
+**Town and company**
+- The town window names what limits growth ("Limited by Traffic") and shows the progress to the next level as text.
+- A perk that is locked although the game bar already shows the required rank says *Promotion pending - open the Company window*.
 
-```bash
-make              # list targets
-make deps         # once: fengari, luacheck source, SVG renderer
-make lint         # luacheck
-make test         # offline specs, seconds
-make test-ingame  # in-game scenarios: starts the game, builds, checks, quits
-make preview      # assets/preview.svg -> _metadata/0.png
-make deploy       # regenerate _content.json, copy the mod into the game's staging area
-make validate     # deploy, then run the game's mod validation (dist/validation.json)
-make package      # dist/<mod>.zip
-```
+**Construction**
+- The Rail and Tracks menus show each other's tabs, as do Road and Roads; each button still opens on its own first tab.
+- Tracks are listed fastest first (available ones before future ones), so the default track is the best you can build.
+- *Configure* on a station opens Tracks, Platforms, Road Access or Building first instead of Decoration.
+- The bulldozer's tooltip warns before removing a station that lines stop at.
 
-## Requirements
+**Game bar and store**
+- The Earnings tooltip also shows the cash flow of the last 30 days and the 30 days before.
+- The vehicle store lists the newest models first (and preselects the newest) and keeps your sort for the session.
 
-- **WSL** with the Windows Steam installation of TF3 under `C:\Program Files (x86)\Steam`, and Windows `node`.
-- **Busted and luacheck** are used when installed. Otherwise specs and lint run on [fengari](https://github.com/fengari-lua/fengari).
-- **In-game tests** need Steam running, the game closed, and a `steam_appid.txt` containing `3493540` in the game folder. Without that file, Steam asks for confirmation of the custom launch argument on every start.
+## Compatibility
 
-## TF3 modding rules this template follows
+- Safe to add to and remove from savegames: the mod changes only the user interface and adds no game script.
+- Built on the game's official UI extension points and recipe replacement. Every change falls back to the vanilla screen if it fails, so an error never takes the game's UI down.
+- Other mods that replace the same vanilla UI parts (the Line Manager's vehicle list, the Statistics lines tab, the line window's vehicle card, the earnings display, the tool stack, the action bar) conflict with it; tested together with *Timetables* and *Auto Line Namer*.
+- English and German.
 
-- **Engine-loaded files:** files the engine loads as resources must define the global `data()`. These are `*.gs.lua`, the `*.script.lua` files they point to, and app scripts. Modules loaded with `require` are plain `local m = {} … return m` modules.
-- **`require` paths:** `require("/x.lua")` resolves inside the owning mod; `require("::/x.lua")` resolves inside the base game.
-- **Game script state:** game scripts run in changing Lua states. Keep state in `state:get()` / `state:set()`, not in module-level variables.
-- **Commands from game scripts:** `api.cmd.sendCommand` from a game script must not pass a callback. List fields of engine objects are copies, so always assign whole lists.
-- **Network changes after a build:** a game script that changes the track network after a player build must wait until no build tool is open (`api.gui.contextHelper.getIdsOfActiveTool()` is only `{ "EntityDetailsTool" }`). The open track tool crashes if its edges disappear.
-- **Keep `mod.io_fileid.txt`:** after the first in-game publish, keep `_metadata/mod.io_fileid.txt` in the repository. `make deploy` adopts it from the staging area automatically. It links later publishes to the existing mod.io entry.
+## Development
 
-## Publishing
+This repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-template): `make lint test` (offline), `make test-ingame` (in-game checks on a small new map) or `make test-ingame SAVE="<savegame>"` (on a temporary copy of a savegame), which also takes screenshots of each UI state into `spec/ingame/results/`.
 
-Publish from the game (Main menu → Mods → your staging mod → Publish) with a [mod.io](https://mod.io/g/transportfever3) account. The game validates the mod, cooks it and uploads it.
+- `docs/inventory/`: code-level inventory of the game's UI, the basis of the mod.
+- `docs/PLAN.md`, `docs/flows_audit_v2.md`: plan and the ranked list of further improvements.
+- `docs/api_cookbook.md`: engine API reference for GUI work.
+- `tools/extract_game_sources.sh`: extracts the game's GUI sources to `.game/` for reference.
+- `src/ux_overhaul/content/ux_overhaul/gui/`: one module per change, each installed through a guarded stub (`*.script.lua`, `guard.lua`).
 
 ## License
 
