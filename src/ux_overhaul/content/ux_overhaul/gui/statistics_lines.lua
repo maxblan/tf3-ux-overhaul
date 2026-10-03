@@ -412,7 +412,7 @@ local Replacement = react.RegisterRecipe("LinesStatistic", function(params)
 	local ok, node = pcall(render, params)
 	if ok then return node end
 	debugPrint("[ux_overhaul] statistics lines tab failed, showing the base tab: ", tostring(node))
-	return react.CallOriginalRecipe(base_lines_statistic, params)
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_lines_statistic, params) } }
 end)
 
 --- Called from the react-replacement-config before the UI starts.

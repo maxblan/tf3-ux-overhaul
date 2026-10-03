@@ -41,6 +41,9 @@
         "ux_overhaul/gui/tool_stack.res.lua",
         "ux_overhaul/gui/tool_stack.script.lua",
         "ux_overhaul/gui/ui.lua",
+        "ux_overhaul/gui/window_tweaks.lua",
+        "ux_overhaul/gui/window_tweaks.res.lua",
+        "ux_overhaul/gui/window_tweaks.script.lua",
         "ux_overhaul/logger.lua"
     ]
 }

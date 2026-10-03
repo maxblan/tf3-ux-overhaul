@@ -67,7 +67,7 @@ local Replacement = react.RegisterRecipe("GameBarEarningsPlugin", function(...)
 	local ok, node = pcall(render)
 	if ok then return node end
 	debugPrint("[ux_overhaul] earnings display failed, showing the base one: ", tostring(node))
-	return react.CallOriginalRecipe(earnings_plugin.GameBarEarningsPlugin, ...)
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(earnings_plugin.GameBarEarningsPlugin, ...) } }
 end)
 
 --- Called from the react-replacement-config before the UI starts.

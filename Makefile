@@ -42,6 +42,8 @@ endif
 lint: ## Run luacheck on src, spec and tools/lua, and reject syntax the game's Lua 5.2 lacks
 	@! grep -rnE --include='*.lua' '\\u\{|[^-/]//[^/]|[^~]~[^=]|<<|>>' src \
 		|| { echo "Lua 5.3 syntax above (\\u{} escape, //, bitwise ops): the game embeds Lua 5.2"; exit 1; }
+	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src \
+		|| { echo "wrap CallOriginalRecipe in a layout: a recipe's root must be a layout (else the game UI drops)"; exit 1; }
 ifneq ($(LUACHECK),)
 	"$(LUACHECK)" $(LUA_FILES)
 else

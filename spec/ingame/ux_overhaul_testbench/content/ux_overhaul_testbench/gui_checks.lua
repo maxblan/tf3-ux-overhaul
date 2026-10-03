@@ -140,6 +140,16 @@ local checks = {
 		end,
 	},
 	{
+		name = "replace_many_asks_first",
+		act = function(ctx)
+			local vehicles = ctx.card_line and line_vehicles(ctx.card_line) or {}
+			if #vehicles >= 2 then api.gui.fireReactEvent("uxo.debug.replace", { vehicles[1], vehicles[2] }) end
+		end,
+		wait = 60,
+		shot = "line_manager_replace_question",
+		check = function() return visible("menu.management"), "line manager open with the question" end,
+	},
+	{
 		name = "line_window_card",
 		act = function(ctx)
 			api.gui.fireReactEvent("closeVehicleManager", nil)
@@ -186,6 +196,20 @@ local checks = {
 		wait = 90,
 		shot = "vehicle_window",
 		check = function() return true, "reference screenshot" end,
+	},
+	{
+		name = "town_window_bottleneck",
+		act = function(ctx)
+			local towns = api.engine.getEntitiesWithComponent(api.type.ComponentType.TOWN)
+			ctx.town = towns[1]
+			if ctx.town then api.gui.fireReactEvent("selectEntity", { entity = ctx.town, stack = false }) end
+		end,
+		wait = 120,
+		shot = "town_window",
+		check = function(ctx)
+			if not ctx.town then return true, "skipped: no town" end
+			return visible("uxo.town.bottleneck"), "bottleneck line visible=" .. tostring(visible("uxo.town.bottleneck"))
+		end,
 	},
 	{
 		name = "construction_rail_menu",

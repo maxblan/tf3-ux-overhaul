@@ -17,6 +17,18 @@ function entry.render()
 	react.onEvent(actions.ACTION_EVENT, function(_e, param) actions.run(param) end)
 	react.onStepTimer(store.refresh, store.REFRESH_SECONDS)
 	react.onEvent("openVehicleManager", function(_e, param) lvm_tweaks.on_open(param) end)
+	-- testbench: replace `vehicles` with identical configs the way the vehicle store does; expects the
+	-- Line Manager's question instead of an immediate replace
+	react.onEvent("uxo.debug.replace", function(_e, vehicles)
+		local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
+		local changes = {}
+		for _i, v in ipairs(vehicles) do
+			local tv = api.engine.getComponent(v, api.type.ComponentType.TRANSPORT_VEHICLE)
+			local config = api.type.TransportVehicleConfig.new(tv.transportVehicleConfig)
+			changes[#changes + 1] = { vehicleEntity = v, config = config }
+		end
+		vehicle_react_util.HandleVehicleChanges(changes, {}, nil, nil, nil, nil)
+	end)
 	-- testbench: send a clone of `vehicles` the way the Line Manager does; expects the confirmation
 	react.onEvent("uxo.debug.clone", function(_e, vehicles)
 		react.fireEvent(nil, "duplicateVehicles", {

@@ -132,11 +132,13 @@ local function render(params)
 end
 
 local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
-	if params.ownershipState ~= "Player" then return react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) end
+	if params.ownershipState ~= "Player" then
+		return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
+	end
 	local ok, node = pcall(render, params)
 	if ok then return node end
 	debugPrint("[ux_overhaul] line vehicles card failed, showing the base card: ", tostring(node))
-	return react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params)
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
 end)
 
 --- Called from the react-replacement-config before the UI starts.

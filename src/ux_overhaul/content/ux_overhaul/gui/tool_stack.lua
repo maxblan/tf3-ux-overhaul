@@ -287,7 +287,7 @@ local Replacement = react.RegisterRecipe("ToolStack", function(params)
 	local ok, node = pcall(render, params)
 	if ok then return node end
 	debugPrint("[ux_overhaul] tool stack failed, using the vanilla one: ", tostring(node))
-	return react.CallOriginalRecipe(builtin.ToolStack, params)
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(builtin.ToolStack, params) } }
 end)
 
 --- Called from the react-replacement-config before the UI starts.
