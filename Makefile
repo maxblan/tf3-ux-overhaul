@@ -47,8 +47,8 @@ else
 	"$(NODE)" $(LUA_TOOLS)/run.js $(LUA_TOOLS)/lint.lua $(LUA_FILES)
 endif
 
-test-ingame: content ## Run the in-game scenarios (launches the game)
-	spec/ingame/run.sh
+test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame)
+	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)")
 
 check: lint test test-ingame ## Run lint and all tests
 

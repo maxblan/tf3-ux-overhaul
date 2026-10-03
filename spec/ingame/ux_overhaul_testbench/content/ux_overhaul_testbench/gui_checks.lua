@@ -20,8 +20,18 @@ end
 
 return {
 	{
+		name = "gui_fixture_facts",
+		wait = 60,
+		check = function()
+			local player = api.engine.util.getPlayer()
+			local lines = api.engine.system.lineSystem.getLinesForPlayer(player)
+			local vehicles = api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE)
+			local towns = api.engine.getEntitiesWithComponent(api.type.ComponentType.TOWN)
+			return true, string.format("lines=%d vehicles=%d towns=%d", #lines, #vehicles, #towns)
+		end,
+	},
+	{
 		name = "gui_gamebar_plugin",
-		wait = 120,
 		check = function()
 			return visible("uxo.spike.status"), "status chip visible=" .. tostring(visible("uxo.spike.status"))
 		end,

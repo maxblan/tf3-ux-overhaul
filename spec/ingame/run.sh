@@ -2,16 +2,20 @@
 # In-game integration test: deploys the mod and the testbench mod, launches Transport Fever 3
 # with the testbench's app script, waits for the scenarios to finish and prints their results.
 #
-# Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench]
+# Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME]
+#   --save NAME  run on a copy of the savegame NAME (without .sav) instead of a new small map. The
+#                copy is called uxo_fixture; it and its autosaves are deleted afterwards.
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
 set -euo pipefail
 
 timeout=900
 keep_testbench=0
+save=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--timeout) timeout="$2"; shift 2 ;;
 		--keep-testbench) keep_testbench=1; shift ;;
+		--save) save="$2"; shift 2 ;;
 		*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 done
@@ -23,7 +27,10 @@ testbench_dir="$repo/spec/ingame/${mod}_testbench"
 results_dir="$repo/spec/ingame/results"
 game_dir_win='C:\Program Files (x86)\Steam\steamapps\common\Transport Fever 3'
 game_dir="$(wslpath "$game_dir_win")"
-log="$(ls -d "/mnt/c/Program Files (x86)/Steam/userdata/"*/3493540/local | head -n 1)/crash_dump/stdout.txt"
+userdata="$(ls -d "/mnt/c/Program Files (x86)/Steam/userdata/"*/3493540/local | head -n 1)"
+log="$userdata/crash_dump/stdout.txt"
+saves="$userdata/save"
+fixture_name=uxo_fixture
 # --script takes a game resource path; the app script ships inside the testbench mod.
 app_script="${mod}_testbench_1::/${mod}_testbench/app_script.lua"
 
@@ -45,6 +52,19 @@ if [ ! -f "$game_dir/steam_appid.txt" ]; then
 fi
 
 "$repo/tools/deploy.sh" "$mod_dir" "$testbench_dir"
+
+remove_fixture() {
+	rm -f "$saves/$fixture_name".* "$saves/autosave_$fixture_name"_*
+}
+if [ -n "$save" ]; then
+	[ -f "$saves/$save.sav" ] || { echo "savegame not found: $saves/$save.sav" >&2; exit 1; }
+	remove_fixture
+	cp "$saves/$save.sav" "$saves/$fixture_name.sav"
+	[ -f "$saves/$save.jpg" ] && cp "$saves/$save.jpg" "$saves/$fixture_name.jpg"
+	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
+	printf -- '-- Written by spec/ingame/run.sh --save %s\nreturn { save = "%s" }\n' "$save" "$fixture_name" > "$staged_fixture"
+	echo "running on a copy of savegame '$save' ($fixture_name)"
+fi
 
 launched_at=$(date +%s)
 echo "launching Transport Fever 3 with --script $app_script"
@@ -78,6 +98,7 @@ mkdir -p "$results_dir"
 saved="$results_dir/$(date +%Y%m%d-%H%M%S)-stdout.txt"
 [ -f "$log" ] && cp "$log" "$saved"
 [ "$keep_testbench" -eq 1 ] || "$repo/tools/deploy.sh" --remove "$testbench_dir"
+[ -z "$save" ] || remove_fixture
 
 echo
 echo "outcome: $outcome   (full log: $saved)"
