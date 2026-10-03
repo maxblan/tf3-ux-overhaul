@@ -180,7 +180,20 @@ D4, D6, command palette (jump to any line, station or town by typing), notificat
 - The startup `compat.lua` check passes on the current game build. When a required base symbol is missing, the dependent feature switches itself off and logs a single `[uxo] disabled <feature>: <reason>` line.
 - English and German strings from the start (`strings.lua`).
 
-## 7. Risks
+## 7. Compatibility notes (scanned 2026-10-03)
+
+Installed community mods that use the same hooks:
+- **celmi_timetables:**
+  - replaces `line_manager_panel.LineManagerPanel`;
+  - adds plugins to the game bar, the mod button area, the radial menu, and the Line, Station and Vehicle windows.
+  - → We **must not replace `LineManagerPanel`**, which rules out D4/D5 via that recipe. We put our cards at a different `order`.
+- **zhenya_auto_assign_terminals:**
+  - replaces `popover_react_util.PopoverWindowContent` and a scroll container;
+  - monkey-patches `line_util.makeLineActionDescriptor` and `builtin.Button`.
+  - → Avoid those recipes. Its patching confirms that patching module tables works.
+- **auto_line_namer:** only `rename_scheme` data and a game script, so no conflict.
+
+## 8. Risks
 - **Game updates:** we depend on internal module paths and exported recipes, which are not a public API. Mitigations: `compat.lua`, re-running `tools/extract_game_sources.sh` and diffing after every patch, and keeping replacements few and wrapping.
 - **Mod conflicts:** only one mod can replace a given recipe. Phase 1 has no replacements; phase 3 replacements are behind flags and listed in the mod description.
 - **Performance** on large networks: use parallel/timer hooks, memoise per revision, and slice detector scans the way vanilla does.
