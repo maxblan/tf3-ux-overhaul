@@ -3,7 +3,7 @@
 -- @module ux_overhaul.core.format
 local format = {}
 
-local MINUS = "\u{2212}" -- typographic minus, same width as "+"
+local MINUS = "\xE2\x88\x92" -- typographic minus, same width as "+"
 
 local function trim(text)
 	-- "1.0k" -> "1k", "12.50" stays "12.5" (callers format with one decimal at most)
@@ -41,7 +41,7 @@ end
 
 --- 0.456 -> "46%", nil -> "–".
 function format.percent(ratio)
-	if ratio == nil then return "\u{2013}" end
+	if ratio == nil then return "\xE2\x80\x93" end
 	return string.format("%d%%", math.floor(ratio * 100 + 0.5))
 end
 

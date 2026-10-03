@@ -7,18 +7,40 @@
 --   check(ctx)     returns passed (boolean) and a details string
 --
 -- `ctx` is a plain table kept in the GUI state; checks may store values in it (serialisable only).
+-- Checks that need lines pass as "skipped" on the small new map; run them with
+-- `make test-ingame SAVE="<savegame>"`.
 -- @module ux_overhaul_testbench.gui_checks
 
 local function visible(id)
 	return api.gui.byId.isVisibleRecursive(id)
 end
 
-local function first_town()
-	local towns = api.engine.getEntitiesWithComponent(api.type.ComponentType.TOWN)
-	return towns[1], #towns
+local function line_vehicles(line)
+	return api.engine.system.transportVehicleSystem.getLineVehicles(line)
 end
 
-return {
+--- The player's line with the most vehicles, or nil.
+local function busiest_line()
+	local best, best_count = nil, 0
+	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		local count = #line_vehicles(line)
+		if count > best_count then best, best_count = line, count end
+	end
+	return best, best_count
+end
+
+local function oldest_vehicle(line)
+	local best, best_time
+	for _i, vehicle in ipairs(line_vehicles(line)) do
+		local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+		local t = math.huge
+		for _j, part in ipairs(tv.transportVehicleConfig.vehicles) do t = math.min(t, part.purchaseTime) end
+		if best == nil or t < best_time then best, best_time = vehicle, t end
+	end
+	return best
+end
+
+local checks = {
 	{
 		name = "gui_fixture_facts",
 		wait = 60,
@@ -26,66 +48,88 @@ return {
 			local player = api.engine.util.getPlayer()
 			local lines = api.engine.system.lineSystem.getLinesForPlayer(player)
 			local vehicles = api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE)
-			local towns = api.engine.getEntitiesWithComponent(api.type.ComponentType.TOWN)
-			return true, string.format("lines=%d vehicles=%d towns=%d", #lines, #vehicles, #towns)
+			return true, string.format("lines=%d vehicles=%d", #lines, #vehicles)
 		end,
 	},
 	{
-		name = "gui_gamebar_plugin",
+		name = "status_strip_visible",
+		wait = 120,
 		check = function()
-			return visible("uxo.spike.status"), "status chip visible=" .. tostring(visible("uxo.spike.status"))
+			return visible("uxo.status.problems"), "problems chip visible=" .. tostring(visible("uxo.status.problems"))
+				.. " cashflow chip visible=" .. tostring(visible("uxo.status.cashflow"))
 		end,
 	},
 	{
-		name = "gui_stylesheet",
+		name = "launcher_visible",
 		check = function()
-			-- spike.css.lua hides the probe; its sibling text stays visible.
-			local probe = api.gui.byId.isVisible("uxo.spike.css_probe")
-			return not probe and visible("uxo.spike.status"), "css probe visible=" .. tostring(probe)
+			local shown = api.gui.byId.isVisible("uxo.launcher.control_center")
+			return shown, "control center button visible=" .. tostring(shown)
 		end,
 	},
 	{
-		name = "gui_mod_button_plugin",
-		check = function()
-			local shown = api.gui.byId.isVisible("uxo.spike.launcher")
-			return shown, "launcher visible=" .. tostring(shown) .. " recursive=" .. tostring(visible("uxo.spike.launcher"))
-		end,
-	},
-	{
-		name = "gui_recipe_replacement",
-		check = function()
-			return visible("uxo.spike.replaced"), "replaced earnings marker visible=" .. tostring(visible("uxo.spike.replaced"))
-		end,
-	},
-	{
-		name = "gui_entry_point_window",
-		act = function() api.gui.fireReactEvent("uxo.spike.open", nil) end,
+		name = "control_center_problems_tab",
+		act = function() api.gui.fireReactEvent("uxo.open", { tab = "problems" }) end,
 		wait = 60,
 		check = function()
-			return visible("uxo.spike.window"), "window visible=" .. tostring(visible("uxo.spike.window"))
+			return visible("uxo.cc.window") and visible("uxo.cc.problems"),
+				string.format("window=%s problems=%s", tostring(visible("uxo.cc.window")), tostring(visible("uxo.cc.problems")))
 		end,
 	},
 	{
-		name = "gui_town_window_card",
-		act = function(ctx)
-			local town, count = first_town()
-			ctx.town, ctx.town_count = town, count
-			if town then api.gui.fireReactEvent("selectEntity", { entity = town, stack = true }) end
-		end,
-		wait = 90,
-		check = function(ctx)
-			if not ctx.town then return false, "no town on the map" end
-			return visible("uxo.spike.town"), string.format("town=%d of %d, card visible=%s", ctx.town, ctx.town_count,
-				tostring(visible("uxo.spike.town")))
-		end,
-	},
-	{
-		name = "gui_save_data_roundtrip",
-		act = function() api.gui.game.setGuiSaveData("ux_overhaul_1", { probe = 42, nested = { "a" } }) end,
-		wait = 5,
+		name = "control_center_lines_tab",
+		act = function() api.gui.fireReactEvent("uxo.open", { tab = "lines", filter = "all" }) end,
+		wait = 60,
 		check = function()
-			local data = api.gui.game.getGuiSaveData("ux_overhaul_1") or {}
-			return data.probe == 42, "probe=" .. tostring(data.probe)
+			return visible("uxo.cc.filter.losing") and visible("uxo.cc.lines"),
+				string.format("filters=%s lines=%s", tostring(visible("uxo.cc.filter.losing")), tostring(visible("uxo.cc.lines")))
+		end,
+	},
+	{
+		name = "action_add_vehicle",
+		act = function(ctx)
+			ctx.line, ctx.before = busiest_line()
+			if ctx.line then api.gui.fireReactEvent("uxo.action", { name = "add_vehicle", entity = ctx.line }) end
+		end,
+		wait = 600,
+		check = function(ctx)
+			if not ctx.line then return true, "skipped: no line with vehicles" end
+			local after = #line_vehicles(ctx.line)
+			return after == ctx.before + 1, string.format("line %d vehicles %d -> %d", ctx.line, ctx.before, after)
+		end,
+	},
+	{
+		name = "action_remove_vehicle",
+		act = function(ctx)
+			ctx.vehicle = ctx.line and oldest_vehicle(ctx.line)
+			if ctx.vehicle then api.gui.fireReactEvent("uxo.action", { name = "remove_vehicle", entity = ctx.line }) end
+		end,
+		wait = 300,
+		check = function(ctx)
+			if not ctx.vehicle then return true, "skipped: no line with vehicles" end
+			local tv = api.engine.getComponent(ctx.vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+			if not tv then return true, "vehicle already sold" end
+			local going = tv.state == api.type.enum.TransportVehicleState.GOING_TO_DEPOT
+				or tv.state == api.type.enum.TransportVehicleState.IN_DEPOT
+			return going and tv.sellOnArrival == true, string.format("vehicle %d state=%s sellOnArrival=%s",
+				ctx.vehicle, tostring(tv.state), tostring(tv.sellOnArrival))
 		end,
 	},
 }
+
+-- Crash probe (gui/probe.script.lua): set PROBE = true to open its window variants first.
+local PROBE = false
+if PROBE then
+	local probes = {}
+	for variant = 1, 5 do
+		probes[#probes + 1] = {
+			name = "probe_variant_" .. variant,
+			act = function() api.gui.fireReactEvent("uxo.probe", variant) end,
+			wait = 120,
+			check = function() return api.gui.byId.isVisibleRecursive("probe.window"), "window visible" end,
+		}
+	end
+	for _i, check in ipairs(checks) do probes[#probes + 1] = check end
+	return probes
+end
+
+return checks

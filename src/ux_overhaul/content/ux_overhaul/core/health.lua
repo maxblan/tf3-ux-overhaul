@@ -58,18 +58,18 @@ function health.summarize(snapshot, thresholds)
 		old_vehicles = 0,
 		no_path_vehicles = 0,
 	}
-	for _, line in ipairs(snapshot.lines or {}) do
+	for _i, line in ipairs(snapshot.lines or {}) do
 		summary.lines_balance = summary.lines_balance + (line.balance or 0)
 		if health.is_losing(line) then summary.losing_lines = summary.losing_lines + 1 end
 		if health.has_issue(line) then summary.issue_lines = summary.issue_lines + 1 end
 		if (line.vehicle_count or 0) == 0 then summary.empty_lines = summary.empty_lines + 1 end
 	end
-	for _, vehicle in ipairs(snapshot.vehicles or {}) do
+	for _i, vehicle in ipairs(snapshot.vehicles or {}) do
 		if health.is_old(vehicle, t.old_vehicle_ratio) then summary.old_vehicles = summary.old_vehicles + 1 end
 		if vehicle.no_path then summary.no_path_vehicles = summary.no_path_vehicles + 1 end
 	end
 	summary.problems, summary.cautions = 0, 0
-	for _, item in ipairs(health.problems(snapshot, thresholds)) do
+	for _i, item in ipairs(health.problems(snapshot, thresholds)) do
 		if item.severity == "problem" then summary.problems = summary.problems + 1 end
 		if item.severity == "caution" then summary.cautions = summary.cautions + 1 end
 	end
@@ -92,7 +92,7 @@ function health.problems(snapshot, thresholds)
 		add(list, { kind = "low_cash", severity = "problem", title = "Cash", detail = { cash = finance.cash },
 			weight = -(finance.cash or 0), actions = { "open_finances" } })
 	end
-	for _, line in ipairs(snapshot.lines or {}) do
+	for _i, line in ipairs(snapshot.lines or {}) do
 		if (line.vehicle_count or 0) == 0 then
 			add(list, { kind = "line_empty", severity = "problem", entity = line.id, title = line.name, detail = {},
 				weight = 0, actions = { "open_line_manager" } })
@@ -102,7 +102,7 @@ function health.problems(snapshot, thresholds)
 				detail = { balance = line.balance, utilization = line.utilization }, weight = -line.balance,
 				actions = { "remove_vehicle", "open_line" } })
 		end
-		for _, issue in ipairs(line.issues or {}) do
+		for _j, issue in ipairs(line.issues or {}) do
 			add(list, { kind = "line_issue", severity = issue.severity or "caution", entity = line.id, title = line.name,
 				detail = { text = issue.text }, weight = 0, actions = { "open_line" } })
 		end
@@ -112,7 +112,7 @@ function health.problems(snapshot, thresholds)
 				actions = { "remove_vehicle", "open_line" } })
 		end
 	end
-	for _, vehicle in ipairs(snapshot.vehicles or {}) do
+	for _i, vehicle in ipairs(snapshot.vehicles or {}) do
 		if vehicle.no_path then
 			add(list, { kind = "vehicle_no_path", severity = "problem", entity = vehicle.id, title = vehicle.name,
 				detail = { line = vehicle.line }, weight = 0, actions = { "open_vehicle" } })
@@ -135,7 +135,7 @@ end
 --- Number of problems per kind, e.g. { line_losing = 3, vehicle_old = 7 }.
 function health.count_by_kind(problems)
 	local counts = {}
-	for _, item in ipairs(problems) do counts[item.kind] = (counts[item.kind] or 0) + 1 end
+	for _i, item in ipairs(problems) do counts[item.kind] = (counts[item.kind] or 0) + 1 end
 	return counts
 end
 

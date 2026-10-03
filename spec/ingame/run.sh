@@ -80,7 +80,7 @@ while [ $(( $(date +%s) - launched_at )) -lt "$timeout" ]; do
 	# stdout.txt is rewritten on startup; ignore the previous session's file.
 	[ -f "$log" ] && [ "$(stat -c %Y "$log")" -ge "$launched_at" ] || continue
 	if grep -aq "\[testbench\] DONE" "$log"; then outcome="done"; break; fi
-	if grep -aq "Ungraceful exit\|Calling HandleCrash" "$log"; then outcome="crash"; break; fi
+	if grep -aq "Ungraceful exit\|Calling HandleCrash\|MinidumpCallback\|Possible hang detected" "$log"; then outcome="crash"; break; fi
 	# The process only appears in tasklist some seconds after launch; count misses after that.
 	if game_running; then
 		seen=1
@@ -114,5 +114,9 @@ passed=$(grep -ac "\[testbench\] PASS" "$saved" || true)
 failed=$(grep -ac "\[testbench\] FAIL" "$saved" || true)
 echo
 echo "scenarios: $passed passed, $failed failed"
+if [ "$outcome" = "crash" ]; then
+	echo "--- last lines before the crash ---"
+	grep -a -B12 "MinidumpCallback\|Calling HandleCrash" "$saved" | cut -c1-200 | head -14 || true
+fi
 [ "$gui_failures" -eq 0 ] || echo "GUI failed to load ($gui_failures times), see engine errors above"
 [ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ] && [ "$gui_failures" -eq 0 ]

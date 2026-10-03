@@ -1,7 +1,11 @@
-std = "lua53"
+-- The game embeds Lua 5.2.2 (TransportFever3.exe strings); specs run on fengari (Lua 5.3).
+std = "lua52"
 
 -- Globals provided by Transport Fever 3.
-read_globals = { "api", "app", "debugPrint" }
+-- "_" is the engine's translation function.
+read_globals = { "api", "app", "debugPrint", "_" }
+-- Variables named with a leading underscore are intentionally unused.
+ignore = { "21./_.*" }
 
 -- Resource files the engine loads directly (not via require) define the global data() it calls.
 files["**/*.gs.lua"] = { globals = { "data" } }
@@ -9,8 +13,6 @@ files["**/*.script.lua"] = { globals = { "data" } }
 files["**/app_script.lua"] = { globals = { "data" } }
 files["**/*.res.lua"] = { globals = { "data" } }
 files["**/*.css.lua"] = { globals = { "data" } }
--- GUI code: "_" is the engine's translation function.
-files["src/**/gui/**"] = { read_globals = { "_" } }
 
 files["spec"] = { std = "+busted" }
 -- Loads resource files the way the engine does, through the global data().

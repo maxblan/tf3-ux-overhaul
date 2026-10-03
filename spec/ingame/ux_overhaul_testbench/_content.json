@@ -3,6 +3,8 @@
     "files": [
         "ux_overhaul_testbench/app_script.lua",
         "ux_overhaul_testbench/fixture.lua",
+        "ux_overhaul_testbench/gui/probe.res.lua",
+        "ux_overhaul_testbench/gui/probe.script.lua",
         "ux_overhaul_testbench/gui_checks.lua",
         "ux_overhaul_testbench/scenarios.lua",
         "ux_overhaul_testbench/site.lua",

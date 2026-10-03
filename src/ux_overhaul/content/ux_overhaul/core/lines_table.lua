@@ -32,9 +32,9 @@ lines_table.COLUMNS = {
 function lines_table.counts(lines, thresholds)
 	local t = { low_utilization = (thresholds or {}).low_utilization or health.DEFAULTS.low_utilization }
 	local counts = {}
-	for _, key in ipairs(lines_table.FILTERS) do
+	for _i, key in ipairs(lines_table.FILTERS) do
 		local n = 0
-		for _, line in ipairs(lines) do
+		for _j, line in ipairs(lines) do
 			if predicates[key](line, t) then n = n + 1 end
 		end
 		counts[key] = n
@@ -50,7 +50,7 @@ function lines_table.rows(lines, query)
 	local t = { low_utilization = (query.thresholds or {}).low_utilization or health.DEFAULTS.low_utilization }
 	local search = query.search and query.search ~= "" and string.lower(query.search) or nil
 	local rows = {}
-	for _, line in ipairs(lines) do
+	for _i, line in ipairs(lines) do
 		if predicate(line, t) and (not search or string.find(string.lower(line.name or ""), search, 1, true)) then
 			rows[#rows + 1] = line
 		end
@@ -74,7 +74,7 @@ end
 function lines_table.totals(rows)
 	local totals = { lines = #rows, vehicles = 0, balance = 0 }
 	local weighted, weight = 0, 0
-	for _, line in ipairs(rows) do
+	for _i, line in ipairs(rows) do
 		local vehicles = line.vehicle_count or 0
 		totals.vehicles = totals.vehicles + vehicles
 		totals.balance = totals.balance + (line.balance or 0)
