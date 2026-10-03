@@ -82,9 +82,9 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 |---|---|
 | `src/ui_overhaul/content/ui_overhaul/gui/` | one module per change; each is installed through a small guarded stub (`*.script.lua`, `guard.lua`) |
 | `docs/inventory/` | inventory of the game's UI, read from its source |
-| `docs/flows_audit_v2.md` | ranked list of further improvements, with status |
+| `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |
-| `docs/PLAN.md` | the project plan and its history |
+| `docs/design.md` | how the mod is built and the rules it follows |
 | `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 
 ## License

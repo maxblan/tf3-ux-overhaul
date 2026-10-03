@@ -1,4 +1,4 @@
---- Status in the Line Manager's rows, where the player already looks (backlog D1):
+--- Status in the Line Manager's rows, where the player already looks:
 --   line rows:    cargo icons, vehicle count and the 12-month balance (red when losing money)
 --   vehicle rows: age (red once the lifespan is reached)
 -- Wraps the exported base recipe line_react_util.ManagerNotificationWidget, which the base renders

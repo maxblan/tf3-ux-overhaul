@@ -1,4 +1,4 @@
---- Line Manager safety and memory (backlog D3):
+--- Line Manager safety and memory:
 --   * with two or more lines selected, clicking a station creates the new line without moving all
 --     their vehicles onto it (selecting lines selects their whole fleets); a deliberate vehicle
 --     selection still moves the vehicles as before

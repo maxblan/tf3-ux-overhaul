@@ -1,4 +1,4 @@
---- Line Manager vehicle models (backlog: change one model across many lines):
+--- Line Manager vehicle models, for changing one model across many lines:
 --   * a row above the vehicle list with one button per model in the list (the base vehicle icon and
 --     count); clicking one selects exactly the vehicles of that model
 --   * "In all lines" adds every vehicle of the selected model from all the player's lines to the

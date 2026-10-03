@@ -1,6 +1,6 @@
---- One-time cleanup for savegames played with an early development build that added its own
--- notification types (since removed). Ends any persistent notifications of those types, so the log
--- does not keep entries whose type no longer exists. Runs from the entry point's per-frame step.
+--- One-time cleanup for savegames that contain notifications of the old "ux_overhaul" types, which
+-- the mod no longer has. Ends any persistent notifications of those types, so the log does not keep
+-- entries whose type does not exist. Runs from the entry point's per-frame step.
 -- @module ui_overhaul.gui.cleanup
 local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
 

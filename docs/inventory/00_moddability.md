@@ -1,28 +1,28 @@
 # 00: How a TF3 mod can change or extend the GUI (moddability)
 
-Sources: extracted game source under `SCR/game/` (SCR = this scratchpad), official mods/DLC from
+Sources: extracted game source under `SCR/game/` (SCR = the working directory that holds the extracted sources), official mods/DLC from
 `.../Transport Fever 3/mods/release/*` and `dlcs/*` (extracted to `SCR/modsx/`), `strings TransportFever3.exe`
-(saved as `SCR/exe_strings.txt`), the tf3-modding skill references, and `/mnt/c/Users/maxbl/tf3-mod-template`.
+(saved as `SCR/exe_strings.txt`), the tf3-modding skill references, and the `tf3-mod-template` repository.
 Paths below are relative to `SCR/game/gui/gui/` unless they start with another top-level folder.
-"Verified" = shown in the code. "Needs in-game verification" = it follows from the code but nobody has run it yet.
+"Verified" = shown in the code. "Needs in-game verification" = it follows from the code but has not been checked in-game.
 
-## Architecture decision
+## Overview
 
 The whole in-game GUI is a Lua/Teal "React-like" recipe tree (`main/react.lua`). The engine renders C++ builtins.
 It has no imperative widget API like TPF2's `api.gui.comp.*`. `api/gui.d.tl` has no constructors for widgets.
 A mod has three official, data-driven hooks, all registered as generic resources (`*.res.lua` with `data()`).
 Official Urban Games content uses all three:
 
-| Mechanism | Resource `type` | Effort / risk | Use for |
+| Mechanism | Resource `type` | Properties | Use for |
 |---|---|---|---|
-| Plugin into an extension point | `"react-plugin <modId>::<ExtensionPointName>"` (base: `"react-plugin ::Name"`) | easy, additive, compatible with other mods | new widgets in entity windows, game bar, radial menu, mod button area, invisible "entry point" components (event/hotkey handlers that open your own windows) |
-| Global recipe replacement | `"react-replacement-config"` → `doReplaceFn(replacementApi)` → `replacementApi.ReplaceRecipe(orig, repl)` | medium, one winner per recipe, breaks on game updates | changing/wrapping existing UI (LVM, statistics, game bar, EOW internals), as long as the recipe is exported by its module |
-| Generic data resources | `menu_category`, `menu_filter_category`, `construction_tool`, `notification`, `rename_scheme`, `gui_res`... | easy | construction-menu categories, notification types, colours |
+| Plugin into an extension point | `"react-plugin <modId>::<ExtensionPointName>"` (base: `"react-plugin ::Name"`) | additive, compatible with other mods | new widgets in entity windows, game bar, radial menu, mod button area, invisible "entry point" components (event/hotkey handlers that open your own windows) |
+| Global recipe replacement | `"react-replacement-config"` → `doReplaceFn(replacementApi)` → `replacementApi.ReplaceRecipe(orig, repl)` | one winner per recipe, breaks on game updates | changing/wrapping existing UI (LVM, statistics, game bar, EOW internals), as long as the recipe is exported by its module |
+| Generic data resources | `menu_category`, `menu_filter_category`, `construction_tool`, `notification`, `rename_scheme`, `gui_res`... | data only | construction-menu categories, notification types, colours |
 
 **File shadowing (shipping `gui/main/game.tl` in a mod) does not work.** No evidence for it was found; see §2.3.
 New rebindable hotkeys cannot be registered from Lua. The input actions are hard-coded in the engine; see §3.3.
 
-Architecture this research points to:
+Recommended architecture for a GUI mod:
 1. Headless entry point: a plugin into `::ModEntryPointExtension`. It listens to events and input actions, holds shared state and opens the mod's own windows or tools through `game_react_globals`.
 2. Visible entry points: plugins into `::MainModButtonAreaExtension` (buttons next to the layer ridge, plus an automatic "Mods" entry in the radial menu) and `::GameBarInfoDisplayExtension` (widgets in the game bar, always visible).
 3. Context panels: plugins into the 14 entity-window extension points, for actions and status inside Line, Vehicle, Station, Industry and Town windows.
@@ -330,7 +330,7 @@ Game updates
 Performance
 - Code that scans all lines and vehicles every step is expensive. Use `useStepStateTimer` with ≥ 0.5–1 s or `useStepStateParallel`, and memoise per revision (`api.engine.getRevision`).
 
-Verify in-game first (smallest spikes)
+Open questions to verify in-game
 1. A staging mod with a `react-plugin ::GameBarInfoDisplayExtension` that returns a TextView: are mod `.res.lua` plugins discovered, and does the `.script.lua` module load?
 2. A `react-plugin ::ModEntryPointExtension` that `debugPrint`s on mount and handles `react.onEvent("uio.open")`. Fire the event from a `::MainModButtonAreaExtension` button and open a `builtin.Window` through `game_react_globals.getDefaultWindowApi().addSingletonWindow`.
 3. A `react-replacement-config` that wraps an exported recipe, for example `line_react_util.LineBalance`, with `CallOriginalRecipe`: does it take effect, and does it combine with mission replacements?
@@ -342,7 +342,7 @@ Verify in-game first (smallest spikes)
 
 ## 7. Testing GUI mods with the template
 
-Template: `/mnt/c/Users/maxbl/tf3-mod-template`. Its layout is `src/<mod>/content/<mod>/...`, it has an offline fengari mock (`spec/support/mock_engine.lua`) and an in-game driver `spec/ingame/run.sh`. The driver deploys the mod and the testbench to the staging area and launches `TransportFever3.exe --script <testbench>::/<dir>/app_script.lua`. The app script starts a 16x16 game with `MODS = {urbangames_no_costs_1, my_mod_1, my_mod_testbench_1}` (`spec/ingame/my_mod_testbench/content/my_mod_testbench/app_script.lua:11-36`). The testbench's game script prints `[testbench] PASS|FAIL ...` and `DONE`.
+Template: the `tf3-mod-template` repository. Its layout is `src/<mod>/content/<mod>/...`, it has an offline fengari mock (`spec/support/mock_engine.lua`) and an in-game driver `spec/ingame/run.sh`. The driver deploys the mod and the testbench to the staging area and launches `TransportFever3.exe --script <testbench>::/<dir>/app_script.lua`. The app script starts a 16x16 game with `MODS = {urbangames_no_costs_1, my_mod_1, my_mod_testbench_1}` (`spec/ingame/my_mod_testbench/content/my_mod_testbench/app_script.lua:11-36`). The testbench's game script prints `[testbench] PASS|FAIL ...` and `DONE`.
 
 How to use it for GUI work:
 - Offline: the mock has no react runtime. Put data shaping (line/vehicle aggregation, problem ranking, formatting) in pure modules that take plain tables, and spec those. Keep recipes thin. A minimal fake of `react`/`builtin` (functions that return tables) would allow snapshot tests of recipe output, but it is not in the template.
@@ -352,7 +352,7 @@ How to use it for GUI work:
   3. Give every mod component a `meta = { id = "uio.dashboard" }`; the base does the same, e.g. `main/game.tl:381,421`.
   4. Recipes can `debugPrint` on mount, and run.sh greps `stdout.txt`.
   5. Exercise actions with real commands: build a line or depot in the scenario, then trigger the mod's button handler through an event and check components (e.g. `TRANSPORT_VEHICLE.state`).
-  6. For visual checks: `api.gui.camera.takeScreenshot(scale)` writes to the userdata folder (`apidef/api/gui.d.tl:455`), or use the PowerShell screen grab described in skill testing.md (ask the user first).
+  6. For visual checks: `api.gui.camera.takeScreenshot(scale)` writes to the userdata folder (`apidef/api/gui.d.tl:455`), or use the PowerShell screen grab described in skill testing.md.
 - The `make validate` step (game validator) also applies to GUI mods, and `make content` must list all new `.res.lua`, `.script.lua` and `.css.lua` files in `_content.json`.
 
 ## Appendix: official mods and DLC scan

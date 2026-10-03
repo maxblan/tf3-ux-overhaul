@@ -1,4 +1,4 @@
---- Construction menu (backlog F1-F3):
+--- Construction menu:
 --   * the Rail and Tracks menus show each other's tabs, as do Road and Roads: stations, depots,
 --     tracks and signals are one menu away from either game-bar button. Each button still opens on
 --     its own first tab, so nothing moves away from where players look for it.

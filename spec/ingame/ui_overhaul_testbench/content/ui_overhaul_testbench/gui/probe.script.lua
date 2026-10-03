@@ -38,11 +38,12 @@ end)
 
 -- variant -> { hooks in the window wrapper, content builder }
 local VARIANTS = {
-	{ wrapper = "constant_timer", content = function() return col{ text("v1 constant timer in wrapper") } end },
-	{ wrapper = "state", content = function() return col{ text("v2 useState in wrapper") } end },
+	{ wrapper = "constant_timer", content = function() return col{ text("variant 1: constant timer in wrapper") } end },
+	{ wrapper = "state", content = function() return col{ text("variant 2: useState in wrapper") } end },
 	{ content = function() return col{ TickingContent{} } end },
 	{ content = function() return col{ TickingContent{ rich = true } } end },
-	{ wrapper = "ticking_timer", content = function(n) return col{ text("v5 ticking timer in wrapper " .. n) } end },
+	{ wrapper = "ticking_timer",
+		content = function(n) return col{ text("variant 5: ticking timer in wrapper " .. n) } end },
 }
 
 local ProbeWindow

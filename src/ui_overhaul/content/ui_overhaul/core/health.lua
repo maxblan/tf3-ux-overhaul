@@ -1,6 +1,5 @@
 --- Network health from a plain snapshot of the game (see engine/snapshot.lua): counters and a
--- ranked problem list (written for the status strip and the Control Center, both since removed).
--- Pure Lua, no engine access.
+-- ranked problem list. Pure Lua, no engine access.
 --
 -- Snapshot shape:
 --   finance  = { cash, loan, cashflow_month, cashflow_last_month }        money in game units

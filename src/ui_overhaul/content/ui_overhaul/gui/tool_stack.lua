@@ -1,4 +1,4 @@
---- Window behaviour (backlog E1-E3). The game manages its big windows on a "tool stack" where only
+--- Window behaviour. The game manages its big windows on a "tool stack" where only
 -- the top tool's window is visible and opening a window closes the others. This replacement keeps
 -- the vanilla stack and changes three rules:
 --   * the "window tools" (Statistics, Line Manager, Finances, Company, notification log) and entity

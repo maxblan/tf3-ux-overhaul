@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for looking. This file covers the parts of this repository that cost hours to find out by trial. Most of them come from one fact: a mistake in a GUI mod can take the whole game UI down with it.
+Thanks for looking. This file covers the parts of this repository that are hard to find out by trial. Most of them come from one fact: a mistake in a GUI mod can take the whole game UI down with it.
 
 ## What you need
 

@@ -1,6 +1,6 @@
 # TF3 UI/UX inventory
 
-An inventory of Transport Fever 3's in-game UI, read from the game's GUI source (build of 2026-09-29). Every claim cites `file:line`. Paths that start with `SCR/game/...` correspond to `.game/game/...` after you run `tools/extract_game_sources.sh`.
+An inventory of Transport Fever 3's in-game UI, read from the game's GUI source (build 40408). Every claim cites `file:line`. Paths that start with `SCR/game/...` correspond to `.game/game/...` after you run `tools/extract_game_sources.sh`.
 
 | File | Area | Contents |
 |---|---|---|
@@ -16,7 +16,7 @@ An inventory of Transport Fever 3's in-game UI, read from the game's GUI source 
 
 Each area file has the same four sections: 1. Surfaces, 2. Task flows (with click counts), 3. Friction findings (rated High/Med/Low) and 4. Improvement opportunities (with the saving and how it could be modded).
 
-## Ten facts that shape the mod
+## Ten facts that shape GUI modding
 
 1. The whole in-game GUI is Lua/Teal React-style "recipes" (`gui/main/react.lua`), about 117k lines. The engine draws only the built-in widgets.
 2. Mods hook in with resource files instead of shadowing base files:

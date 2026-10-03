@@ -5,8 +5,8 @@ Two sub-files go into more detail (summarised in §5):
 - `01b_notifications.md`: notifications, warnings, popups, log, every notification type.
 - `01c_layers_maphud.md`: the 11 map layers, the layer ridge, map HUD icons, tooltips and callouts.
 
-Paths: `G=SCR/game/gui/gui`, `GM=SCR/game/game_mechanics/game_mechanics`, `MS=SCR/game/mission_x/mission`. I extracted `mission.zip` from the TF3 install into `SCR/game/mission_x` because the guide system and mission task list live there.
-Keybindings: the physical keys are not in the Lua sources. Input actions come from the engine (`app.getInputActionRep()`, `G/menu/settings_page.tl:1645`; `InputActionDesc.defaultBindings`, `SCR/game/apidef/api/type.d.tl:3073-3094`). I read the keys from the player's `settings_keys_v3.lua` (Steam userdata `.../3493540/local/`, copy at `SCR/settings_keys_v3.lua`, parsed into `SCR/keys_table.txt`). These are probably the defaults unless the player rebound something. Needs in-game verification.
+Paths: `G=SCR/game/gui/gui`, `GM=SCR/game/game_mechanics/game_mechanics`, `MS=SCR/game/mission_x/mission`. `SCR/game/mission_x` holds the extracted `mission.zip` from the TF3 install, because the guide system and mission task list live there.
+Keybindings: the physical keys are not in the Lua sources. Input actions come from the engine (`app.getInputActionRep()`, `G/menu/settings_page.tl:1645`; `InputActionDesc.defaultBindings`, `SCR/game/apidef/api/type.d.tl:3073-3094`). The keys below are read from a player's `settings_keys_v3.lua` (Steam userdata `.../3493540/local/`, copy at `SCR/settings_keys_v3.lua`, parsed into `SCR/keys_table.txt`). These are probably the defaults unless the player rebound something. Needs in-game verification.
 
 ## 0. Shell architecture (how the frame is built)
 
@@ -265,7 +265,7 @@ Anchored bottom-left, full width (`G/game_bar/game_bar.css.lua:40-50`). Backgrou
 - Esc is bound to `IA_MENU`, `IA_MENU_BACK`, `IA_CLOSE_TOPMOST_WINDOW`, `IA_CONSTRUCTION_ACTION_CANCEL` and `IA_SKIP_VOICEOVER_AND_CUTSCENE` at once. Which one wins is engine priority and needs in-game verification.
 
 ### 1.16 Keyboard and mouse bindings (from the player's `settings_keys_v3.lua`; gamepad in brackets)
-Settings UI: Settings → Key Mapping, mouse mode only. Categories are General, Game, Campaign, Statistics, Layers, Construction, Camera and Camera Tool, with a text filter and conflict detection (`G/menu/settings_page.tl:91-100,131-210,1641-1660`). Only actions with a non-empty `uiCategory` are listed. The ids are engine-defined; I found no way for a mod to register new input actions in the code (needs verification).
+Settings UI: Settings → Key Mapping, mouse mode only. Categories are General, Game, Campaign, Statistics, Layers, Construction, Camera and Camera Tool, with a text filter and conflict detection (`G/menu/settings_page.tl:91-100,131-210,1641-1660`). Only actions with a non-empty `uiCategory` are listed. The ids are engine-defined; The code shows no way for a mod to register new input actions (needs verification).
 
 | Area | Action id → key | Handler / effect |
 |---|---|---|
@@ -340,20 +340,20 @@ Hotkeys can be discovered only through the hover tooltip (`tooltipModifierInputA
 
 | # | Proposal | Saving | Moddability |
 |---|---|---|---|
-| I1 | Status strip in the game bar: cash-flow this month and last month (`calcIncomeSince` / `calculateBalance`), loan, # problem lines (`getProblemLines`), # line issues (`getLinesIssues`), # no-path vehicles (`getNoPathVehicles`), # vehicles past lifespan. Each item is clickable and deep-links: `openStatisticsWindow "Line"`, `openFinanceWindow "Finances"`, `openVehicleManager{openWithVehicleEntities}`. | "Is anything wrong?" goes from 2–6C (T5) to 0 (glance), and drill-down to 1C | Easy: `react-plugin ::GameBarInfoDisplayExtension` with an `order` field (`game_bar_widgets.tl:70`). Polling should use `useStepStateTimer` (`engine_react_util.tl:126-157`) to stay cheap. |
-| I2 | Quick-launch row (top-left next to Layers): Finances, Company, Weather, Vehicle Store, Notifications log, "next problem" button, 1x/2x/4x/8x buttons. | Opening a window without a hotkey: 1C, but discoverable. Speed set: 1C instead of 1–3K | Easy: `MainModButtonAreaExtension` (`main_mod_button_area.tl:7`). Events per §0. Speed via `api.cmd.makeGameSetSpeedCmd(n)`, which `GameSpeedHelper` re-syncs every step (`game.tl:640-652`). Whether speed >4 works needs verification. |
-| I3 | Non-exclusive, side-by-side windows: let Statistics, Line Manager, Finances, Music and Weather stack, and stop shelving from hiding them. | T6/T8/T9/T10/T11: saves 1K + navigation each time; enables list+detail workflows | Medium: replace the `ToolStack` recipe (`builtin.lua:1197`, normal RegisterRecipe) through `react-replacement-config`. Copy about 260 lines, then make `push` stack for whitelisted tool names and make `shelveNonTop` skip hiding. Watch out for tools that rely on exclusivity (construction). |
-| I4 | Map click keeps tool windows: pass `allowStacking=true` for mouse picks, or only when Ctrl is held (`dummyModifierMultiselect`). | T9: saves reopening the Line Manager each click | Medium: replace `InspectorSelector` (`selector_react_util.tl:243`). `makeDefaultSelector` already takes `allowStacking` (`:88`). Needs I3 so stacked windows stay visible. |
-| I5 | Pin without closing tools | T8 | Medium: needs a `ViewManager`/entity-window replacement (`view_manager.tl:498-509`) or I3's ToolStack replacement where `clear()` spares whitelisted tools. |
-| I6 | Problem-first notifications: un-ignore problem types by default, badge on the button. | T5: 2–6C → 0–1C | Easy/Medium: override notification `.res.lua` defaults; badge needs `GloballyReplaceRecipe(NotificationButton)` (see 01b §5). |
-| I7 | Earnings tooltip / period clarity, plus a second plugin "This month" | F8 | Easy: own `GameBarInfoDisplayExtension` plugin. Changing the built-in label needs a replacement of `GameBarEarningsPlugin` (a registered plugin recipe). |
-| I8 | Shortcut cheat-sheet overlay listing all bound actions and keys | F14 | Easy/Medium: a window from a `MainModButtonArea` button. The list comes from `app.getInputActionRep()` (as in `settings_page.tl:1645-1660`) and the bindings from app config `keyCmdDefinitions` (`:131`). Whether those are readable from in-game UI needs verification. |
+| I1 | Status strip in the game bar: cash-flow this month and last month (`calcIncomeSince` / `calculateBalance`), loan, # problem lines (`getProblemLines`), # line issues (`getLinesIssues`), # no-path vehicles (`getNoPathVehicles`), # vehicles past lifespan. Each item is clickable and deep-links: `openStatisticsWindow "Line"`, `openFinanceWindow "Finances"`, `openVehicleManager{openWithVehicleEntities}`. | "Is anything wrong?" goes from 2–6C (T5) to 0 (glance), and drill-down to 1C | A `react-plugin ::GameBarInfoDisplayExtension` with an `order` field (`game_bar_widgets.tl:70`). Polling should use `useStepStateTimer` (`engine_react_util.tl:126-157`) to stay cheap. |
+| I2 | Quick-launch row (top-left next to Layers): Finances, Company, Weather, Vehicle Store, Notifications log, "next problem" button, 1x/2x/4x/8x buttons. | Opening a window without a hotkey: 1C, but discoverable. Speed set: 1C instead of 1–3K | A `MainModButtonAreaExtension` plugin (`main_mod_button_area.tl:7`). Events per §0. Speed via `api.cmd.makeGameSetSpeedCmd(n)`, which `GameSpeedHelper` re-syncs every step (`game.tl:640-652`). Whether speed >4 works needs verification. |
+| I3 | Non-exclusive, side-by-side windows: let Statistics, Line Manager, Finances, Music and Weather stack, and stop shelving from hiding them. | T6/T8/T9/T10/T11: saves 1K + navigation each time; enables list+detail workflows | Replace the `ToolStack` recipe (`builtin.lua:1197`, normal RegisterRecipe) through `react-replacement-config`. Copy about 260 lines, then make `push` stack for whitelisted tool names and make `shelveNonTop` skip hiding. Watch out for tools that rely on exclusivity (construction). |
+| I4 | Map click keeps tool windows: pass `allowStacking=true` for mouse picks, or only when Ctrl is held (`dummyModifierMultiselect`). | T9: saves reopening the Line Manager each click | Replace `InspectorSelector` (`selector_react_util.tl:243`). `makeDefaultSelector` already takes `allowStacking` (`:88`). Needs I3 so stacked windows stay visible. |
+| I5 | Pin without closing tools | T8 | Needs a `ViewManager`/entity-window replacement (`view_manager.tl:498-509`) or I3's ToolStack replacement where `clear()` spares whitelisted tools. |
+| I6 | Problem-first notifications: un-ignore problem types by default, badge on the button. | T5: 2–6C → 0–1C | Override notification `.res.lua` defaults; badge needs `GloballyReplaceRecipe(NotificationButton)` (see 01b §5). |
+| I7 | Earnings tooltip / period clarity, plus a second plugin "This month" | F8 | A separate `GameBarInfoDisplayExtension` plugin. Changing the built-in label needs a replacement of `GameBarEarningsPlugin` (a registered plugin recipe). |
+| I8 | Shortcut cheat-sheet overlay listing all bound actions and keys | F14 | A window from a `MainModButtonArea` button. The list comes from `app.getInputActionRep()` (as in `settings_page.tl:1645-1660`) and the bindings from app config `keyCmdDefinitions` (`:131`). Whether those are readable from in-game UI needs verification. |
 | I9 | Hotkeys for unbound or missing actions | F7 | Existing unbound actions (`selectMusicPlayer`, `selectCameraTool`, `IA_TOGGLE_LAYER_BUTTON_RIDGE`): the player can bind them in Settings (only if they have a `uiCategory`; verify). New actions (Finances, Company, etc.): likely not feasible, because input actions are engine-defined (`InputActionRep`). Workaround: I2 buttons, or a command palette (I10). |
-| I10 | Command palette / jump-to window (type a line, station or town name → open its window, line manager, statistics tab or construction tab) | Saves 2–5C per navigation | Medium: a window opened from a `MainModButtonArea` button. Entities via `api.engine.system.lineSystem.getLinesForPlayer` (`system.d.tl:18`), opening via `selectEntity` / `openVehicleManager` / `constructionMenuSetTab` events. A dedicated hotkey is limited by I9. |
-| I11 | Radial menu on PC (it already has `mouseSupport`) plus entries for Line Manager, Vehicle Store and Construction | F7 | Entries: easy via `RadialMenuExtension`. Opening it on PC needs a binding for `IA_RADIAL_MENU` (settings, if exposed) or a replacement of `GameBarMenuRight` (`game_bar.tl:1123`) to make its fake button reachable. Medium. |
-| I12 | Celebration throttle: collapse queued celebrations into one summary callout, or shorten to 4 s | F11 | Medium: replace `CelebrationsContainer` (`celebration_react_util.tl:133`). |
-| I13 | Real-speed indicator (shows "throttled to 2x" when `getEstimatedMaximumGameSpeed` < selected) | F9 | Easy as a `GameBarInfoDisplayExtension` plugin, which reads the `GAME_SPEED` component like `game.tl:644`. |
-| I14 | Context-help pages for mod UIs | F15 | Medium: replace `ContextHelperWindow` (wrapper recipe; `pages` table is local). |
+| I10 | Command palette / jump-to window (type a line, station or town name → open its window, line manager, statistics tab or construction tab) | Saves 2–5C per navigation | A window opened from a `MainModButtonArea` button. Entities via `api.engine.system.lineSystem.getLinesForPlayer` (`system.d.tl:18`), opening via `selectEntity` / `openVehicleManager` / `constructionMenuSetTab` events. A dedicated hotkey is limited by I9. |
+| I11 | Radial menu on PC (it already has `mouseSupport`) plus entries for Line Manager, Vehicle Store and Construction | F7 | Entries via `RadialMenuExtension`. Opening it on PC needs a binding for `IA_RADIAL_MENU` (settings, if exposed) or a replacement of `GameBarMenuRight` (`game_bar.tl:1123`) to make its fake button reachable. |
+| I12 | Celebration throttle: collapse queued celebrations into one summary callout, or shorten to 4 s | F11 | Replace `CelebrationsContainer` (`celebration_react_util.tl:133`). |
+| I13 | Real-speed indicator (shows "throttled to 2x" when `getEstimatedMaximumGameSpeed` < selected) | F9 | A `GameBarInfoDisplayExtension` plugin that reads the `GAME_SPEED` component like `game.tl:644`. |
+| I14 | Context-help pages for mod UIs | F15 | Replace `ContextHelperWindow` (wrapper recipe; `pages` table is local). |
 
 ## 5. Sub-file summaries
 
@@ -362,14 +362,14 @@ Hotkeys can be discovered only through the hover tooltip (`tooltipModifierInputA
 - Popups: icons only, at most 18, text on hover. Left-click jumps the camera and closes windows. Right-click dismisses.
 - Log: one column, category filter, History/Active toggle. No search, counts or dismiss-all.
 - No notification at all for unprofitable lines, low cash or loan, old vehicles, lines without vehicles, or idle vehicles in a depot.
-- Mod hooks: new detectors are easy (game script + notification res). Badge or overview needs a recipe replacement.
+- Mod hooks: a new detector needs only a game script and a notification res. A badge or overview needs a recipe replacement.
 
 01c, layers and map HUD (`01c_layers_maphud.md`):
 - 11 exclusive layers; 2 clicks by mouse or 1 numpad key. Only the HUD filter persists; layer options reset on open.
 - Map HUD shows: vehicle state and load, industry and warehouse stock, town growth, warning icons, waiting passengers at stations (not cargo).
 - Map HUD does not show: unprofitable lines/vehicles. The meaning of a warning is hover-only.
-- Easy mod hook: `MainModButtonAreaExtension` for quick layer and filter toggles.
-- Medium mod hooks: replace `HudIconMasterGame`, `DefaultEntityToolTip` or `ExpandableLayerButton`.
+- Plugin hook: `MainModButtonAreaExtension` for quick layer and filter toggles.
+- Replacement hooks: `HudIconMasterGame`, `DefaultEntityToolTip` or `ExpandableLayerButton`.
 
 ## 6. Unknowns needing in-game verification
 - Default key bindings (taken from the player's file).

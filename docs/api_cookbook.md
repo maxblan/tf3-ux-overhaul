@@ -200,7 +200,7 @@ not the calendar one. Age-in-years style values should therefore divide by `api.
 Common facts for this section:
 - All paths are relative to `.game/game/`. Snippets are base Teal with annotations and casts removed. `api.type["enum"].X` in Teal is written as `api.type.enum.X` in plain Lua (`enum` is a Teal keyword but not a Lua one).
 - Every engine call below is a read from `api.engine.*`. The base calls these from GUI recipes, and `notifications.script.tl` calls the same `api.engine.util.line.*` functions from the engine-side game script. They work in both states.
-- The base never uses `useStepStateParallel` for lines or stations. The only parallel user is the town window. Statistics and the LVM use `useStepStateTimer` (default 0.5 s) or `useStepState` (every step), once per visible table cell.
+- The base never uses `useStepStateParallel` for lines or stations. The town window is the only parallel caller. Statistics and the LVM use `useStepStateTimer` (default 0.5 s) or `useStepState` (every step), once per visible table cell.
 - Money values are raw integers; pass them to `api.util.formatMoney`. Time values are game-time ticks (`GAME_TIME.gameTime`, integer); `api.util.getDefaultYearDuration()` = "game ticks per year" (`apidef/api/util.d.tl:118-120`).
 
 ### 2.1 Lines of the player
@@ -452,7 +452,7 @@ Paths are relative to `.game/game/`. Short forms used below: `LVM/` = `gui/gui/l
 | `carrier` | `api.type.enum.Carrier.ROAD/TRAM/RAIL/WATER/AIR` |
 | `transportVehicleConfig.vehicles[i]` | `TransportVehiclePart{ part{modelId, reversed, color, …}, purchaseTime, maintenanceState, maintenanceChange, autoLoadConfig }` (`apidef/api/type.d.tl:1511-1524`) |
 | `state` | `TransportVehicleState` (see below) |
-| `userStopped` | the user stopped the vehicle |
+| `userStopped` | the player stopped the vehicle |
 | `depot` | depot entity if the vehicle is in a depot or heading to one |
 | `sellOnArrival` | the vehicle will be sold at the depot |
 | `line`, `stopIndex` | assigned line; next stop index (0-based) |
@@ -461,7 +461,7 @@ Paths are relative to `.game/game/`. Short forms used below: `LVM/` = `gui/gui/l
 | `maintenanceStation` | -1 if the vehicle is not maintained |
 | `loadState`, `timeUntilDeparture`, `lastLineStopDeparture`, `sectionTimes`, `lineStopDepartures` | scheduling data |
 
-`TransportVehicleState` (`apidef/api/type.d.tl:438-447`) has only 4 values: `IN_DEPOT`, `EN_ROUTE`, `AT_TERMINAL`, `GOING_TO_DEPOT`. Read them as `api.type.enum.TransportVehicleState.X`. "Stopped by user" is not a state; it is the separate flag `userStopped`.
+`TransportVehicleState` (`apidef/api/type.d.tl:438-447`) has only 4 values: `IN_DEPOT`, `EN_ROUTE`, `AT_TERMINAL`, `GOING_TO_DEPOT`. Read them as `api.type.enum.TransportVehicleState.X`. "Stopped by the player" is not a state; it is the separate flag `userStopped`.
 
 Base polling hooks (`gui/gui/main/engine_react_util.tl`):
 - `useStepState(fn)` re-evaluates every frame.
@@ -617,7 +617,7 @@ local tv = api.engine.getComponent(vehicleEntity, api.type.ComponentType.TRANSPO
 local part = tv.transportVehicleConfig.vehicles[1]
 local desc = api.res.modelRep.get(part.part.modelId).metadata.description
 local modelName = desc.name           -- localized model name; icons: desc.icon20, desc.icon20cblend
-local vehicleName = api.engine.util.getEntityName(vehicleEntity)   -- the user-visible vehicle name (engine/util.d.tl:1038-1040)
+local vehicleName = api.engine.util.getEntityName(vehicleEntity)   -- the vehicle name shown in the UI (engine/util.d.tl:1038-1040)
 ```
 - For a whole train, list all parts: `vehicle_util.GetVehicleModelIds(v) -> {modelId}` (`LVM/vehicle_util.tl:316-324`).
 - `VehicleInfoType` builds the name as "A (3x)\n + B" (`EOW/vehicle/vehicle_eow.script.tl:86-140`).
@@ -1248,8 +1248,8 @@ to `_` logs a warning and returns it unchanged. A mod's own strings come from it
 plain components (`TextView`, `Button`, `Component`, `DataTable`) inside it.
 - This is not enforced in Lua. `react.lua:262-295` only checks *wrapper* recipes (0 or 1 child of the wrapped
   builtin). The C++ framework enforces it: a non-layout root logs `Recipe child must be a layout` →
-  `ReactFramework::Load() failed`, and the **whole game UI** drops. This was verified in the project spike
-  (`docs/PLAN.md:163`, tf3-modding `references/engine.md:152-155`).
+  `ReactFramework::Load() failed`, and the **whole game UI** drops. This is verified in-game
+  ([CONTRIBUTING.md, "Rules the game enforces"](../CONTRIBUTING.md#rules-the-game-enforces), tf3-modding `references/engine.md:152-155`).
 - Base follows it everywhere: even `LinesStatistic` returns `builtin.FloatingLayout` (`G/statistics/statistic_lines.tl:436`).
   Window wrapper recipes return `builtin.Window` (`RegisterWrapperRecipe`).
 - `builtin.Component{ layout = BoxLayout{…} }` is how a component gets children (`scripts/scripts/builtin.d.tl:760-766`).

@@ -1,16 +1,10 @@
-# Flow audit v2: missed and under-served player flows
+# Improvement candidates
 
-Date: 2026-10-03. Source: the extracted game build in `.game/game/` (the same build as `docs/inventory/`). Paths are relative to `.game/game/gui/gui/` unless they start with `game_mechanics/`, `scripts/`, `apidef/` or `src/`.
+Player flows in the vanilla screens that could be quicker, safer or clearer, with a proposal for each and its status. Paths are relative to the extracted game sources in `.game/game/gui/gui/` (see `tools/extract_game_sources.sh` and `docs/inventory/`) unless they start with `game_mechanics/`, `scripts/`, `apidef/` or `src/`.
 
-This audit followed the v2 direction:
-- Improve the vanilla screens in place, as if they had always worked this way.
-- Add new UI only when nothing else works, and then in vanilla style.
-- Add nothing new for the player to learn.
-- No new notifications, and no change to which notifications are hidden.
+Every candidate follows the rules in [design.md](design.md#design-rules): improve the vanilla screen in place, add new UI only when nothing else works, add nothing new for players to learn, and change nothing about which notifications appear.
 
-Items that were already done or rejected at the time of the audit (see the brief in `PLAN.md` and the commit `041576a`) are not proposed again. Several proposals have been built since; the Status column in section 1 shows which.
-
-Method: a full play session was split into seven areas:
+The candidates cover a full play session in seven areas:
 - vehicle store
 - line editing
 - construction
@@ -19,17 +13,15 @@ Method: a full play session was split into seven areas:
 - shell, save and load
 - layers and statistics
 
-Every claim was traced to code. The top items were checked a second time by hand: ProblemsCell equality, quit/load/save paths, `groupSaves`, the sublistId tab bug, `newLine` with selected vehicles, the `customFilters` side effect, Sell, the accordion, the store sort default, the mission counter in the store table, and the export status of every hook named below.
+Every claim is traced to the game's code. Value is high, med or low.
 
-Ratings: effort is E (easy: wrapper, patch or data, under about 100 lines), M (medium: small fork or a hack that needs verification) or H (hard: big fork). Value is high, med or low.
+## 0. Hooks shared by many candidates
 
-## 0. Enabling hooks found during the audit (shared by many items)
-
-These make most proposals cheap. Each one is called through a module table at runtime or is an exported recipe.
+Each of these is called through a module table at run time or is an exported recipe.
 
 | Hook | Where | Kind | Reaches |
 |---|---|---|---|
-| `entity_window_util.ActionButtonBar` | entity_window_util.tl:1187 | exported recipe. Wrap it and edit `primaryButtons`/`secondaryButtons` by `tag`. `customItem` (:1119) lets one button be swapped for our own stateful recipe. | Sell/discard confirmations and button labels in all 6 action bars |
+| `entity_window_util.ActionButtonBar` | entity_window_util.tl:1187 | exported recipe. Wrap it and edit `primaryButtons`/`secondaryButtons` by `tag`. `customItem` (:1119) lets one button be swapped for a stateful recipe of the mod. | Sell/discard confirmations and button labels in all 6 action bars |
 | `content_card.makeContentCardsCollapsibleFunctions` | main/content_card.tl:457 | module function, called through the table by 15 call sites | Collapsible sections in every entity window |
 | `content_card.ContentCard` | main/content_card.tl:207 | exported recipe. It can detect local content recipes by `react.GetRecipeName` (react.lua:441). | Local cards such as `TownLevelWidget`, `SuppliersWidget`, `VehicleBalanceGraph`. One central recipe, so keep the wrapper thin. |
 | LVM `commonParams` capture | `line_util.makeLineActionDescriptor` (called at manager_window.tl:435, 817, 992, 1157, 1308), or the exported `vehicle_list_react_util.VehicleList` (`params.commonParams`) | patch or wrap | `newLine`, `moveStop`, `openCargoFilter`, `addFeedback`, and `vehicleStoreOpenForDepotAndLineRef` (which line a purchase is for). These functions are reassigned on every render, so wrap them through a metatable proxy (`__newindex`). Chain with zhenya_auto_assign_terminals, which also patches `makeLineActionDescriptor`. |
@@ -48,66 +40,66 @@ Hooks that are possible but hacky (flag them, and use them only behind a self-ch
 
 ## 1. Ranked overview
 
-Ranked by value divided by effort. The fixes to our own code come first. The Status column is as of 2026-10-03. "Out of scope" items touch save, load or quit, and v2 changes gameplay screens only (see `PLAN.md`). #17 still lacks the age-% column and the hand-off to the Line Manager.
+Fixes to the mod's own code come first. After them the order follows value, with candidates that need a fork of a large base file last. Status is done, partly done, open, or out of scope. The mod changes gameplay screens only (see [design.md](design.md#design-rules)), so candidates on the save, load and pause screens are out of scope.
 
-| # | Flow | Proposal (what the player notices) | Effort | Value | Status |
-|---|---|---|---|---|---|
-| 1 | Statistics → Problems (all tabs) | The Problems icon updates live (it no longer sticks after a fix), and the tooltip lists the problems | E | high | open |
-| 2 | Statistics → Lines (our feature) | Our bug: the "Problems" quick filter always shows nothing; it also re-filters every frame | E | high | done |
-| 3 | Sell from the vehicle window | Sell asks first, with the same question tape as the Line Manager | E | high | done |
-| 4 | Any entity window | Opened sections stay open next time, and several can be open at once | E | high | done |
-| 5 | Load the latest progress (in game) | The Load card loads the newest save, autosave included | E | high | out of scope (save/load) |
-| 6 | Load another save (in game) | "All unsaved progress will be lost." asks before loading | E–M | high | out of scope (save/load) |
-| 7 | Perk locked after a promotion | The lock reason says "Promotion pending – open the Company window" instead of contradicting the bar | E | high | done |
-| 8 | Vehicle store | Newest model listed first and preselected; the sort choice is kept | E (hacky) / M | high | done (list layout only) |
-| 9 | Town not growing | The level card says "Growing slowly – limited by Traffic" and shows "43 % to Small Town" as text | E–M | high | done |
-| 10 | Bulldozing a station | The bulldozer tooltip warns "Removes *Name* – 3 lines stop here" | E–M | high | done |
-| 11 | Road network + bus stops | Road and Roads show all road tabs (mirror merge, like Rail+Tracks) | E–M | high | done |
-| 12 | Extending a hand-configured line | New stops still get automatic cargo | E–M | high | open |
-| 13 | Configure opens the module tab (done feature) | Vanilla bug sends the sublistId to the wrong tab in the dynamic Modules menu; a workaround is needed | M | high | worked around (module tab order) |
-| 14 | Quit | Quit asks first and offers Save & Quit | M | high | out of scope (save/load) |
-| 15 | Station click with several lines selected | No longer moves every selected vehicle onto a new one-stop line | M | high | done |
-| 16 | Replace a fleet | "Replace 12 vehicles for $X?" before an instant mass replace | M | high | done |
-| 17 | Find old or losing vehicles | Vehicles tab: quick filters, totals, age as % of lifespan, hand-off to the LVM | M | high | partly done (filters, totals, red age, age sort) |
-| 18 | Find crowded or idle stations | Stations tab: quick filters (incl. "No lines"), totals, correct Utilization sort | M | high | done |
-| 19 | Choose or repay a loan | Correct interest label and total cost; "Repay $X" with the interest saved | M (fork ~400) | high | open |
-| 20 | Save over the current game | No overwrite dialog when the name is the current game (it matches F10) | E (hack) / M | med-high | out of scope (save/load) |
-| 21 | Why is my line stuck? | Full-load stops show the vanilla load-mode icon in the stop row | E | med-high | open |
-| 22 | Station/landmark menu when money is short | The callout price turns red when unaffordable (vanilla already does this for custom actions) | M | med-high | open |
-| 23 | Buy a train for a line | Store title shows the line and the shortest platform | E–M | med-high | open |
-| 24 | Read the vehicle action bar | Secondary icons get their existing labels as captions | M | med-high | open |
-| 25 | Electric locos on non-electrified lines | Not offered for that line (like large aircraft for small airports) | M | med-high | open |
-| 26 | Town rating tiles and layer HUD | "Traffic · Poor" as text next to the colour | E | med | open |
-| 27 | Bridge/tunnel choice | Tooltip names the current type and its speed limit | E | med | open |
-| 28 | Subsidy offer | "Offer ends in 1 month" and "Due {date}" | E | med | open |
-| 29 | Perk "Already built" | "…another one at rank Director" | E | med | open |
-| 30 | Vehicle profit | "Last 12 months: +$X" in the Balance card | E | med | open |
-| 31 | Warehouse "Discard All Cargo" | Asks first | E | med | open |
-| 32 | Configure Stop | Always opens fresh for the clicked stop (stale state) | E | med | open |
-| 33 | Vehicle hover tooltip | Shows the line ("Line 4" / "In Depot") | E | med | open |
-| 34 | Finance window | Reopens on the tab used last | E–M | med | open |
-| 35 | Statistics after loading | Our replaced tabs keep sort and quick filter across save/load | E–M | med | open |
-| 36 | Cargo Satisfaction layer | Keeps the chosen cargo | E | med | open |
-| 37 | Notification log (reading) | Date always visible (CSS); search in a later step | E? / H | med | open |
-| 38 | Celebrations | Click acts and dismisses; no crash on an empty queue; paused while the game is paused | E (copy 233) | med | open |
-| 39 | Moving a stop | Automatic cargo is recalculated, as for every other edit | M | med | open |
-| 40 | Adding a stop | Tooltip names the position and warns about the wrong carrier | E–M | med | open |
-| 41 | Rank tax and rank progress | "Ticket income at this rank: 96 %"; one consistent progress figure with population numbers | M (hacky) | med–high | open |
-| 42 | Industry suppliers | Tables sorted by Received; per-cargo counts fixed | M | med | open |
-| 43 | Industries tab | "0 %" workload shown for starving processors | M | med | open |
-| 44 | Account tooltip | Debt and monthly loan payment | E (if writable) | med | open |
-| 45 | ConstructionWindow tabs | Each station tab gets its own type label (bug) | M | med | open |
-| 46 | Store comparison | Running cost and lifespan columns in Table layout (fixes a mission bug too) | M | med | open |
-| 47 | Calendar speed | Shown next to the date only when it is not 1x | E | low-med | open |
-| 48 | Tram/bus-lane tools | Options in the bottom bar instead of a second window | E | low-med | open |
-| 49 | Achievements tab | Vanilla "cannot be earned" tape plus "x / y" | E | low-med | open |
-| 50 | Junk one-stop lines | Discarded when deselected (debatable) | M | med | open |
-| 51 | Line search | Also finds lines by stop/station name | H (8.5k fork) | high | open |
-| 52 | Cargo waiting at cargo terminals | Station window counter shows cargo | H (1,069 fork) | med-high | open |
+| # | Flow | Proposal (what the player notices) | Value | Status |
+|---|---|---|---|---|
+| 1 | Statistics → Problems (all tabs) | The Problems icon updates live (it no longer sticks after a fix), and the tooltip lists the problems | high | open |
+| 2 | Statistics → Lines (the mod's tab) | Bug in the mod: the "Problems" quick filter always shows nothing; it also re-filters every frame | high | done |
+| 3 | Sell from the vehicle window | Sell asks first, with the same question tape as the Line Manager | high | done |
+| 4 | Any entity window | Opened sections stay open next time, and several can be open at once | high | done |
+| 5 | Load the latest progress (in game) | The Load card loads the newest save, autosave included | high | out of scope (save and load screens) |
+| 6 | Load another save (in game) | "All unsaved progress will be lost." asks before loading | high | out of scope (save and load screens) |
+| 7 | Perk locked after a promotion | The lock reason says "Promotion pending – open the Company window" instead of contradicting the bar | high | done |
+| 8 | Vehicle store | Newest model listed first and preselected; the sort choice is kept | high | done (list layout only) |
+| 9 | Town not growing | The level card says "Growing slowly – limited by Traffic" and shows "43 % to Small Town" as text | high | done |
+| 10 | Bulldozing a station | The bulldozer tooltip warns "Removes *Name* – 3 lines stop here" | high | done |
+| 11 | Road network + bus stops | Road and Roads show all road tabs (mirror merge, like Rail+Tracks) | high | done |
+| 12 | Extending a hand-configured line | New stops still get automatic cargo | high | open |
+| 13 | Configure opens the module tab | Vanilla bug sends the sublistId to the wrong tab in the dynamic Modules menu; the module tabs are ordered around it | high | done (module tab order) |
+| 14 | Quit | Quit asks first and offers Save & Quit | high | out of scope (pause menu) |
+| 15 | Station click with several lines selected | No longer moves every selected vehicle onto a new one-stop line | high | done |
+| 16 | Replace a fleet | "Replace 12 vehicles for $X?" before an instant mass replace | high | done |
+| 17 | Find old or losing vehicles | Vehicles tab: quick filters, totals, age as % of lifespan, hand-off to the LVM | high | partly done (filters, totals, red age, age sort; no age-% column or hand-off to the Line Manager) |
+| 18 | Find crowded or idle stations | Stations tab: quick filters (incl. "No lines"), totals, correct Utilization sort | high | done |
+| 19 | Choose or repay a loan | Correct interest label and total cost; "Repay $X" with the interest saved | high | open |
+| 20 | Save over the current game | No overwrite dialog when the name is the current game (it matches F10) | med-high | out of scope (save and load screens) |
+| 21 | Why is my line stuck? | Full-load stops show the vanilla load-mode icon in the stop row | med-high | open |
+| 22 | Station/landmark menu when money is short | The callout price turns red when unaffordable (vanilla already does this for custom actions) | med-high | open |
+| 23 | Buy a train for a line | Store title shows the line and the shortest platform | med-high | open |
+| 24 | Read the vehicle action bar | Secondary icons get their existing labels as captions | med-high | open |
+| 25 | Electric locos on non-electrified lines | Not offered for that line (like large aircraft for small airports) | med-high | open |
+| 26 | Town rating tiles and layer HUD | "Traffic · Poor" as text next to the colour | med | open |
+| 27 | Bridge/tunnel choice | Tooltip names the current type and its speed limit | med | open |
+| 28 | Subsidy offer | "Offer ends in 1 month" and "Due {date}" | med | open |
+| 29 | Perk "Already built" | "…another one at rank Director" | med | open |
+| 30 | Vehicle profit | "Last 12 months: +$X" in the Balance card | med | open |
+| 31 | Warehouse "Discard All Cargo" | Asks first | med | open |
+| 32 | Configure Stop | Always opens fresh for the clicked stop (stale state) | med | open |
+| 33 | Vehicle hover tooltip | Shows the line ("Line 4" / "In Depot") | med | open |
+| 34 | Finance window | Reopens on the tab used last | med | open |
+| 35 | Statistics after loading | The mod's Statistics tabs keep sort and quick filter across save/load | med | open |
+| 36 | Cargo Satisfaction layer | Keeps the chosen cargo | med | open |
+| 37 | Notification log (reading) | Date always visible (CSS); search would need a fork | med | open |
+| 38 | Celebrations | Click acts and dismisses; no crash on an empty queue; paused while the game is paused | med | open |
+| 39 | Moving a stop | Automatic cargo is recalculated, as for every other edit | med | open |
+| 40 | Adding a stop | Tooltip names the position and warns about the wrong carrier | med | open |
+| 41 | Rank tax and rank progress | "Ticket income at this rank: 96 %"; one consistent progress figure with population numbers | med–high | open |
+| 42 | Industry suppliers | Tables sorted by Received; per-cargo counts fixed | med | open |
+| 43 | Industries tab | "0 %" workload shown for starving processors | med | open |
+| 44 | Account tooltip | Debt and monthly loan payment | med | open |
+| 45 | ConstructionWindow tabs | Each station tab gets its own type label (bug) | med | open |
+| 46 | Store comparison | Running cost and lifespan columns in Table layout (fixes a mission bug too) | med | open |
+| 47 | Calendar speed | Shown next to the date only when it is not 1x | low-med | open |
+| 48 | Tram/bus-lane tools | Options in the bottom bar instead of a second window | low-med | open |
+| 49 | Achievements tab | Vanilla "cannot be earned" tape plus "x / y" | low-med | open |
+| 50 | Junk one-stop lines | Discarded when deselected (debatable) | med | open |
+| 51 | Line search | Also finds lines by stop/station name | high | open |
+| 52 | Cargo waiting at cargo terminals | Station window counter shows cargo | med-high | open |
 
-The full entries follow, in the same order. Section 4 lists the vanilla bugs, section 5 what was considered and rejected, and section 6 the in-game checks.
+The full entries follow, in the same order. Section 4 lists vanilla bugs, section 5 ideas that do not fit, and section 6 open questions to check in the game.
 
-## 2. Proposals in detail
+## 2. Candidates in detail
 
 ### 1. Statistics Problems column updates live
 - Flow: fix a broken line, stuck vehicle or crowded station while Statistics is open, then check the warning is gone. Or sort by Problems.
@@ -123,16 +115,13 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route: replace the exported `statistics_react_util.ProblemsCell` (:346) with a copy of about 60 lines that includes the local `WarningIcon` (:317-344).
   - Read the notification state through a cache refreshed at most once per frame.
   - Use default deepEquals.
-  - This fixes all 6 vanilla tabs plus ours.
-- Rating: E / high.
+  - This fixes all 6 vanilla tabs and the mod's tabs.
 
-### 2. Our Lines "Problems" quick filter (our own bug) and per-frame cost
+### 2. The mod's Lines "Problems" quick filter and its per-frame cost
 - Status: done.
 - Bug: `hasProblems` checks `type(value) == "number"` (src/ui_overhaul/content/ui_overhaul/gui/statistics_lines.lua:182-185). `getProblemsCompareValue` returns `{count, ids}` (statistics_react_util.tl:305-311), so the filter is always empty.
-  - Fix: `return value[1] > 0`.
-  - Add a spec.
+  - Fix: `return value[1] > 0`, with a spec.
 - Performance: `tableState` uses `useStepState` (statistics_lines.lua:283), so on every frame it runs `makeFilteredKeys`, which calls `calculateBalance` per line for the "losing" filter. Switch to `useStepStateTimer(…, 1.0)`.
-- Rating: E / high.
 
 ### 3. Sell from the vehicle window asks first
 - Status: done.
@@ -146,7 +135,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - For the entry with tag `entityWindow.vehicle.sell`, set `customItem = UioConfirmButton{orig = entry}`: a small recipe that holds the armed state and calls the original `onClick` on accept, which keeps the protected-entity feedback.
   - Drop `sound` from the first click.
   - No fork.
-- Rating: E / high.
 
 ### 4. Entity-window sections remember their state
 - Status: done.
@@ -164,10 +152,9 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Caveats:
   - With Input and Output both open, the industry flow arrows show only the inputs (`if/elseif`, industry.tl:330-357).
   - An expanded card registers its own `IA_MENU_BACK` (content_card.tl:356-360). Check the Esc order in game.
-- Rating: E / high.
 
 ### 5. The in-game Load card loads the newest save
-- Status: out of scope (save/load).
+- Status: out of scope (save and load screens).
 - Flow: "load where I was".
 - Vanilla friction:
   - `groupSaves` takes the first manual save as `mostRecent` (menu/savegame_react_util.tl:159-163).
@@ -180,10 +167,9 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Re-sort in Date mode.
   - The Save page filters to Manual and is unaffected.
   - The main-menu Load page stays vanilla, because there is no replacement pass outside the game GUI.
-- Rating: E / high.
 
 ### 6. Unsaved-progress warning before an in-game load
-- Status: out of scope (save/load).
+- Status: out of scope (save and load screens).
 - Vanilla friction: all three in-game load paths call `app.loadGame` immediately:
   - card button: savegame_react_util.tl:341-345
   - details double-click: :1105-1108
@@ -194,8 +180,7 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route: wrap the exported `SavegameCard` (:244) and `SavegameSelectCard` (:848). Hand them a proxied `commonParams` with `inGame = false` and a `setPage` that intercepts `"ProgressPage"`.
   - Every non-inGame branch defers loading into `onMount` (:347-355, 1110-1121, 1155-1164). The proxy shows the dialog and calls `onMount` on accept.
   - Restore `inGame` for `ModSelectorPage` (mod_selector_page.tl:1515; wrap its module return :682).
-  - About 70 lines, and all strings exist.
-- Rating: E–M / high.
+  - All strings exist.
 
 ### 7. Promotion pending: say so where the player hits the lock
 - Status: done.
@@ -207,13 +192,12 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - So the bar says "Manager" while the perk says "Unlocked at Rank: Manager" (company_util.tl:176).
   - The rank-up notification auto-dismisses (company_growth.script.tl:103).
 - Change: a rank-locked perk whose rank is already reached says "Promotion pending – open the Company window to unlock".
-  - Auto-applying was considered and rejected, because it would skip the vanilla unlock ceremony.
+  - Applying the rank automatically would skip the vanilla unlock ceremony.
 - No load: only existing reason text, and it removes a contradiction.
 - Route: monkey-patch `company_util.getConstructionDisableReason` (GUI state only; called through the table at construction_react_util.tl:1176, 1184). Compare `minRank` against `company_progression_util.getCompanyProgressionState(player).potentialLevel`.
   - Optional, hacky: the Company button tooltip ("Promotion ready…") via a `lang_util.format` template hook at game_bar.tl:466. `CompanyButton` is local (:378).
-- Rating: E / high.
 
-### 8. Vehicle store: newest model first, and the sort is remembered (D6, refined)
+### 8. Vehicle store: newest model first, and the sort is remembered
 - Status: done for the list layout only.
 - Vanilla friction:
   - The sort starts as `{mode="YearFrom", ascending=true, groupTypes=true}` (line_vehicle_mgmt/vehicle_store_window.tl:2550-2554), and the selection index starts at 1 (:2541-2544).
@@ -223,10 +207,9 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Change: newest first, newest preselected, and the last sort choice kept for the session.
 - No load: same controls, better default.
 - Route (smallest first):
-  - (a) In `doReplaceFn`, patch `react.useState` to substitute `ascending = false`, or a remembered sort through a small `old`/`set`/`transform` proxy. Only when the initial value is a table with exactly these three fields; that pattern occurs only at :2550 (grep). If the pattern stops matching it falls back to vanilla silently. About 15 lines, but hacky: flag it and self-check.
+  - (a) In `doReplaceFn`, patch `react.useState` to substitute `ascending = false`, or a remembered sort through a small `old`/`set`/`transform` proxy. Only when the initial value is a table with exactly these three fields; that pattern occurs only at :2550 (grep). If the pattern stops matching it falls back to vanilla silently. Hacky: flag it and self-check.
   - (b) Table layout: fork the exported `VehicleStoreTable` (587 lines) and combine with #46 and bug B-V1.
-  - (c) Clean fallback: fork about 4,680 lines. Everything under `VehicleStoreWindow` is local, so the backlog's "~2.5k" is too low.
-- Rating: E (hacky) / M / high.
+  - (c) Clean fallback: fork about 4,680 lines. Everything under `VehicleStoreWindow` is local.
 
 ### 9. Town window: name the growth bottleneck
 - Status: done.
@@ -237,7 +220,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Change: inside the existing level card, "Growing Slowly – limited by Traffic" (or "– no supplies"), plus "43 % towards Small Town" under the bar.
 - No load: one line in a card already shown; it replaces an up-to-8-tab hunt.
 - Route: `TownLevelWidget` is local (:26). Either fork the exported `TownLevelPlugin` (:124, about 110 lines), or use a thin ContentCard wrapper on "TownLevelWidget". Data: the same parallel rating functions the dashboard calls (`GetRatingsDashboard`, game_mechanics/towns/town_react_util.tl:2149-2205).
-- Rating: E–M / high.
 
 ### 10. Bulldozer: warn before removing a station that is in use
 - Status: done.
@@ -251,7 +233,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Walk `proposal.toRemove_native` (pattern: game_mechanics/towns/town_util.tl:1049ff).
   - For CONSTRUCTION entities, take `stations`, then `lineSystem.getLineStopsForStation`.
   - Needs in-game check that `toRemove` holds the construction.
-- Rating: E–M / high.
 
 ### 11. Road + Roads mirror merge
 - Status: done.
@@ -266,7 +247,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Check that the Rail+Tracks implementation avoids this trap too.
   - Every menu key must stay a table: `ipairs(menuCategories[menu])` at construction.tl:4012.
   - Known regression: tabs shown in the "foreign" menu lose their context-help page, because pages are keyed by element id (context_helper/context_helper_react.tl:28-160). The same applies to Rail+Tracks.
-- Rating: E–M / high.
 
 ### 12. Stops added to a hand-configured line still get automatic cargo
 - Vanilla friction:
@@ -279,23 +259,22 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route: wrap `line_util.autoLoadConfig`. When `customFilters` is set, run the original on a copy with it cleared, then copy back only the new stops.
   - New stops can be recognised: `makeNewStop` sets no `minWaitingTime`, while stops read from the game always have one (line_util.tl:99-104 vs 486-489).
   - No fork; this does not touch `LineManagerPanel`, so there is no conflict with celmi.
-- Rating: E–M / high. Check in game that passengers do not board when the flag is false.
+- Check in game that passengers do not board when the flag is false.
 
 ### 13. "Configure opens the relevant module tab" is affected by a vanilla bug
-- Status: worked around by ordering the module tabs (route a).
+- Status: done, worked around by ordering the module tabs (route a).
 - Evidence:
   - The `constructionMenuSetTab{sublistId}` handler passes the data index of the sublist to `setActiveTab` (construction.tl:2809-2821).
   - `setActiveTab` expects a position in `shownSublistsState` (:2796-2806).
   - In the dynamic MODULES menu, empty sublists are left out (`if found or not params.dynamic`, :2634).
   - So whenever an earlier module tab (Plots or Warehouse at order 0) is empty for a station, the wrong tab opens, or the index goes out of range and errors.
-- Change: our Configure → Tracks/Platforms lands on the right tab every time.
+- Change: the mod's Configure → Tracks/Platforms lands on the right tab every time.
 - Route: the bug is in local `ConstructionCategory`, so fixing it needs a fork. Workarounds:
   - (a) In the patched `getMenuCategories`, order the module categories so that the target tabs come before anything that can be empty.
-  - (b) Compute the shown position ourselves and fire `tabIndex` plus the shifted index. Verify per station type in game.
-- Rating: M / high (correctness of a shipped decision).
+  - (b) Compute the shown position in the mod and fire `tabIndex` plus the shifted index. Verify per station type in game.
 
 ### 14. Quit asks first and offers Save & Quit
-- Status: out of scope (save/load).
+- Status: out of scope (save and load screens).
 - Vanilla friction:
   - On PC, "Return to Main Menu" calls `app.stopGame()` and "Return to Desktop" calls `app.quit(true)` immediately (main/pause_menu.tl:191-193, 205-207).
   - The console branch already uses `quitWithConfirmation` with "All unsaved progress will be lost." (:15-45).
@@ -304,10 +283,9 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Change: both buttons show the vanilla dialog with Cancel, Quit and Save & Quit (saves under `getDefaultSavegameId()`, then quits in the callback).
 - No load: the console dialog; Save & Quit removes 4 actions from the most common ending.
 - Route: `PauseMainPage` is local.
-  - (A) Wrap the `PauseMenuTool.push`/`.pop` fields to track "menu open", and patch `app.stopGame`/`app.quit` to show `dialog_react_util.DialogWindow` (exported, dialog_react_util.tl:124). About 50 lines. Whether `app` is writable needs in-game verification.
+  - (A) Wrap the `PauseMenuTool.push`/`.pop` fields to track "menu open", and patch `app.stopGame`/`app.quit` to show `dialog_react_util.DialogWindow` (exported, dialog_react_util.tl:124). Whether `app` is writable needs in-game verification.
   - (B) Fallback: fork pause_menu.tl (437 lines, flag it).
   - One new string, "Save & Quit".
-- Rating: M / high.
 
 ### 15. Clicking a station with several lines selected must not move their vehicles
 - Status: done.
@@ -316,11 +294,10 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - In MAIN mode a station click calls `commonParams.newLine(sgDetails, selectedVehicles)` (:311). That stores the vehicles (:6708-6710) and sends all of them to the new one-stop line (:6479-6501).
   - The tooltip says only "Create new line starting at {name}." The honest "…and assign {count} vehicles." string exists but is used only in Send-to-Line mode.
   - Esc does not clear a vehicle-only selection (:7451-7472).
-  - This is more likely now that our map clicks keep the LVM open.
+  - This is more likely because the mod's tool stack keeps the LVM open on map clicks.
 - Change: with 2 or more lines selected, the station click creates the line without moving vehicles. Deliberate vehicle selections keep vanilla behaviour, but the tooltip uses the existing "assign {count} vehicles" string.
 - No load: an accidental mass move stops happening.
 - Route: capture `commonParams` (section 0) and wrap `newLine`: if `#lineManagerStateRef:get().lineListEntitiesSelected >= 2`, call the original with `{}`. Wrap the exported `manager_tooltips_util.CreateLine` for the text.
-- Rating: M / high.
 
 ### 16. Confirm before replacing many vehicles
 - Status: done.
@@ -329,12 +306,11 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - The list has focus and the oldest model preselected (#8), so Enter right after opening replaces N vehicles with the oldest model.
   - `makeVehicleReplaceCmd` swaps in place, mid-route, with no callback (vehicle_react_util.tl:405).
 - Change: when more than one vehicle would be replaced or modified, the Line Manager asks "Replace 12 vehicles for $X?". Single replaces stay instant.
-- No load: the vanilla question tape, as in our clone confirmation.
+- No load: the vanilla question tape, as in the mod's clone confirmation.
 - Route: patch `vehicle_react_util.HandleVehicleChanges`. When `#changes > 1` and the changes target existing vehicles, defer into `commonParams.addFeedback(msg, "Question", {onAccept=…})`.
   - Cost = price × N − Σ `getDepreciatedValue` (the maths at vehicle_store_window.tl:3577-3591).
   - Without a captured `commonParams` (entity-window path, always 1 vehicle), pass through.
   - Also pass `onFail`, which fixes the silent failures (B-V7).
-- Rating: M / high.
 
 ### 17. Statistics → Vehicles: the same quick filters and totals as Lines
 - Status: partly done. The quick filters, the totals row, the red Age cell and the age sort are built; the age-% column and the hand-off to the Line Manager are not.
@@ -348,12 +324,11 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - A totals row with count, capacity, utilization and 12-month balance.
   - The Age cell turns red past the lifespan, with the existing tooltip "{total} of Lifetime ({age} Remaining)" (line_eow.script.tl:142-146).
   - The count in the totals row opens the LVM with exactly these vehicles selected (`openVehicleManager{openWithVehicleEntities}`). The existing bulk Replace/Sell/Depot buttons then apply.
-- No load: the same pattern and wording as our Lines tab.
+- No load: the same pattern and wording as the mod's Lines tab.
 - Route: the module return `VehiclesStatistic` (:475), ported like `statistics_lines.lua` with a pcall fallback (about 475 lines).
   - Balance: `calculateBalance({v}, now-1y, now, true)`.
   - Filtering: use `useStepStateTimer(…, 1.0)`.
   - Share `QuickFilterBar`/`Totals` with Lines.
-- Rating: M / high.
 
 ### 18. Statistics → Stations: quick filters including "No lines", totals, correct sort
 - Status: done.
@@ -366,7 +341,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - A totals row (waiting/capacity, unhappy, upkeep). Under "No lines", the upkeep total is money wasted.
 - No load: hidden stations appear only when asked for.
 - Route: port the module return `StationsStatistic` (:387, about 390 lines), with the same pattern as #17. Fix bug B-T2.
-- Rating: M / high.
 
 ### 19. Loan cards: honest interest, total cost, safe repay
 - Vanilla friction:
@@ -380,32 +354,28 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - With the same fork: "New offer around {date}", "Offer valid until {date}", and "Maximum of 4 loans".
 - No load: existing labels corrected; no new elements.
 - Route: `DefaultLoanCard` is local. Replace the exported `LoanBoard` (:483) with a copy of the card and board code (about 400 of 655 lines; flag it). Data: `loan_util.getFullLoanAndInterestPayBack` (:169).
-- Rating: M / high.
 
 ### 20. Save over the current game without the overwrite dialog
-- Status: out of scope (save/load).
+- Status: out of scope (save and load screens).
 - Vanilla friction:
   - The name is prefilled with the current save (save_game_page.tl:157-158), so the overwrite dialog always appears (:74-84).
   - Cancel is the primary button (:39-53), and `DialogWindowContent` focuses the first primary button. Type, Enter, Enter therefore cancels silently.
   - F10 overwrites the same name without asking.
 - Change: no dialog when the name equals `getDefaultSavegameId()`. Overwriting *another* game's save still asks.
 - Route:
-  - (a) Wrap the exported `SaveGamePage` (:154) with a proxied `windowContainer` that auto-accepts this one dialog (about 30 lines; hacky).
+  - (a) Wrap the exported `SaveGamePage` (:154) with a proxied `windowContainer` that auto-accepts this one dialog (hacky).
   - (b) Fork `SaveGamePage` (330 lines), which also fixes B-S1.
-- Rating: E/M / med-high.
 
 ### 21. Full-load stops visible in the stop list
 - Vanilla friction: the stop row shows only cargo icons (`LineCargoDisplay{stopCargoDisplay=true}`, line_manager_panel.tl:915). Loading mode and stop times are hover → Configure Stop, one stop at a time. "Why is my line stuck?" is usually a forgotten Full Load.
 - Change: stops that are not "Load if Available" show the vanilla `load-mode_full-any/all.tga` icon, with the vanilla tooltip "Full Load (Any/All)".
 - No load: known icons, shown only on unusual stops.
 - Route: wrap the exported `line_react_util.LineCargoDisplay`: `CallOriginalRecipe` plus an icon when `stopCargoDisplay`. Read `stops[i].loadMode` in a timer. Outside `LineManagerPanel`, so no celmi conflict (assuming celmi's stop row still calls it).
-- Rating: E / med-high.
 
 ### 22. Construction callout price red when unaffordable
 - Vanilla friction: the callout cost is never coloured (construction_desc_react_util.tl:368-401), but custom actions colour it red through `getPlayersBalance` (construction_react_util.tl:1208-1254). Inconsistent.
 - Change: in the hover callout, the price uses the vanilla error colour when the minimum cost is more than the balance. Per-km items are skipped.
 - Route: patch `construction_desc_react_util.formatNumbers` (:816, called through the table at construction.tl:3526) to flag the cost entry. Replace the exported `ConstructionInfoNumberList` (:906-973, 67 lines) to add class `error` to the flagged item.
-- Rating: M / med-high.
 
 ### 23. Store title names the line and the shortest platform
 - Vanilla friction:
@@ -416,14 +386,12 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route: wrap `VehicleStoreWindow` (:4580) and rewrite `params.title`.
   - The line comes from the captured `commonParams.vehicleStoreOpenForDepotAndLineRef` for Buy, or from `transportVehicle.line` for Replace/Modify.
   - The length is the minimum over stops of `line_util.getTerminalLength(station, terminal+1)` (exported, line_util.tl:1433).
-- Rating: E–M / med-high.
 
 ### 24. Vehicle action bar: labels under the icons
 - Vanilla friction: Reverse, Start/Stop, Clone (it buys a vehicle), Replace, Modify, Depot and Sell are icon-only. The label is a tooltip, and only for secondary buttons (entity_window_util.tl:1133, 1160).
 - Change: the existing description appears as a small caption under each icon.
 - No load: the same buttons, now self-explanatory.
 - Route: the `ActionButtonBar` wrapper turns each secondary entry into a `customItem` copy of `makeActionButtonElement` (about 40 lines). Check the German width at 450 px in game.
-- Rating: M / med-high.
 
 ### 25. Do not offer electric locos for non-electrified lines
 - Vanilla friction:
@@ -436,7 +404,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Wrap `line_util.getLineAndVehicleCompatibleTransportModesAndCarrier` (called through the table at manager_window.tl:5191, vehicle.tl:450/486).
   - Patch `vehicle_store_util.vehicleFilter` for electric-only `engineTypes`.
   - Needs in-game check of how TF3 models declare transport modes.
-- Rating: M / med-high.
 
 ### 26. Town ratings in words as well as colours
 - Vanilla friction:
@@ -449,14 +416,12 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Wrap the exported `TownRatingIconWithText`.
   - Replace the exported `layer_react_util.TownRatingHudIcon` (:93-142, about 50 lines).
   - Wrap the exported `town_react_util.RatingBar` (:83).
-- Rating: E / med.
 
 ### 27. Bridge/tunnel button names the current type
 - Vanilla friction: the button is icon-only, with the static tooltip "Use this bridge type when needed." (construction_react_util.tl:2389).
   - A slow bridge chosen by hand silently stays when switching to fast track (`resetOnDefinitionChange=false`, :2397).
 - Change: "Use this bridge type when needed – *Steel Truss* (160 km/h)".
 - Route: wrap the exported `menu_category_util.FilterObjectsCalloutButton` (main/menu_category_util.tl:367-399) and extend `tooltip`.
-- Rating: E / med.
 
 ### 28. Subsidy offer expiry
 - Vanilla friction:
@@ -465,26 +430,22 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Active cards show the static duration while the bar shows the time remaining.
 - Change: "Task time: 2 years · offer ends in 1 month" and "Due {month year}".
 - Route: patch `subvention_util.makeDefaultCardData` to rewrite `deadline.name` only.
-- Rating: E / med.
 
 ### 29. "Already built" tells when the next one comes
 - Friction: "Already Built/Used" (company_util.tl:224-233), although further permits come at later ranks (`rankAndPermits`).
 - Change: "Already built – another one at rank Director", or "– no further uses".
 - Route: the same patch as #7, using `company_static_util.getExtraPermitsAggregatedPerRank()` (company_static_util.tl:73-90).
-- Rating: E / med.
 
 ### 30. Vehicle 12-month profit as a number
 - Friction: the Balance card is a 16-year chart only (vehicle_eow.script.tl:1194-1222).
 - Change: "Last 12 months: +$X" at the top of the existing card.
-- Route: fork the exported `VehicleBalancePlugin` (about 30 lines) and reuse our 12-month balance code.
-- Rating: E / med.
+- Route: fork the exported `VehicleBalancePlugin` (about 30 lines) and reuse the mod's 12-month balance code.
 
 ### 31. Warehouse "Discard All Cargo" asks first
 - Friction: the trash icon sends `makeStockListDiscardCargoCmd(…, 1.0)` at once (entity_window_util.tl:424-435).
 - Change: the same armed confirm as #3.
 - Route: wrap `entity_window_util.SendCommandButton` (:2438). This is its only caller.
   - Optional: tooltips on the unlabelled cargo pin buttons (:338-375). Needs a fork of about 220 lines.
-- Rating: E / med.
 
 ### 32. Configure Stop always opens fresh
 - Friction:
@@ -492,29 +453,25 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - The singleton window then probably keeps the previous stop's uncontrolled checkbox and toggle state (cargofilter_window.tl:745-824). Needs verification.
 - Change: every way of opening shows the clicked stop's real values.
 - Route: capture `commonParams` and wrap `openCargoFilter` to close first.
-- Rating: E / med.
 
 ### 33. Vehicle hover tooltip shows the line
 - Friction: the tooltip is the name plus notification text (main/game_tooltips.tl:145-223). Finding which line a jammed bus belongs to costs a click, and layer clicks stack windows.
 - Change: one line under the name: "Line 4" or "In Depot".
 - Route: wrap the exported `DefaultEntityToolTip` (:145) and add `line_util.getVehicleInstructionName` (line_util.tl:1356-1366). Verify carriage→vehicle delegation.
-- Rating: E / med.
 
 ### 34. Finance window reopens on the last tab
 - Friction: `openFinanceWindow` defaults to "Overview" (main/game.tl:290-301), and every caller fires it without a tab (game_bar.tl:111, 322). That is +1 click on every visit to Finances or Loans.
 - Change: it reopens on the tab used last this session.
 - Route:
   - Record the tab by wrapping the exported `FinancesCharts` (game_mechanics/finance/finances_charts.tl:409), which receives `tabValue` on every tab change.
-  - Inject it in our existing `ToolStack` replacement when the Finances tool is pushed with a nil tab.
-- Rating: E–M / med.
+  - Inject it in the mod's `ToolStack` replacement when the Finances tool is pushed with a nil tab.
 
-### 35. Statistics sort and quick filter survive save/load (our replaced tabs)
-- Friction: sort is kept per session only (statistics.tl:264, 673-688). Our quick filter is a Lua module variable (statistics_lines.lua:30).
+### 35. Statistics sort and quick filter survive save/load (the mod's tabs)
+- Friction: sort is kept per session only (statistics.tl:264, 673-688). The mod's quick filter is a Lua module variable (statistics_lines.lua:30).
 - Change: after loading, the replaced tabs come back with the same sort column and filter.
 - Route: `initialSortColumn = params.initialSortColumn or saved.sort`. Wrap `onSortColumnChange` and store in `api.gui.game.setGuiSaveData(modId, …)` (apidef/api/gui.d.tl:776-781).
   - Search and carrier toggles are owned by local `StatisticsContainer`, so they cannot be kept.
   - Expand/shrink would need a 706-line fork, which is not worth it.
-- Rating: E–M / med.
 
 ### 36. Cargo Satisfaction layer keeps its cargo
 - Friction: the filter is `useState({-1,1})` (layers/layer_cargo.tl:276-281) and resets on every open.
@@ -522,8 +479,7 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route: replace the exported `layer_cargo.Layer` (:349) and fork only `CargoLayerWindowContent` (:265-347, about 85 lines).
   - Store the `cargoTypeId`, not the index, because the list is rebuilt from produced cargo.
   - Fire the saved config in `onMount`.
-  - Infrastructure needs a whole-file fork (279 lines): medium value, later.
-- Rating: E / med.
+  - The Infrastructure layer would need a whole-file fork (279 lines).
 
 ### 37. Notification log: date always visible (reading only)
 - Friction: the date badge is visible only on hover (`visible`/`invisible` class toggle, game_mechanics/notifications/gui/notification_log.tl:176-188). There is no text search (:561-573).
@@ -531,7 +487,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - Route:
   - (a) A mod CSS override for that TextView (needs verification of mod CSS loading and overlap).
   - (b) A fork of the 654-line file plus swapping `NotificationLogTool` fields. Hard; search would come with it.
-- Rating: E? / H / med.
 
 ### 38. Celebrations behave
 - Friction:
@@ -540,13 +495,11 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - The timer uses application time (:191), so the queue cycles while paused.
 - Change: no crash, a click dismisses, and the queue holds while paused.
 - Route: replace the exported `CelebrationsContainer` (:133). In practice that is a copy of the 233-line file.
-- Rating: E / med.
 - Inventory correction: celebrations do have a Settings toggle (menu/settings_page.tl:525-528).
 
 ### 39. Moving a stop recalculates automatic cargo
 - Friction: `addStop`, `removeStop` and `moveVia` call `autoLoadConfig` (manager_window.tl:6786, 6845, 6879); `moveStop` (:6851-6868) does not. A moved truck stop keeps loading the old station's cargo.
 - Route: wrap `commonParams.moveStop` and send a follow-up `makeLineUpdateCmd` with auto config while `customFilters` is false.
-- Rating: M / med.
 
 ### 40. Add-stop tooltip says where and whether
 - Friction:
@@ -554,7 +507,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - There is no carrier check: a rail station can be added to a bus line. The error appears later as a red segment with a hover-only "The stop is incompatible."
 - Change: "…after stop 3", plus a warning line when the station does not serve the line's carrier.
 - Route: wrap the exported `manager_tooltips_util.LMAddStop`. Use `getModeState()` and `line_util.getLineCarriers` vs `stationGroupSystem.getCarriers`. One new string.
-- Rating: E–M / med.
 
 ### 41. Rank tax and rank progress made visible
 - Friction:
@@ -565,7 +517,6 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - In the Company rank header: "Ticket income at this rank: 96 %".
   - The bar tooltip: "30 % towards Director – world population 18,000 / 25,000".
 - Route: `CompanyRankHeader` and `CompanyButton` are local. Use the `lang_util.format` template hook (hacky; flag it) or a 964-line fork of company.tl. Verify the multiplier semantics in game first.
-- Rating: M / med–high.
 
 ### 42. Industry supplier and consumer tables
 - Friction:
@@ -573,74 +524,64 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
   - Counts are keyed by entity, not by (entity, cargo) (:187, 192, 238, 259, 319, 338, 452, 471), so a two-cargo partner shows the same number twice.
 - Change: sorted by Received/Supplied, highest first, with correct per-cargo numbers.
 - Route: fork `SuppliersWidget`/`ConsumersWidget` (about 300 lines) through the ContentCard wrapper or `IndustryCombinedStockGroupedCountsPlugin` (:768).
-- Rating: M / med.
 
 ### 43. Industries tab shows starving processors
 - Friction: the Workload cell is blank at 0 % (statistic_industries.tl:278), so an unsupplied processor looks like a raw producer.
 - Change: "0 %" when the industry has inputs; raw producers sort below.
   - Optional: "Connected / Starving" quick filters (`industry_util.isIndustryConnected`, main/industry_util.tl:541-556).
 - Route: port the module return (:490, about 490 lines).
-- Rating: M / med.
 
 ### 44. Account tooltip shows debt
 - Friction: the Account tooltip repeats the balance in another format (game_bar.tl:243). Debt is 2 clicks away.
 - Change: "$12.3M · Debt $40M (2 of 4 loans), $1.1M/month in loan payments".
 - Route: game_bar.tl:243 is the only caller of `api.util.formatMoneyAlt`. Wrap it if `api.util` is writable; otherwise a 1532-line game-bar fork, which is not worth it.
-- Rating: E (if writable) / med.
 
 ### 45. ConstructionWindow tabs: own label per station
 - Friction: `getSubconstructionDescriptionAndSortKey` uses `getCarriers(stationGroup, -1, -1)`, which spans the whole group (make_entity_window.tl:60-90). Combined rail+bus constructions get identical tab labels, and sort keys add up.
 - Route: fork `ConstructionWindow` (:117-276) plus the helper (about 220 lines), and pass the station index.
-- Rating: M / med. Needs in-game check that such stations share a group.
+- Needs in-game check that such stations share a group.
 
 ### 46. Store Table layout: running cost and lifespan columns
 - Friction: no "lifespan" anywhere in the store (grep). The Table layout, the only side-by-side view, has no running-cost or year column (vehicle_store_table.tl:345-470).
 - Change: two more familiar columns.
 - Route: fork `VehicleStoreTable` (587 lines, module return). This fixes B-V1 too.
-- Rating: M / med.
 
 ### 47. Calendar speed shown only when not 1x
 - Friction: a slowed or frozen calendar is visible only in Weather & Time (game_bar_widgets.tl:337-404), so a frozen date looks like a bug.
 - Change: when the factor is not 1x, the date shows the vanilla `calendar_speed.tga` icon and "0.25x"/"Paused".
 - Route: wrap the exported `game_bar_widgets.CalendarDisplay` (:269).
-- Rating: E / low-med.
 
 ### 48. Tram and bus-lane options in the bottom bar
 - Friction: Catenary and Symmetry have no `location` (tools/tram_track_tool.script.tl:24-52, bus_lane_tool.script.tl:17-26). A second, non-movable Settings window opens for two buttons, while Underground sits in the bottom bar.
 - Route: in the `forEachDefinition` wrapper, set `param.location = Toolbar` for those two actions. Check the width.
-- Rating: E / low-med.
 
 ### 49. Achievements tab shows whether they can be earned
 - Route: wrap the exported `savegame_react_util.ScrollableAchievementsList` (:1551) and prepend the vanilla "Achievements cannot be earned." tape (savegame_react_util.tl:1486-1497) plus "x / y unlocked".
-- Rating: E / low-med.
 
 ### 50. Discard junk one-stop lines (debatable)
 - Friction: any station click in MAIN mode creates "Line N" at once (manager_window.tl:311, 6691-6716), and it stays behind as a one-stop line with a problem marker.
 - Change: a line created in this session that still has one stop and no vehicles is discarded when deselected.
 - Route: capture `commonParams` and send `makeLineDestroyCmd` with the mission guard (manager_window.tl:6810).
-- Rating: M / med. The user decides.
 
 ### 51. Line search by station name (flag: big fork)
 - Friction: the search matches line, cargo and depot names only (manager_window.tl:2525-2580), and default names are "Line N".
 - Route: the local `LineAndDepotList` means forking `ManagerWindowContent`, effectively the 8.5k-line file. Not recommended unless the LVM is forked for other reasons.
-- Rating: H / high.
 
 ### 52. Cargo waiting at cargo terminals (flag: big fork)
 - Friction: `TerminalStops` receives `isCargoTerminal` but ignores it, and counts use passengers only (station_group.tl:314, 705-707).
-- Route: fork `StationGroupWindowContent` (about 1,069 lines). Flag it; it was rejected as a new card, and this is the in-place alternative.
-- Rating: H / med-high.
+- Route: fork `StationGroupWindowContent` (about 1,069 lines). Flag it. A new card would add UI; this is the in-place alternative.
 
-## 3. Notes on done or decided work found during the audit
+## 3. Notes on built features
 
-- Configure → module tab: see #13. A vanilla index bug makes the naïve `constructionMenuSetTab{sublistId}` unreliable in the Modules menu.
+- Configure → module tab: see #13. A vanilla index bug makes the naive `constructionMenuSetTab{sublistId}` unreliable in the Modules menu.
 - Rail+Tracks merge:
   - If entries were *moved*, the Tracks game-bar button greys out (game_bar.tl:608-613, 631). Mirroring avoids that.
   - In the merged menu, track and station params share one bucket per menu (construction.tl:1454) and both use the key `height` (construction_react_util.tl:2240-2265 vs 851-868). Elevated track at +10 m then places the next station at +10 m. If that is unwanted, set `resetOnDefinitionChange=true` on the construction `height` param through the `forEachDefinition` wrapper. Needs in-game check.
-- Statistics Lines tab: our bug and per-frame cost, see #2.
+- Statistics Lines tab: the quick-filter bug and per-frame cost, see #2.
 
 ## 4. Small vanilla bugs that can be fixed invisibly
 
-"Route" names the cheapest way. "fork only" means the bug sits in a local recipe and is worth fixing only together with a fork done for other reasons.
+"Route" names the smallest change. "fork only" means the bug sits in a local recipe and is worth fixing only together with a fork done for other reasons.
 
 | Id | Where | Bug | Fix / route |
 |---|---|---|---|
@@ -698,7 +639,7 @@ Not moddable (main-menu only; there is no replacement pass outside `bootstrap_ga
 - the "Downloading Mods" dialog's misplaced `onBackChoiceIndex` (main_menu.tl:714)
 - no "Reset to Default" for remembered new-game gameplay settings (advanced_settings.tl:569)
 
-## 5. Considered and rejected (so they are not re-proposed)
+## 5. Ideas that do not fit
 
 - Bulldozer confirmation dialog: no engine veto exists; #10 is the substitute.
 - Sticky bridge/tunnel choice across menus: with Rail+Tracks merged it already survives inside the menu, and stickiness worsens the stale-slow-bridge case. #27 instead.
@@ -711,26 +652,25 @@ Not moddable (main-menu only; there is no replacement pass outside `bootstrap_ga
   - The engine probably shows its own save indicator (main/internal.css.lua:68-84); check before building anything.
 - Remembering finance carrier expansion, statistics expand/shrink, search and carrier toggles: each needs a 700+-line fork for little gain.
 - "Take a loan" link in the store's "Not enough money": new UI outside the screen's purpose.
-- Notification changes of any kind: out of scope by the v2 rule (#37 is reading-only presentation).
+- Notification changes of any kind: out of scope by the design rules (#37 is reading-only presentation).
 
-## 6. In-game checks needed before building
+## 6. Open questions to check in the game
 
 1. Is `app` writable (#14), and is `api.util` writable (#44)?
-2. Does the LVM `commonParams` metatable proxy survive re-renders and catch row clicks (#15, #32, #39, #50)?
-3. Does the bulldozer proposal's `toRemove` contain the station construction (#10)? Does the native tooltip already show affordability and refund (#22)?
-4. Which Modules tabs are empty for which station types (#13)?
-5. Do passengers board when the stop's passenger load flag is false (#12)?
-6. Does mod CSS load, and can it override `!invisible` in the log (#37)?
-7. Is `getGuiSaveData(modId)` with a non-empty id saved with the game (#35, #36)?
-8. How do TF3 rail models declare `transportModes` versus `engineTransportModes` (#25)?
-9. Ticket price multiplier semantics (#41), and how bad the search pattern error is (B-C2).
-10. Shared `height` param in the merged Rail menu (section 3).
-11. How celmi_timetables replaces `LineManagerPanel`: wrap or fork? Does its stop row still call `line_react_util.LineCargoDisplay` (#21)?
+2. Does the LVM `commonParams` metatable proxy survive re-renders and catch row clicks (#32, #39, #50)?
+3. Does the native construction tooltip already show affordability and refund (#22)?
+4. Do passengers board when the stop's passenger load flag is false (#12)?
+5. Does mod CSS load, and can it override `!invisible` in the log (#37)?
+6. Is `getGuiSaveData(modId)` with a non-empty id saved with the game (#35, #36)?
+7. How do TF3 rail models declare `transportModes` versus `engineTransportModes` (#25)?
+8. Ticket price multiplier semantics (#41), and how bad the search pattern error is (B-C2).
+9. Shared `height` param in the merged Rail menu (section 3).
+10. How celmi_timetables replaces `LineManagerPanel`: wrap or fork? Does its stop row still call `line_react_util.LineCargoDisplay` (#21)?
 
-## 7. Corrections to the inventory
+## 7. Corrections to docs/inventory
 
 - The pause menu does pause the game (`setInGameMenuPause`, pause_menu.tl:263-268).
 - Celebrations have a Settings toggle (settings_page.tl:525-528).
 - New games already remember the last mods, mod params, gameplay params, start year and terrain generator (new_game_react_util.tl:82-200). Mod presets exist (mod_selector_page.tl:1581-1735).
 - Town rating bars do not open layers: `onClickEvent` has no reader (town_util.tl:654-704). The town window tabs set the layer themselves.
-- The vehicle store full fork is about 4,680 lines, not about 2.5k (D6).
+- A full fork of the vehicle store is about 4,680 lines, not about 2.5k.
