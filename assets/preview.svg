@@ -1,28 +1,101 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
   <title>UX Overhaul</title>
-  <!-- Placeholder preview (1920x1080, like the official mods). Replace with your own artwork;
+  <!-- Preview (1920x1080, like the official mods). Text-free: the renderer loads no fonts.
+       A game bar with status chips and the Control Center with ranked line rows.
        make preview renders it to src/ux_overhaul/_metadata/0.png. -->
   <defs>
-    <radialGradient id="background-fill" cx="960" cy="420" r="1150" gradientUnits="userSpaceOnUse">
+    <radialGradient id="sky" cx="960" cy="360" r="1200" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#2a4c68"/><stop offset="0.55" stop-color="#173047"/><stop offset="1" stop-color="#0a1622"/>
     </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
   </defs>
-  <rect id="background" width="1920" height="1080" fill="url(#background-fill)"/>
-  <g id="track" transform="translate(960 540) rotate(-30)">
-    <rect class="sleeper" x="-558" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-468" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-378" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-288" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-198" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-108" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="-18" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="72" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="162" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="252" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="342" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="432" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="sleeper" x="522" y="-150" width="36" height="300" rx="6" fill="#e6e8ea"/>
-    <rect class="rail" x="-640" y="-96" width="1280" height="22" rx="4" fill="#ffffff"/>
-    <rect class="rail" x="-640" y="74" width="1280" height="22" rx="4" fill="#ffffff"/>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+
+  <!-- faint network in the background -->
+  <g stroke="#3d6582" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.55">
+    <path d="M120 820 C 420 700, 620 760, 900 640 S 1450 520, 1800 600"/>
+    <path d="M200 300 C 480 380, 700 300, 980 420 S 1500 700, 1780 860"/>
+  </g>
+  <g fill="#5b86a6" opacity="0.7">
+    <circle cx="420" cy="712" r="18"/><circle cx="900" cy="640" r="18"/><circle cx="1450" cy="540" r="18"/>
+    <circle cx="700" cy="318" r="18"/><circle cx="1500" cy="700" r="18"/>
+  </g>
+
+  <!-- Control Center panel -->
+  <g filter="url(#shadow)">
+    <rect x="430" y="150" width="1060" height="640" rx="22" fill="#eef1f4"/>
+    <rect x="430" y="150" width="1060" height="78" rx="22" fill="#d9dfe5"/>
+    <rect x="430" y="200" width="1060" height="28" fill="#d9dfe5"/>
+    <!-- tabs -->
+    <rect x="470" y="172" width="170" height="36" rx="18" fill="#2a4c68"/>
+    <rect x="660" y="172" width="150" height="36" rx="18" fill="#b9c4ce"/>
+  </g>
+  <!-- rows: severity dot, name bar, value bar (red = losing, green = earning), +/- buttons -->
+  <g>
+    <g transform="translate(0 0)">
+      <circle cx="490" cy="282" r="14" fill="#d64545"/>
+      <rect x="520" y="268" width="300" height="28" rx="8" fill="#2f3b47"/>
+      <rect x="1040" y="268" width="210" height="28" rx="8" fill="#d64545"/>
+      <rect x="1290" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1300" y="279" width="20" height="6" fill="#fff"/>
+      <rect x="1345" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1355" y="279" width="20" height="6" fill="#fff"/><rect x="1362" y="272" width="6" height="20" fill="#fff"/>
+    </g>
+    <g transform="translate(0 82)">
+      <circle cx="490" cy="282" r="14" fill="#d64545"/>
+      <rect x="520" y="268" width="250" height="28" rx="8" fill="#2f3b47"/>
+      <rect x="1100" y="268" width="150" height="28" rx="8" fill="#d64545"/>
+      <rect x="1290" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1300" y="279" width="20" height="6" fill="#fff"/>
+      <rect x="1345" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1355" y="279" width="20" height="6" fill="#fff"/><rect x="1362" y="272" width="6" height="20" fill="#fff"/>
+    </g>
+    <g transform="translate(0 164)">
+      <circle cx="490" cy="282" r="14" fill="#e3a52b"/>
+      <rect x="520" y="268" width="340" height="28" rx="8" fill="#2f3b47"/>
+      <rect x="1150" y="268" width="100" height="28" rx="8" fill="#e3a52b"/>
+      <rect x="1290" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1300" y="279" width="20" height="6" fill="#fff"/>
+      <rect x="1345" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1355" y="279" width="20" height="6" fill="#fff"/><rect x="1362" y="272" width="6" height="20" fill="#fff"/>
+    </g>
+    <g transform="translate(0 246)">
+      <circle cx="490" cy="282" r="14" fill="#3fa36b"/>
+      <rect x="520" y="268" width="280" height="28" rx="8" fill="#2f3b47"/>
+      <rect x="980" y="268" width="270" height="28" rx="8" fill="#3fa36b"/>
+      <rect x="1290" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1300" y="279" width="20" height="6" fill="#fff"/>
+      <rect x="1345" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1355" y="279" width="20" height="6" fill="#fff"/><rect x="1362" y="272" width="6" height="20" fill="#fff"/>
+    </g>
+    <g transform="translate(0 328)">
+      <circle cx="490" cy="282" r="14" fill="#3fa36b"/>
+      <rect x="520" y="268" width="220" height="28" rx="8" fill="#2f3b47"/>
+      <rect x="1030" y="268" width="220" height="28" rx="8" fill="#3fa36b"/>
+      <rect x="1290" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1300" y="279" width="20" height="6" fill="#fff"/>
+      <rect x="1345" y="262" width="40" height="40" rx="10" fill="#2a4c68"/><rect x="1355" y="279" width="20" height="6" fill="#fff"/><rect x="1362" y="272" width="6" height="20" fill="#fff"/>
+    </g>
+    <!-- totals line -->
+    <rect x="470" y="710" width="980" height="4" rx="2" fill="#b9c4ce"/>
+    <rect x="520" y="732" width="200" height="28" rx="8" fill="#2f3b47"/>
+    <rect x="1080" y="732" width="170" height="28" rx="8" fill="#3fa36b"/>
+  </g>
+
+  <!-- game bar with status chips -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="900" width="1400" height="110" rx="26" fill="#1c2935"/>
+  </g>
+  <g>
+    <rect x="300" y="925" width="200" height="60" rx="30" fill="#d64545"/>
+    <circle cx="340" cy="955" r="20" fill="#fff"/><rect x="337" y="941" width="6" height="18" rx="3" fill="#d64545"/><circle cx="340" cy="966" r="3.5" fill="#d64545"/>
+    <rect x="378" y="944" width="96" height="22" rx="8" fill="#fff" opacity="0.9"/>
+
+    <rect x="530" y="925" width="200" height="60" rx="30" fill="#2f3b47"/>
+    <rect x="556" y="944" width="40" height="22" rx="6" fill="#d64545"/>
+    <rect x="608" y="944" width="96" height="22" rx="8" fill="#fff" opacity="0.9"/>
+
+    <rect x="760" y="925" width="200" height="60" rx="30" fill="#2f3b47"/>
+    <rect x="786" y="944" width="40" height="22" rx="6" fill="#e3a52b"/>
+    <rect x="838" y="944" width="96" height="22" rx="8" fill="#fff" opacity="0.9"/>
+
+    <rect x="990" y="925" width="240" height="60" rx="30" fill="#3fa36b"/>
+    <path d="M1020 970 L1045 948 L1060 960 L1085 938" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="1102" y="944" width="104" height="22" rx="8" fill="#fff" opacity="0.9"/>
+
+    <rect x="1290" y="935" width="330" height="40" rx="12" fill="#2a3a48"/>
   </g>
 </svg>

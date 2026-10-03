@@ -69,8 +69,8 @@ Effort is rated **E** (easy: plugin or data), **M** (medium: wrapping replacemen
 |---|---|---|
 | A1 | **Status strip** in the game bar. Shows cash-flow (this month / last month, red/green), loan, number of loss-making lines, number of lines with problems, vehicles without a path, vehicles past their lifespan. Each chip is clickable and opens the Control Center on that filter. | E |
 | A2 | **Quick-launch row** next to the layer buttons: Control Center, Finances, Company, Vehicle Store, Notification log, "next problem" (focuses the camera on it and opens it), speed 1×/2×/4×, Save (overwrite the current save). | E |
-| A3 | **Problems visible by default.** Un-ignore the vanilla problem types for new and existing saves, through a one-time `updateIgnoredTypes` event. | E |
-| A4 | **New detectors**, which add new notification types: unprofitable line, low cash, vehicle past lifespan, line without vehicles, vehicle idle in depot. They automatically show up in the log, the HUD, entity windows and statistics. | E–M |
+| A3 | ~~**Problems visible by default.**~~ *Dropped at the user's request (2026-10-03).* Un-ignore the vanilla problem types for new and existing saves, through a one-time `updateIgnoredTypes` event. | E |
+| A4 | ~~**New detectors**~~ *Dropped at the user's request (2026-10-03).*, which add new notification types: unprofitable line, low cash, vehicle past lifespan, line without vehicles, vehicle idle in depot. They automatically show up in the log, the HUD, entity windows and statistics. | E–M |
 | A5 | Badge with the problem count on the vanilla notification button. | M (`NotificationButton`) |
 
 ### B — Act where you look (entity-window cards, all plugins)

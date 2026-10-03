@@ -11,7 +11,7 @@ local store = require("/ux_overhaul/engine/store.lua")
 local lines_table = require("/ux_overhaul/core/lines_table.lua")
 local format = require("/ux_overhaul/core/format.lua")
 local actions = require("/ux_overhaul/gui/actions.lua")
-local notifications = require("/ux_overhaul/gui/notifications.lua")
+local cleanup = require("/ux_overhaul/gui/cleanup.lua")
 local ui = require("/ux_overhaul/gui/ui.lua")
 
 local control_center = {}
@@ -244,12 +244,15 @@ end
 --- Plugin body for ::ModEntryPointExtension, a headless root that owns the mod's events.
 -- "uxo.open" { tab, filter } opens the Control Center; "uxo.action" { name, entity } runs an action by
 -- name (add_vehicle, remove_vehicle, open_entity, open_line_manager), for other mods and the testbench.
--- It also refreshes the shared snapshot and keeps the mod's notifications in sync.
+-- It also refreshes the shared snapshot.
 function control_center.render_entry()
 	react.onEvent(actions.OPEN_EVENT, function(_e, param) open(param) end)
 	react.onEvent(actions.ACTION_EVENT, function(_e, param) actions.run(param) end)
+	react.onEvent("uxo.close", function()
+		game_react_globals.getDefaultWindowApi().removeAllWindows(ControlCenterWindow)
+	end)
 	react.onStepTimer(store.refresh, store.REFRESH_SECONDS)
-	react.onStep(notifications.step)
+	react.onStep(cleanup.step)
 	return ui.row({})
 end
 

@@ -67,11 +67,34 @@ if [ -n "$save" ]; then
 fi
 
 launched_at=$(date +%s)
+shots_dir="$results_dir/shots-$(date +%Y%m%d-%H%M%S)"
+
+# Screenshots for visual review: the testbench logs "[testbench] SHOT <name>" and holds still for a
+# few seconds; this captures the whole screen into $shots_dir/<name>.png (the game runs in front).
+capture_screen() {
+	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Left,\$b.Top,0,0,\$bmp.Size); \$bmp.Save('$1')" < /dev/null > /dev/null 2>&1
+}
+watch_shots() {
+	local taken=0 names
+	while true; do
+		if [ -f "$log" ] && [ "$(stat -c %Y "$log")" -ge "$launched_at" ]; then
+			mapfile -t names < <(grep -a "\[testbench\] SHOT " "$log" | sed 's/.*SHOT //; s/[^A-Za-z0-9_.-]//g')
+			while [ "$taken" -lt "${#names[@]}" ]; do
+				mkdir -p "$shots_dir"
+				capture_screen "$(wslpath -w "$shots_dir")\\${names[$taken]}.png"
+				taken=$((taken + 1))
+			done
+		fi
+		sleep 0.5
+	done
+}
 echo "launching Transport Fever 3 with --script $app_script"
 powershell.exe -NoProfile -NonInteractive -Command \
 	"Start-Process -FilePath '$game_dir_win\\TransportFever3.exe' -WorkingDirectory '$game_dir_win' -ArgumentList '--script','$app_script'" \
 	< /dev/null
 
+watch_shots &
+watcher=$!
 outcome="timeout"
 seen=0
 missing=0
@@ -92,6 +115,7 @@ while [ $(( $(date +%s) - launched_at )) -lt "$timeout" ]; do
 done
 
 sleep 2
+kill "$watcher" 2> /dev/null || true
 taskkill.exe /IM TransportFever3.exe /F < /dev/null > /dev/null 2>&1 || true
 
 mkdir -p "$results_dir"
@@ -102,6 +126,7 @@ saved="$results_dir/$(date +%Y%m%d-%H%M%S)-stdout.txt"
 
 echo
 echo "outcome: $outcome   (full log: $saved)"
+[ -d "$shots_dir" ] && echo "screenshots: $shots_dir"
 echo "--- testbench output ---"
 grep -a "\[testbench\]\|\[$mod\]" "$saved" | sed 's/^\[[^]]*\]  //' || true
 echo "--- engine errors ---"

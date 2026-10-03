@@ -103,6 +103,13 @@ local function gui_step(g, engine_done)
 		if not ok then passed, details = false, "check failed: " .. tostring(passed) end
 		log(passed and "PASS" or "FAIL", check.name, details or "")
 		g.phase, g.frames = "next", 0
+		if check.shot then
+			-- spec/ingame/run.sh captures the screen when it sees this line; hold still meanwhile.
+			log("SHOT", check.shot)
+			g.phase = "shot_wait"
+		end
+	elseif g.phase == "shot_wait" and g.frames >= 150 then
+		g.phase, g.frames = "next", 0
 	elseif g.phase == "finished" and engine_done then
 		log("DONE")
 		g.phase = "done"

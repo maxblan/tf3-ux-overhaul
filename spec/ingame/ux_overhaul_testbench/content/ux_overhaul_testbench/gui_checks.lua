@@ -54,6 +54,7 @@ local checks = {
 	{
 		name = "status_strip_visible",
 		wait = 120,
+		shot = "status_strip",
 		check = function()
 			return visible("uxo.status.problems"), "problems chip visible=" .. tostring(visible("uxo.status.problems"))
 				.. " cashflow chip visible=" .. tostring(visible("uxo.status.cashflow"))
@@ -70,6 +71,7 @@ local checks = {
 		name = "control_center_problems_tab",
 		act = function() api.gui.fireReactEvent("uxo.open", { tab = "problems" }) end,
 		wait = 60,
+		shot = "control_center_problems",
 		check = function()
 			return visible("uxo.cc.window") and visible("uxo.cc.problems"),
 				string.format("window=%s problems=%s", tostring(visible("uxo.cc.window")), tostring(visible("uxo.cc.problems")))
@@ -79,18 +81,31 @@ local checks = {
 		name = "control_center_lines_tab",
 		act = function() api.gui.fireReactEvent("uxo.open", { tab = "lines", filter = "all" }) end,
 		wait = 60,
+		shot = "control_center_lines",
 		check = function()
 			return visible("uxo.cc.filter.losing") and visible("uxo.cc.lines"),
 				string.format("filters=%s lines=%s", tostring(visible("uxo.cc.filter.losing")), tostring(visible("uxo.cc.lines")))
 		end,
 	},
 	{
-		name = "line_window_card",
-		act = function(ctx)
-			ctx.card_line = busiest_line()
-			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = true }) end
+		name = "vanilla_statistics_reference",
+		act = function()
+			api.gui.fireReactEvent("uxo.close", nil)
+			api.gui.fireReactEvent("openStatisticsWindow", "Line")
 		end,
 		wait = 90,
+		shot = "vanilla_statistics_lines",
+		check = function() return true, "reference screenshot" end,
+	},
+	{
+		name = "line_window_card",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeStatisticsWindow", nil)
+			ctx.card_line = busiest_line()
+			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = false }) end
+		end,
+		wait = 90,
+		shot = "line_window",
 		check = function(ctx)
 			if not ctx.card_line then return true, "skipped: no line" end
 			return visible("uxo.card.line.vehicles"), "line card visible=" .. tostring(visible("uxo.card.line.vehicles"))
@@ -101,9 +116,10 @@ local checks = {
 		act = function(ctx)
 			local component = ctx.card_line and api.engine.getComponent(ctx.card_line, api.type.ComponentType.LINE)
 			ctx.card_station = component and component.stops[1] and component.stops[1].stationGroup
-			if ctx.card_station then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_station, stack = true }) end
+			if ctx.card_station then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_station, stack = false }) end
 		end,
 		wait = 90,
+		shot = "station_window",
 		check = function(ctx)
 			if not ctx.card_station then return true, "skipped: no station" end
 			return visible("uxo.card.station.lines"), "station card visible=" .. tostring(visible("uxo.card.station.lines"))
@@ -113,36 +129,13 @@ local checks = {
 		name = "vehicle_window_card",
 		act = function(ctx)
 			ctx.card_vehicle = ctx.card_line and oldest_vehicle(ctx.card_line)
-			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = true }) end
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = false }) end
 		end,
 		wait = 90,
+		shot = "vehicle_window",
 		check = function(ctx)
 			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
 			return visible("uxo.card.vehicle.age"), "vehicle card visible=" .. tostring(visible("uxo.card.vehicle.age"))
-		end,
-	},
-	{
-		name = "notifications",
-		wait = 900, -- the mod syncs about every 10 s
-		check = function()
-			local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
-			local native = notification_util.externalGetNotificationsStateNative()
-			local by_entity = notification_util.getPersistingEntity2NotificationFromNative(native)
-			local counts, total = {}, 0
-			for _e, ids in pairs(by_entity) do
-				for _i, id in ipairs(ids) do
-					local n = notification_util.getNotificationFromNative(native, id)
-					local own = n and n.type:match("ux_overhaul/notifications/([%w_]+)%.script")
-					if own then counts[own] = (counts[own] or 0) + 1; total = total + 1 end
-				end
-			end
-			local ignored = native:find("ignored"):asTable()
-			local line_warning_hidden = (ignored.types or {})["::/game_mechanics/notifications/types/line_warning.script"]
-			local parts = {}
-			for name, count in pairs(counts) do parts[#parts + 1] = name .. "=" .. count end
-			local lines = #api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
-			return (lines == 0 or total > 0) and not line_warning_hidden,
-				string.format("own=%d {%s} line_warning hidden=%s", total, table.concat(parts, ","), tostring(line_warning_hidden))
 		end,
 	},
 	{
