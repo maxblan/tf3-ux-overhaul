@@ -7,6 +7,10 @@ read_globals = { "api", "app", "debugPrint" }
 files["**/*.gs.lua"] = { globals = { "data" } }
 files["**/*.script.lua"] = { globals = { "data" } }
 files["**/app_script.lua"] = { globals = { "data" } }
+files["**/*.res.lua"] = { globals = { "data" } }
+files["**/*.css.lua"] = { globals = { "data" } }
+-- GUI code: "_" is the engine's translation function.
+files["src/**/gui/**"] = { read_globals = { "_" } }
 
 files["spec"] = { std = "+busted" }
 -- Loads resource files the way the engine does, through the global data().

@@ -1,9 +1,14 @@
 {
     "archives": null,
     "files": [
-        "ux_overhaul/logger.lua",
-        "ux_overhaul/main.gs.lua",
-        "ux_overhaul/main.script.lua",
-        "ux_overhaul/track_stats.lua"
+        "ux_overhaul/gui/spike/entry.res.lua",
+        "ux_overhaul/gui/spike/launcher.res.lua",
+        "ux_overhaul/gui/spike/replacement.res.lua",
+        "ux_overhaul/gui/spike/spike.css.lua",
+        "ux_overhaul/gui/spike/spike.script.lua",
+        "ux_overhaul/gui/spike/station_card.res.lua",
+        "ux_overhaul/gui/spike/status.res.lua",
+        "ux_overhaul/gui/spike/town_card.res.lua",
+        "ux_overhaul/logger.lua"
     ]
 }

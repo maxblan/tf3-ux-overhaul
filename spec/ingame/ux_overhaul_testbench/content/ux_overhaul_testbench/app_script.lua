@@ -26,8 +26,8 @@ local function start_test_game()
 	params.climateGenerator = "::/climates/temperate/temperate.clima"
 	params.economy = "::/economy/temperate.eco"
 	params.mods = MODS
-	params.seed = "tunnel-portal-fix"
-	params.generateTowns = false
+	params.seed = "ux-overhaul"
+	params.generateTowns = true
 	params.generateIndustries = false
 	params.generateAssets = false
 	app.startGame(params)

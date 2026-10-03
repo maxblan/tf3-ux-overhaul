@@ -84,11 +84,14 @@ echo "outcome: $outcome   (full log: $saved)"
 echo "--- testbench output ---"
 grep -a "\[testbench\]\|\[$mod\]" "$saved" | sed 's/^\[[^]]*\]  //' || true
 echo "--- engine errors ---"
-grep -a -A3 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error" "$saved" \
-	| cut -c1-300 | head -60 || true
+# "Script component root failed": a recipe broke the GUI tree and the engine dropped the whole game UI.
+gui_failures=$(grep -ac "ReactFramework::Load() failed\|Script component root failed" "$saved" || true)
+grep -a -A6 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error\|ReactFramework::Load() failed" \
+	"$saved" | cut -c1-300 | head -60 || true
 
 passed=$(grep -ac "\[testbench\] PASS" "$saved" || true)
 failed=$(grep -ac "\[testbench\] FAIL" "$saved" || true)
 echo
 echo "scenarios: $passed passed, $failed failed"
-[ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]
+[ "$gui_failures" -eq 0 ] || echo "GUI failed to load ($gui_failures times), see engine errors above"
+[ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ] && [ "$gui_failures" -eq 0 ]

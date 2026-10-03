@@ -2,6 +2,7 @@
     "archives": null,
     "files": [
         "ux_overhaul_testbench/app_script.lua",
+        "ux_overhaul_testbench/gui_checks.lua",
         "ux_overhaul_testbench/scenarios.lua",
         "ux_overhaul_testbench/site.lua",
         "ux_overhaul_testbench/testbench.gs.lua",

@@ -2,10 +2,12 @@
 --
 -- On game start, unpauses the simulation, finds flat land and runs every scenario of
 -- scenarios.lua in turn: build, wait, check, log "[testbench] PASS|FAIL <name> <details>".
--- Ends with "[testbench] DONE". Progress lives in the game script state, because the engine runs
+-- In parallel, guiUpdate runs the GUI checks of gui_checks.lua the same way. Ends with
+-- "[testbench] DONE" once both are finished. Progress lives in the game script state, because the engine runs
 -- game scripts in changing Lua states. spec/ingame/run.sh collects the "[testbench]" lines.
 -- @module ux_overhaul_testbench.testbench
 local scenarios = require("/ux_overhaul_testbench/scenarios.lua")
+local gui_checks = require("/ux_overhaul_testbench/gui_checks.lua")
 local site = require("/ux_overhaul_testbench/site.lua")
 
 local testbench = {}
@@ -19,8 +21,9 @@ local function log(...)
 	debugPrint(table.concat(parts, " "))
 end
 
+-- The engine side only marks itself done; guiUpdate logs DONE when the GUI checks are finished too.
 local function finish(run)
-	log("DONE")
+	log("engine scenarios finished")
 	run.phase = "done"
 end
 
@@ -82,14 +85,47 @@ end
 function testbench.handleEvent()
 end
 
---- A new game starts paused, and update() only runs while the simulation runs.
-function testbench.guiUpdate(_user_params, _state, gui_state)
+local function gui_step(g, engine_done)
+	g.frames = g.frames + 1
+	local check = gui_checks[g.index]
+	if g.phase == "next" then
+		g.index = g.index + 1
+		check = gui_checks[g.index]
+		if not check then
+			g.phase = "finished"
+			return
+		end
+		log("GUI CHECK", check.name)
+		if check.act then check.act(g.ctx) end
+		g.phase, g.frames = "acted", 0
+	elseif g.phase == "acted" and g.frames >= (check.wait or 10) then
+		local ok, passed, details = pcall(check.check, g.ctx)
+		if not ok then passed, details = false, "check failed: " .. tostring(passed) end
+		log(passed and "PASS" or "FAIL", check.name, details or "")
+		g.phase, g.frames = "next", 0
+	elseif g.phase == "finished" and engine_done then
+		log("DONE")
+		g.phase = "done"
+	end
+end
+
+--- A new game starts paused, and update() only runs while the simulation runs. Afterwards runs the
+-- GUI checks; the engine state is read-only here.
+function testbench.guiUpdate(_user_params, read_only_state, gui_state)
 	local g = gui_state:get() or {}
-	if g.unpaused then return end
-	api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(1))
-	g.unpaused = true
+	if not g.unpaused then
+		api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(1))
+		g.unpaused, g.phase, g.frames, g.index, g.ctx = true, "next", 0, 0, {}
+		log("gui: unpaused the simulation")
+	elseif g.phase ~= "done" then
+		local run = read_only_state:get() or {}
+		local ok, err = pcall(gui_step, g, run.phase == "done")
+		if not ok then
+			log("ERROR gui", err)
+			g.phase = "finished"
+		end
+	end
 	gui_state:set(g)
-	log("gui: unpaused the simulation")
 end
 
 -- The engine loads resource files (unlike modules loaded with require) by calling the global

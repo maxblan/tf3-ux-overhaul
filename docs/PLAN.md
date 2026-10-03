@@ -126,7 +126,19 @@ Effort is rated **E** (easy: plugin or data), **M** (medium: wrapping replacemen
 
 ## 5. Phases
 
-### Phase 0 — Spikes (verify the engine assumptions in-game, about 1 session)
+### Phase 0 — Spikes (verify the engine assumptions in-game) — **done 2026-10-03**
+
+Result (`make test-ingame`, 7/7 PASS): game-bar plugin, mod button plugin, mod stylesheet, wrapping
+recipe replacement, own window opened via a mod event (also from `api.gui.fireReactEvent`), town
+entity-window card, `setGuiSaveData` round trip. Lessons:
+- **Every recipe must return a layout (`BoxLayout`) as root.** Anything else aborts the *whole* game
+  UI (`ReactFramework::Load() failed`). `spec/ingame/run.sh` now fails on that log line.
+- `api.gui.camera.takeScreenshot` renders without UI; `byId.getSize` is 0×0 for non-windows. GUI
+  checks use `byId.isVisible` and CSS-driven probes instead.
+- Still open, verified during the MVP when needed: station-window card (needs a built station), GUI
+  save data across save/load (C5), mod params from GUI code (feature flags), `useInputAction` reuse.
+
+Original spike list:
 Build a throw-away `uxo_spike` feature set and extend the testbench with GUI assertions. Each spike gives PASS/FAIL in `make test-ingame`:
 1. A `react-plugin ::GameBarInfoDisplayExtension` from a staging mod is discovered, and its `.script.lua` loads.
 2. A `ModEntryPointExtension` handles `uxo.open` and opens a `builtin.Window` / tool window; a `MainModButtonArea` button fires the event.

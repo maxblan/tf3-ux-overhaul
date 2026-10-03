@@ -10,21 +10,6 @@
 --
 -- Scenario functions run in a fresh Lua state each time (the engine does not keep module
 -- state between game script calls): pass everything through `area`, not through upvalues.
+-- GUI checks live in gui_checks.lua.
 -- @module ux_overhaul_testbench.scenarios
-local track_builder = require("/ux_overhaul_testbench/track_builder.lua")
-
-return {
-	{
-		name = "straight_track_is_built",
-		build = function(area)
-			local build = track_builder.new()
-			track_builder.add_straight_track(build, area.y, area.x - 100, area.x + 100, area.base + 0.5)
-			build.send()
-		end,
-		wait = 30,
-		check = function(area)
-			local edges = track_builder.edges_near(area.x, area.y, 120)
-			return #edges == 1, "track edges=" .. #edges
-		end,
-	},
-}
+return {}
