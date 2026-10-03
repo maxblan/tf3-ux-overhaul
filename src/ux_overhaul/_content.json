@@ -19,11 +19,19 @@
         "ux_overhaul/gui/launcher.lua",
         "ux_overhaul/gui/launcher.res.lua",
         "ux_overhaul/gui/launcher.script.lua",
+        "ux_overhaul/gui/notifications.lua",
         "ux_overhaul/gui/status.lua",
         "ux_overhaul/gui/status.res.lua",
         "ux_overhaul/gui/status.script.lua",
         "ux_overhaul/gui/ui.lua",
         "ux_overhaul/gui/ux_overhaul.css.lua",
-        "ux_overhaul/logger.lua"
+        "ux_overhaul/logger.lua",
+        "ux_overhaul/notifications/common.lua",
+        "ux_overhaul/notifications/line_empty.res.lua",
+        "ux_overhaul/notifications/line_empty.script.lua",
+        "ux_overhaul/notifications/line_losing.res.lua",
+        "ux_overhaul/notifications/line_losing.script.lua",
+        "ux_overhaul/notifications/vehicle_old.res.lua",
+        "ux_overhaul/notifications/vehicle_old.script.lua"
     ]
 }

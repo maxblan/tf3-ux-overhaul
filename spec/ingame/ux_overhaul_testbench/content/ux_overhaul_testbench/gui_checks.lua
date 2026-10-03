@@ -122,6 +122,30 @@ local checks = {
 		end,
 	},
 	{
+		name = "notifications",
+		wait = 900, -- the mod syncs about every 10 s
+		check = function()
+			local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
+			local native = notification_util.externalGetNotificationsStateNative()
+			local by_entity = notification_util.getPersistingEntity2NotificationFromNative(native)
+			local counts, total = {}, 0
+			for _e, ids in pairs(by_entity) do
+				for _i, id in ipairs(ids) do
+					local n = notification_util.getNotificationFromNative(native, id)
+					local own = n and n.type:match("ux_overhaul/notifications/([%w_]+)%.script")
+					if own then counts[own] = (counts[own] or 0) + 1; total = total + 1 end
+				end
+			end
+			local ignored = native:find("ignored"):asTable()
+			local line_warning_hidden = (ignored.types or {})["::/game_mechanics/notifications/types/line_warning.script"]
+			local parts = {}
+			for name, count in pairs(counts) do parts[#parts + 1] = name .. "=" .. count end
+			local lines = #api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
+			return (lines == 0 or total > 0) and not line_warning_hidden,
+				string.format("own=%d {%s} line_warning hidden=%s", total, table.concat(parts, ","), tostring(line_warning_hidden))
+		end,
+	},
+	{
 		name = "action_add_vehicle",
 		act = function(ctx)
 			ctx.line, ctx.before = busiest_line()
