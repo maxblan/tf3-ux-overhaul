@@ -37,6 +37,8 @@
     <rect width="1920" height="1080" fill="url(#background-glow-fill)"/>
   </g>
 
+  <!-- drawn at 720x460 and scaled up to the size of the tunnel portal in that preview -->
+  <g id="object" transform="translate(960 545) scale(1.4) translate(-960 -460)">
   <g id="window">
     <ellipse id="window-shadow" cx="960" cy="690" rx="470" ry="38" fill="url(#ground-shadow-fill)"/>
     <!-- slab: darker bevel band, then the inset front face -->
@@ -88,5 +90,6 @@
   <g id="pointer" transform="translate(1206 616) rotate(-8) scale(1.15)" stroke-linejoin="round">
     <path id="pointer-side" fill="#9da2a7" d="M4,6 L4,98 L26,77 L41,112 L56,105 L41,71 L71,71 Z"/>
     <path id="pointer-top" fill="url(#pointer-fill)" stroke="#ffffff" stroke-width="2" filter="url(#pointer-shadow)" d="M0,0 L0,92 L22,71 L37,106 L52,99 L37,65 L67,65 Z"/>
+  </g>
   </g>
 </svg>
