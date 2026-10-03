@@ -24,6 +24,6 @@ files["tools/lua/lint.lua"] = { read_globals = { "read_file" } }
 
 max_line_length = 120
 -- Lua conversion of a base game file; keeps the base layout to ease diffing after game updates.
-files["src/ux_overhaul/content/ux_overhaul/gui/statistics_lines.lua"] = { max_line_length = 140 }
-files["src/ux_overhaul/content/ux_overhaul/gui/statistics_vehicles.lua"] = { max_line_length = 140 }
-files["src/ux_overhaul/content/ux_overhaul/gui/statistics_stations.lua"] = { max_line_length = 140 }
+files["src/ui_overhaul/content/ui_overhaul/gui/statistics_lines.lua"] = { max_line_length = 140 }
+files["src/ui_overhaul/content/ui_overhaul/gui/statistics_vehicles.lua"] = { max_line_length = 140 }
+files["src/ui_overhaul/content/ui_overhaul/gui/statistics_stations.lua"] = { max_line_length = 140 }

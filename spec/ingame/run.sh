@@ -4,7 +4,7 @@
 #
 # Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME]
 #   --save NAME  run on a copy of the savegame NAME (without .sav) instead of a new small map. The
-#                copy is called uxo_fixture; it and its autosaves are deleted afterwards.
+#                copy is called uio_fixture; it and its autosaves are deleted afterwards.
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
 set -euo pipefail
 
@@ -20,7 +20,7 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-mod=ux_overhaul
+mod=ui_overhaul
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 mod_dir="$repo/src/$mod"
 testbench_dir="$repo/spec/ingame/${mod}_testbench"
@@ -30,7 +30,7 @@ game_dir="$(wslpath "$game_dir_win")"
 userdata="$(ls -d "/mnt/c/Program Files (x86)/Steam/userdata/"*/3493540/local | head -n 1)"
 log="$userdata/crash_dump/stdout.txt"
 saves="$userdata/save"
-fixture_name=uxo_fixture
+fixture_name=uio_fixture
 # --script takes a game resource path; the app script ships inside the testbench mod.
 app_script="${mod}_testbench_1::/${mod}_testbench/app_script.lua"
 

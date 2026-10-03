@@ -1,0 +1,15 @@
+{
+    "authors": [
+        {
+            "name": "FalconsSky",
+            "role": "CREATOR"
+        }
+    ],
+    "description": "Makes the game's own screens faster to read and quicker to act in. No new windows, no new notifications: the vanilla Line Manager, Statistics, entity windows and construction menu simply show more and need fewer clicks.\n\nLine Manager: vehicle count and 12-month balance per line, age per vehicle; remembers the selected line; asks before cloning or replacing several vehicles.\nLine window: Add/Remove Vehicle buttons in the Vehicles card; a Stops card with waiting passengers per stop.\nStatistics (Lines): quick filters (losing money, problems, no vehicles) and totals; correct sorting.\nWindows: Statistics, Line Manager, Finances and others stay open side by side, also when you click the map; sections stay open; Sell asks first.\nTowns: the level card names what limits growth. Company: locked perks explain a pending promotion.\nConstruction: Rail/Tracks and Road/Roads menus share their tabs; fastest track first; Configure opens the useful module tab; the bulldozer warns before removing a station in use.\nGame bar: Earnings tooltip with the last 30 days. Vehicle store: newest models first.\n\nSafe to add to and remove from savegames (UI only). Every change falls back to vanilla if it fails. English and German.\n\nSource code and issue tracker: https://github.com/maxblan/ui-overhaul",
+    "name": "UI Overhaul",
+    "summary": "The vanilla screens show more and need fewer clicks: status in the Line Manager and Statistics, actions where you look, windows that stay open.",
+    "tags": [
+        "Script Mod"
+    ],
+    "url": ""
+}

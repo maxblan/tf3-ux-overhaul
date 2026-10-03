@@ -327,7 +327,7 @@ These are internal modules with **no stability guarantee**; signatures may chang
 - Plugins are additive. Several mods can plug into the same point; the only issue is ordering, so use a distinct `order`.
 - Replacements are exclusive per recipe (§2.2). Two UX mods replacing `ManagerWindowContent` or `GameBar` conflict silently. Keep replacements few, small and wrapping.
 - Campaign missions themselves replace `HudIconMasterGame` and `PerkHudIcon`. A UX mod must **not** replace those two, or the missions break.
-- Recipe names are global for CSS (`R::Name`). Prefix all recipe names (e.g. `UxoLinePanel`). Event names are global too, so prefix custom events.
+- Recipe names are global for CSS (`R::Name`). Prefix all recipe names (e.g. `UioLinePanel`). Event names are global too, so prefix custom events.
 - Globals: `init.lua:233-252` logs an error for every global assignment in mods. Keep everything `local`.
 
 **Savegames**
@@ -344,7 +344,7 @@ These are internal modules with **no stability guarantee**; signatures may chang
 
 **Verify in-game first (smallest spikes)**
 1. A staging mod with a `react-plugin ::GameBarInfoDisplayExtension` that returns a TextView: are mod `.res.lua` plugins discovered, and does the `.script.lua` module load?
-2. A `react-plugin ::ModEntryPointExtension` that `debugPrint`s on mount and handles `react.onEvent("uxo.open")`. Fire the event from a `::MainModButtonAreaExtension` button and open a `builtin.Window` through `game_react_globals.getDefaultWindowApi().addSingletonWindow`.
+2. A `react-plugin ::ModEntryPointExtension` that `debugPrint`s on mount and handles `react.onEvent("uio.open")`. Fire the event from a `::MainModButtonAreaExtension` button and open a `builtin.Window` through `game_react_globals.getDefaultWindowApi().addSingletonWindow`.
 3. A `react-replacement-config` that wraps an exported recipe, for example `line_react_util.LineBalance`, with `CallOriginalRecipe`: does it take effect, and does it combine with mission replacements?
 4. Is a mod's `*.css.lua` applied automatically?
 5. Does `react.useInputAction` with an existing IA in the ModEntryPoint fire, and which handler wins against base usages?
@@ -362,8 +362,8 @@ How to use it for GUI work:
 - **Offline:** the mock has no react runtime. Put data shaping (line/vehicle aggregation, problem ranking, formatting) in pure modules that take plain tables, and spec those. Keep recipes thin. A minimal fake of `react`/`builtin` (functions that return tables) would allow snapshot tests of recipe output, but it is not in the template.
 - **In-game, automated:**
   1. Add a `guiUpdate` step to `testbench.script.lua`; `guiUpdate` already runs on the GUI thread.
-  2. From there: `api.gui.fireReactEvent("uxo.open", ...)` to open the mod's window, then on later frames `api.gui.byId.isVisibleRecursive("<meta id of your window>")` or `api.gui.contextHelper.collectSubjectStates({...})` to assert that it exists, and print PASS/FAIL.
-  3. Give every mod component a `meta = { id = "uxo.dashboard" }`; the base does the same, e.g. `main/game.tl:381,421`.
+  2. From there: `api.gui.fireReactEvent("uio.open", ...)` to open the mod's window, then on later frames `api.gui.byId.isVisibleRecursive("<meta id of your window>")` or `api.gui.contextHelper.collectSubjectStates({...})` to assert that it exists, and print PASS/FAIL.
+  3. Give every mod component a `meta = { id = "uio.dashboard" }`; the base does the same, e.g. `main/game.tl:381,421`.
   4. Recipes can `debugPrint` on mount, and run.sh greps `stdout.txt`.
   5. Exercise actions with real commands: build a line or depot in the scenario, then trigger the mod's button handler through an event and check components (e.g. `TRANSPORT_VEHICLE.state`).
   6. For visual checks: `api.gui.camera.takeScreenshot(scale)` writes to the userdata folder (`apidef/api/gui.d.tl:455`), or use the PowerShell screen grab described in skill testing.md (ask the user first).

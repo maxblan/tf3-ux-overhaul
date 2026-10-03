@@ -1,4 +1,4 @@
-# UX Overhaul — plan
+# UI Overhaul — plan
 
 > **Status 2026-10-03: direction v2.** The user decided to improve the existing vanilla screens in place
 > instead of adding new UI (status strip, launcher, Control Center and notifications were built, then
@@ -45,7 +45,7 @@ Goal: the player sees the state of the network **without clicking** and can act 
 ## 3. Architecture
 
 ```
-src/ux_overhaul/content/ux_overhaul/
+src/ui_overhaul/content/ui_overhaul/
   core/            pure Lua, no engine access → offline specs against the mock
     metrics.lua      line/vehicle/station aggregates (balance, utilization, age%, problems)
     problems.lua     unify notifications + own detectors into one ranked problem list
@@ -54,7 +54,7 @@ src/ux_overhaul/content/ux_overhaul/
     compat.lua       startup self-check: required base modules, recipes, fields exist → clear log line, feature off
   engine/          thin adapters api.engine.* → plain tables (the only place that touches the engine API)
   gui/
-    entry/           ModEntryPointExtension plugin: event hub ("uxo.*" events), opens our windows
+    entry/           ModEntryPointExtension plugin: event hub ("uio.*" events), opens our windows
     status/          GameBarInfoDisplayExtension plugins (status strip)
     launcher/        MainModButtonAreaExtension plugins (quick-launch row) + RadialMenuExtension
     overview/        "Control Center" tool window (tabs Problems / Lines / Vehicles / Stations)
@@ -65,14 +65,14 @@ src/ux_overhaul/content/ux_overhaul/
   construction/    menu_category / construction_tool data overrides
 ```
 
-- **Recipe names** are prefixed `Uxo…`, events `uxo.*`, and all variables are `local`. Global CSS selectors and event names are shared with other mods.
+- **Recipe names** are prefixed `Uio…`, events `uio.*`, and all variables are `local`. Global CSS selectors and event names are shared with other mods.
 - **Data:** read with `engine_react_util.useStepStateTimer`, at least every 0.5–1 s; aggregates over the whole network use `useStepStateParallel`. Results are memoised by `api.engine.getRevision()`.
 - **Actions:** use the base helpers where they exist (`line_util.sendVehiclesToDepot`, `vehicle_react_util.onBuy`, `duplicateVehicles` event); otherwise call `api.cmd.make*Cmd` with a GUI-side callback. `gameCtx.filters.protectedEntities` and `disableFeatures` are respected, so campaign missions keep working.
 - **Navigation:** go to base windows only through their own events (`selectEntity{stack=true}`, `openVehicleManager{…}`, `openStatisticsWindow`, `openFinanceWindow`, `constructionMenuSelectTabForConstruction`).
 - **Never replace** `GameUIRoot`, `HudIconMasterGame` or `PerkHudIcon`; campaign missions replace the last two.
 - **Testing:**
   - **Offline:** specs for `core/` and `engine/` adapters against the mock.
-  - **In-game:** the template's testbench, extended with a GUI step. `guiUpdate` fires `uxo.*` events and checks `api.gui.byId.isVisibleRecursive("uxo.…")`, giving PASS/FAIL. Screenshots come from `api.gui.camera.takeScreenshot`.
+  - **In-game:** the template's testbench, extended with a GUI step. `guiUpdate` fires `uio.*` events and checks `api.gui.byId.isVisibleRecursive("uio.…")`, giving PASS/FAIL. Screenshots come from `api.gui.camera.takeScreenshot`.
 
 ## 4. Feature backlog
 
@@ -153,9 +153,9 @@ entity-window card, `setGuiSaveData` round trip. Lessons:
   save data across save/load (C5), mod params from GUI code (feature flags), `useInputAction` reuse.
 
 Original spike list:
-Build a throw-away `uxo_spike` feature set and extend the testbench with GUI assertions. Each spike gives PASS/FAIL in `make test-ingame`:
+Build a throw-away `uio_spike` feature set and extend the testbench with GUI assertions. Each spike gives PASS/FAIL in `make test-ingame`:
 1. A `react-plugin ::GameBarInfoDisplayExtension` from a staging mod is discovered, and its `.script.lua` loads.
-2. A `ModEntryPointExtension` handles `uxo.open` and opens a `builtin.Window` / tool window; a `MainModButtonArea` button fires the event.
+2. A `ModEntryPointExtension` handles `uio.open` and opens a `builtin.Window` / tool window; a `MainModButtonArea` button fires the event.
 3. A `react-replacement-config` wrapping `line_react_util.ManagerNotificationWidget` with `CallOriginalRecipe` takes effect.
 4. The mod's `*.css.lua` is applied.
 5. A `StationGroupEowExtensionPoint` plugin renders.
@@ -191,7 +191,7 @@ D4, D6, command palette (jump to any line, station or town by typing), notificat
 - Offline spec for every `core/` module, plus an in-game scenario (testbench) for every GUI surface and every action.
 - `make lint test test-ingame validate` must pass, with no new `Lua error` lines in `stdout.txt`.
 - Performance: the status strip and Control Center are measured on a large save. The target is no visible frame drop; that means `useStepStateParallel` for anything over all vehicles.
-- The startup `compat.lua` check passes on the current game build. When a required base symbol is missing, the dependent feature switches itself off and logs a single `[uxo] disabled <feature>: <reason>` line.
+- The startup `compat.lua` check passes on the current game build. When a required base symbol is missing, the dependent feature switches itself off and logs a single `[uio] disabled <feature>: <reason>` line.
 - English and German strings from the start (`strings.lua`).
 
 ## 7. Compatibility notes (scanned 2026-10-03)

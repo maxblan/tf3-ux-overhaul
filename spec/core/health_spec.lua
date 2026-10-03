@@ -1,4 +1,4 @@
-local health = require("/ux_overhaul/core/health.lua")
+local health = require("/ui_overhaul/core/health.lua")
 
 local function snapshot()
 	return {

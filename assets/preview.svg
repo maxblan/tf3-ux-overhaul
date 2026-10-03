@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-  <title>UX Overhaul</title>
+  <title>UI Overhaul</title>
   <!-- Preview (1920x1080, like the official mods). Text-free: the renderer loads no fonts.
        Shows the mod's idea in the game's dark UI style: a list window with quick filters, totals and
        green/red figures in every row, and a line card with two action buttons.
-       make preview renders it to src/ux_overhaul/_metadata/0.png. -->
+       make preview renders it to src/ui_overhaul/_metadata/0.png. -->
   <defs>
     <radialGradient id="sky" cx="960" cy="380" r="1250" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#3d6b4f"/><stop offset="0.6" stop-color="#22402f"/><stop offset="1" stop-color="#0f1d16"/>

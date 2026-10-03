@@ -1,4 +1,4 @@
 --- Paths of the mod under test, shared by the spec helpers.
 return {
-	content = "src/ux_overhaul/content",
+	content = "src/ui_overhaul/content",
 }

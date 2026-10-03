@@ -133,7 +133,7 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - **E / high.**
 
 ### 2. Our Lines "Problems" quick filter (our own bug) and per-frame cost
-- **Bug:** `hasProblems` checks `type(value) == "number"` (src/ux_overhaul/content/ux_overhaul/gui/statistics_lines.lua:182-185). `getProblemsCompareValue` returns `{count, ids}` (statistics_react_util.tl:305-311), so the filter is always empty.
+- **Bug:** `hasProblems` checks `type(value) == "number"` (src/ui_overhaul/content/ui_overhaul/gui/statistics_lines.lua:182-185). `getProblemsCompareValue` returns `{count, ids}` (statistics_react_util.tl:305-311), so the filter is always empty.
   - Fix: `return value[1] > 0`.
   - Add a spec.
 - **Performance:** `tableState` uses `useStepState` (statistics_lines.lua:283), so on every frame it runs `makeFilteredKeys`, which calls `calculateBalance` per line for the "losing" filter. Switch to `useStepStateTimer(…, 1.0)`.
@@ -147,7 +147,7 @@ The full entries follow, in the same order. Section 4 lists the vanilla bugs, se
 - **Change:** the first click turns the slot into the vanilla question "Sell Selected Vehicle? [Sell] [Cancel]".
 - **No load:** the same wording and tape as the Line Manager; it is already translated.
 - **Route:** wrap the `ActionButtonBar` recipe.
-  - For the entry with tag `entityWindow.vehicle.sell`, set `customItem = UxoConfirmButton{orig = entry}`: a small recipe that holds the armed state and calls the original `onClick` on accept, which keeps the protected-entity feedback.
+  - For the entry with tag `entityWindow.vehicle.sell`, set `customItem = UioConfirmButton{orig = entry}`: a small recipe that holds the armed state and calls the original `onClick` on accept, which keeps the protected-entity feedback.
   - Drop `sound` from the first click.
   - No fork.
 - **E / high.**

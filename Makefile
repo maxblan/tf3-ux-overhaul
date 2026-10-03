@@ -3,7 +3,7 @@
 # Run `make` for the list of targets. Targets that touch the game need WSL with access to the
 # Windows Steam installation (see README.md).
 
-MOD        := ux_overhaul
+MOD        := ui_overhaul
 MOD_DIR    := src/$(MOD)
 TESTBENCH  := spec/ingame/$(MOD)_testbench
 DIST       := dist

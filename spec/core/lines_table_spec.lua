@@ -1,4 +1,4 @@
-local lines_table = require("/ux_overhaul/core/lines_table.lua")
+local lines_table = require("/ui_overhaul/core/lines_table.lua")
 
 local LINES = {
 	{ id = 1, name = "bus 1", carrier = "ROAD", vehicle_count = 3, balance = 25000, utilization = 0.7, issues = {} },

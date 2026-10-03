@@ -271,7 +271,7 @@ function mock_engine.new_game(world, script)
 end
 
 --- Loads a resource file of the mod the way the engine does: run it, then call its data().
--- `path` is relative to the mod's content folder, e.g. "/ux_overhaul/main.script.lua".
+-- `path` is relative to the mod's content folder, e.g. "/ui_overhaul/main.script.lua".
 function mock_engine.load_resource(path)
 	data = nil
 	assert(loadfile(mod_paths.content .. path))()

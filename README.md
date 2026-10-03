@@ -1,4 +1,4 @@
-# UX Overhaul
+# UI Overhaul
 
 A Transport Fever 3 mod that makes the game's own screens faster to read and quicker to act in. It adds no new windows or notifications: the vanilla Line Manager, Statistics, entity windows and construction menu simply show more and need fewer clicks, so there is nothing new to learn.
 
@@ -50,7 +50,7 @@ This repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-te
 - `docs/PLAN.md`, `docs/flows_audit_v2.md`: plan and the ranked list of further improvements.
 - `docs/api_cookbook.md`: engine API reference for GUI work.
 - `tools/extract_game_sources.sh`: extracts the game's GUI sources to `.game/` for reference.
-- `src/ux_overhaul/content/ux_overhaul/gui/`: one module per change, each installed through a guarded stub (`*.script.lua`, `guard.lua`).
+- `src/ui_overhaul/content/ui_overhaul/gui/`: one module per change, each installed through a guarded stub (`*.script.lua`, `guard.lua`).
 
 ## License
 

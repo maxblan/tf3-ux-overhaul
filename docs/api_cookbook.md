@@ -42,7 +42,7 @@ local builtin = require "::/gui/main/builtin.lua"
 local engine_react_util = require "::/gui/main/engine_react_util.tl"
 
 local M = {}
-M.UxoMoney = react.RegisterRecipe("UxoMoney", function(params)
+M.UioMoney = react.RegisterRecipe("UioMoney", function(params)
   local money = engine_react_util.useStepStateTimer(function()
     return api.engine.util.finance.getPlayersBalance(api.engine.util.getPlayer()) -- nil = infinite money
   end, 1.0)
@@ -797,7 +797,7 @@ The base pattern is from `G/statistics/statistics_react_util.tl:317-343` (Warnin
 ```lua
 local util = require "::/scripts/util.tl"
 
-local MyNotificationRow = react.RegisterRecipe("UxoNotificationRow", function(params)
+local MyNotificationRow = react.RegisterRecipe("UioNotificationRow", function(params)
   local dataStateFn = util.useFn(params.notification.type .. "@useDataState")
   local dataState = dataStateFn and dataStateFn(params.notification.params, params.notification.simParams) or nil
   if dataState == nil then
@@ -939,7 +939,7 @@ sender block `notifications.script.tl:535-573`). The type string format follows 
 (`urbangames_campaign_mission_05::/mission/tasks/drilling/mission_drilling_notification.script`).
 
 ```lua
--- content/uxo/notifications/unprofitable_line.res.lua
+-- content/uio/notifications/unprofitable_line.res.lua
 function data()
   return {
     type = "notification",
@@ -952,7 +952,7 @@ function data()
 end
 ```
 ```lua
--- content/uxo/notifications/unprofitable_line.script.lua   (GUI side; returns a table)
+-- content/uio/notifications/unprofitable_line.script.lua   (GUI side; returns a table)
 local entity_util       = require "::/scripts/entity_util.tl"
 local lang_util         = require "::/scripts/lang_util.tl"
 local engine_react_util = require "::/gui/main/engine_react_util.tl"
@@ -987,7 +987,7 @@ return data
 -- sender (GUI, e.g. inside a ::ModEntryPointExtension plugin recipe; or the same body in a *.gs.lua update)
 local entity_util = require "::/scripts/entity_util.tl"
 local table_util  = require "::/scripts/table_util.tl"
-local TYPE = "uxo_1::/uxo/notifications/unprofitable_line.script"   -- "<modId>::/<path under content/>.script"
+local TYPE = "uio_1::/uio/notifications/unprofitable_line.script"   -- "<modId>::/<path under content/>.script"
 
 local lastSent = react.useRef(nil)
 react.onStepTimer(function()
@@ -1358,7 +1358,7 @@ return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, child
   API: `scrollToRowKey(rowKey, forceTopAlign)` (`:1155-1158`).
 - Base, condensed from `G/statistics/statistic_lines.tl:200-218, 376-457`:
 ```lua
-local LineFrequencyCell = react.RegisterRecipe("UxoLineFrequencyCell", function(params)   -- params.rowKey = line entity
+local LineFrequencyCell = react.RegisterRecipe("UioLineFrequencyCell", function(params)   -- params.rowKey = line entity
   local entity = params.rowKey
   local frequencyState = engine_react_util.useStepStateTimer(function()
     return line_util.calculateFrequencySeconds(entity)

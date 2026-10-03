@@ -1,4 +1,4 @@
-local format = require("/ux_overhaul/core/format.lua")
+local format = require("/ui_overhaul/core/format.lua")
 
 describe("format", function()
 	it("abbreviates large numbers", function()

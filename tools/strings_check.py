@@ -5,10 +5,10 @@ Usage: tools/strings_check.py [--prune]   (--prune drops keys from strings.json 
 import glob, gettext, json, re, sys
 
 GAME = "/mnt/c/Program Files (x86)/Steam/steamapps/common/Transport Fever 3/base/strings"
-STRINGS = "src/ux_overhaul/strings.json"
+STRINGS = "src/ui_overhaul/strings.json"
 
 used = set()
-for path in glob.glob("src/ux_overhaul/content/**/*.lua", recursive=True):
+for path in glob.glob("src/ui_overhaul/content/**/*.lua", recursive=True):
     used.update(re.findall(r'_\(\s*"((?:[^"\\]|\\.)*)"\s*\)', open(path, encoding="utf-8").read()))
 mod = json.load(open(STRINGS, encoding="utf-8"))
 missing = []

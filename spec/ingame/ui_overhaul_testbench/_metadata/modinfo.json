@@ -1,0 +1,15 @@
+{
+    "authors": [
+        {
+            "name": "FalconsSky",
+            "role": "CREATOR"
+        }
+    ],
+    "description": "Development only. Runs scripted in-game scenarios on game start and logs PASS/FAIL. Do not use in real savegames.",
+    "name": "UI Overhaul - Testbench",
+    "summary": "Automated in-game tests for UI Overhaul.",
+    "tags": [
+        "Script Mod"
+    ],
+    "url": ""
+}

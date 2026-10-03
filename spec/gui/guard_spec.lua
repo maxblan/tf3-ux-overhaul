@@ -4,7 +4,7 @@ package.loaded["/fixtures/ok.lua"] = { render = function(x) return "rendered " .
 package.loaded["/fixtures/broken.lua"] = { render = function() error("boom") end }
 _G.debugPrint = _G.debugPrint or function() end
 
-local guard = require("/ux_overhaul/gui/guard.lua")
+local guard = require("/ui_overhaul/gui/guard.lua")
 
 describe("guard", function()
 	it("renders through the module when it works", function()
