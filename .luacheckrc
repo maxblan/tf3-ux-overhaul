@@ -27,3 +27,7 @@ max_line_length = 120
 files["src/ui_overhaul/content/ui_overhaul/gui/statistics_lines.lua"] = { max_line_length = 140 }
 files["src/ui_overhaul/content/ui_overhaul/gui/statistics_vehicles.lua"] = { max_line_length = 140 }
 files["src/ui_overhaul/content/ui_overhaul/gui/statistics_stations.lua"] = { max_line_length = 140 }
+-- Wraps the engine's global orderedPairs and reads the React registry _react (base/init.lua).
+files["src/ui_overhaul/content/ui_overhaul/gui/station_terminals.lua"] = {
+	globals = { "orderedPairs" }, read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}

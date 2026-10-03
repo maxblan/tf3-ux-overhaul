@@ -11,6 +11,11 @@
 -- wrapper hands it this recipe instead of the base one. Other mods that replace the recipe
 -- PopoverWindowContent (e.g. Auto Assign Terminals) still see the same parameters. If rendering fails,
 -- the base popover is shown. Installed by terminals.script.lua.
+--
+-- TerminalButton opens the same popover outside the Line Manager (station window, line window). Its
+-- parameters have the shape of the Line Manager's, with the line read from the game and each change
+-- sent as a line update, so a mod that swaps the base popover by name (Easy Terminal Assignment) shows
+-- its own popover here too.
 -- @module ui_overhaul.gui.terminals
 local builtin = require("::/gui/main/builtin.lua")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
@@ -21,6 +26,7 @@ local line_util = require("::/gui/line_vehicle_mgmt/line_util.tl")
 local popover_react_util = require("::/gui/main/popover_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local styleutil = require("::/gui/main/styleutil.tl")
+local table_util = require("::/scripts/table_util.tl")
 
 local terminals = {}
 
@@ -379,15 +385,178 @@ terminals.TerminalSelection = TerminalSelection
 
 --- Popover parameters with this recipe in place of the base terminal selection; other popovers' parameters
 -- are returned unchanged. `recipe_name` is react.GetRecipeName (a parameter for the specs).
+-- Other mods register popovers under the base name too (Terminal Selector, with parameters of its own),
+-- so only a popover with the base parameters is taken over.
 function terminals.swap(p, recipe_name)
 	if type(p) ~= "table" or p.recipe == nil or p.recipe == TerminalSelection then return p end
 	if recipe_name(p.recipe) ~= BASE_NAME then return p end
+	local params = p.params
+	if type(params) ~= "table" or params.viaState == nil or params.commonParams == nil then return p end
 	base_recipe = p.recipe
 	local copy = {}
 	for k, v in pairs(p) do copy[k] = v end
 	copy.recipe = TerminalSelection
 	return copy
 end
+
+-- Popover outside the Line Manager ----------------------------------------------------------------
+
+local ICON = "::/gui/line_vehicle_mgmt/icons/indicator_terminal.tga" -- the Line Manager's terminal icon
+local ICON_PATHS = { -- the entries of the Line Manager's iconPaths the popover uses
+	problemAlert = "::/gui/statistics/icons/alert.tga",
+	problemArrow = "::/gui/line_vehicle_mgmt/icons/special_arrow_down.tga",
+}
+
+local function same_revision(a, b)
+	return a.num[1] == b.num[1] and a.num[2] == b.num[2] and a.num[3] == b.num[3]
+end
+
+--- Line state of `line` for the popover: old() is the line as the Line Manager keeps it, read again
+-- when the line changes and the same table until then (as the base state is between two steps, which
+-- mods editing it before a change rely on).
+function terminals.line_state(line, read, revision)
+	local cached, cached_revision
+	return {
+		old = function()
+			if not api.engine.entityExists(line) then return nil end
+			local current = revision(line)
+			if cached == nil or not same_revision(cached_revision, current) then
+				cached, cached_revision = read(line), current
+			end
+			return cached
+		end,
+		reset = function() cached = nil end,
+	}
+end
+
+--- Sends `react_line` as the update of its line, as the Line Manager does on a change.
+local function commit(react_line)
+	local line = react_line.entityAndRevision.entity
+	local component = api.type.Line.new()
+	component.stops = line_util.autoAssignTerminals(line, react_line.path)
+	component.customFilters = react_line.customFilters
+	component.reservationPriority = react_line.reservationPriority
+	api.cmd.sendCommand(api.cmd.makeLineUpdateCmd(line, component), function(_result, success)
+		if not success then report("line update", "rejected") end
+	end)
+end
+
+--- The Line Manager's terminal changes on a line state (manager_window.tl, commonParams).
+function terminals.common_params(line_state, send)
+	local function change(modify)
+		local react_line = line_state.old()
+		if not react_line then return end
+		react_line = table_util.copy(react_line)
+		modify(react_line)
+		line_state.reset()
+		send(react_line)
+	end
+	return {
+		lineState = { old = function(_self) return line_state.old() end },
+		iconPaths = ICON_PATHS,
+		changeMainTerminal = function(stopNumber, stationIndex1, terminalIndex1)
+			change(function(react_line)
+				react_line.path[stopNumber].stop.station1 = stationIndex1
+				react_line.path[stopNumber].stop.terminal1 = terminalIndex1
+			end)
+		end,
+		selectAlternativeTerminal = function(stopNumber, stationIndex1, terminalIndex1, add)
+			change(function(react_line)
+				local stop = react_line.path[stopNumber].stop
+				local alternatives = {}
+				for _i, v in ipairs(stop.alternativeTerminals) do
+					if v.station ~= stationIndex1 - 1 or v.terminal ~= terminalIndex1 - 1 then
+						alternatives[#alternatives + 1] = api.type.StationTerminal.new(v.station, v.terminal)
+					end
+				end
+				if add then
+					alternatives[#alternatives + 1] = api.type.StationTerminal.new(stationIndex1 - 1, terminalIndex1 - 1)
+				end
+				stop.alternativeTerminals = alternatives
+			end)
+		end,
+	}
+end
+
+--- Number of the stop `stop_index0` in `path` (stops and waypoints, as the Line Manager counts).
+function terminals.stop_number(path, stop_index0)
+	local stops = 0
+	for number, via in ipairs(path) do
+		if via.stop then
+			if stops == stop_index0 then return number end
+			stops = stops + 1
+		end
+	end
+	return nil
+end
+
+--- Popover parameters for stop `stop_index0` of `line`, in the shape of the Line Manager's.
+function terminals.popover_params(line, stop_index0)
+	local line_state = terminals.line_state(line, line_util.getReactLineFromGameState, api.engine.getRevision)
+	local react_line = line_state.old()
+	local stop_number = react_line and terminals.stop_number(react_line.path, stop_index0)
+	if not stop_number then return nil end
+	return {
+		commonParams = terminals.common_params(line_state, commit),
+		viaState = {
+			old = function(_self)
+				local current = line_state.old()
+				return current and current.path
+			end,
+		},
+		lineEntity = line,
+		stopNumber = stop_number,
+		stopIndex = stop_index0,
+		stopCount = #react_line.path,
+		index2problems = {},
+	}
+end
+
+-- Loaded on the first click, not with this file: it loads game.tl and with it the menu pages, whose
+-- require paths (a doubled slash before engine_react_util.tl) the game's mod validator reports as errors.
+local GAME_REACT_GLOBALS = "::/gui/main/game_react_globals.tl"
+
+-- A new window key for each popover, so it opens at the button and not where the previous one was
+-- (as popover_react_util does).
+local popovers_opened = 0
+
+--- Opens the terminal popover of stop `stop_index0` of `line` at `position`.
+function terminals.open(line, stop_index0, position, title)
+	local params = terminals.popover_params(line, stop_index0)
+	local windows = require(GAME_REACT_GLOBALS).getDefaultWindowApi()
+	if not params or not windows then return end
+	popovers_opened = popovers_opened + 1
+	windows.removeAllWindows(popover_react_util.PopoverWindow)
+	windows.addWindow(popover_react_util.PopoverWindow, "uio.terminals." .. popovers_opened, {
+		onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
+		x = position.x,
+		y = position.y,
+		windowTitle = title,
+		windowClass = "select-terminal, management",
+		recipe = TerminalSelection,
+		params = params,
+	})
+end
+
+--- Button that opens the terminal popover of stop `stopIndex0` (0-based, without waypoints) of `line`.
+-- `id`: component id of the button, unique among all open windows.
+terminals.TerminalButton = react.RegisterRecipe("UioTerminalButton", function(params)
+	local self_ref = react.useSelfRef()
+	local title = _("Select Terminals")
+	return builtin.BoxLayout{
+		children = {
+			builtin.Button{
+				meta = { class = "uio-terminal-button", tooltip = title, id = params.id },
+				content = builtin.ImageView{ path = ICON, scaling = builtin.type.ImageViewScaling.AutoFit },
+				onClick = function()
+					local position = self_ref:get():getPosition(1.0, 0.0)
+					local ok, err = pcall(terminals.open, params.line, params.stopIndex0, position, title)
+					if not ok then report("open", err) end
+				end,
+			},
+		},
+	}
+end)
 
 --- Wraps `previous` (the PopoverWindowContent function: the base recipe, or another mod's wrapper).
 function terminals.wrap(previous)

@@ -1,5 +1,6 @@
 --- Addition inside the vanilla line window, built from the game's own widgets and styles: a "Stops"
--- card listing every stop with its waiting passengers (cargo in the tooltip), in the same table as the
+-- card listing every stop with its waiting passengers (cargo in the tooltip) and a button for the
+-- stop's terminals (the Line Manager's popover, terminals.lua), in the same table as the
 -- vanilla vehicle list (DataTable, class "line-vehicles-table", NameTextView cells). The base line
 -- window shows no stops at all; the station window already lists waiting counts per terminal.
 -- Rendered by the guarded stubs in cards.script.lua. State functions run in timer callbacks and only
@@ -12,6 +13,9 @@ local content_card = require("::/gui/main/content_card.tl")
 local cargo_util = require("::/gui/main/cargo_util.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+-- optional: without it the stops have no terminal button
+local terminals = guard.module("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
 
 local cards = {}
 
@@ -78,6 +82,10 @@ local UioStopCell = react.RegisterRecipe("UioStopCell", function(params)
 			entity = station_group, locationButton = true, stackEntityOpen = true, editMode = false,
 		},
 		gui_react_util.makeHorizontalSpacer(), -- keeps name and pin left-aligned like the vehicle table
+		terminals and terminals.TerminalButton{
+			line = line, stopIndex0 = params.rowKey - 1,
+			id = "uio.terminals.stops." .. tostring(line) .. "." .. tostring(params.rowKey - 1),
+		} or nil,
 	}
 end)
 

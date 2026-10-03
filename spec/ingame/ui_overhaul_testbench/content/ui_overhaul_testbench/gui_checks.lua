@@ -11,6 +11,16 @@
 -- `make test-ingame SAVE="<savegame>"`.
 -- @module ui_overhaul_testbench.gui_checks
 
+local fixture = require("/ui_overhaul_testbench/fixture.lua")
+
+-- Mods the run added (run.sh --with-mod): checks expect what they change.
+local with_mod = {}
+for _i, name in ipairs(fixture.mods or {}) do with_mod[name] = true end
+-- Replaces the station window and brings its own terminal buttons there.
+local TERMINAL_SELECTOR = with_mod.terminal_selector
+-- Takes over every popover named TerminalSelection, the mod's included.
+local EASY_TERMINALS = with_mod.zhenya_easy_terminal_assignment
+
 local function visible(id)
 	return api.gui.byId.isVisibleRecursive(id)
 end
@@ -31,6 +41,28 @@ end
 
 local function stops_card(line)
 	return line and visible("uio.card.line.stops." .. tostring(line))
+end
+
+--- A terminal of the first stop's station group that is neither preferred nor alternative: station
+-- and terminal (1-based), or nil.
+local function free_terminal(line)
+	local stop = api.engine.getComponent(line, api.type.ComponentType.LINE).stops[1]
+	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	for s, station_entity in ipairs(group.stations) do
+		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		for t = 1, #station.terminals do
+			local used = stop.station == s - 1 and stop.terminal == t - 1
+			for _i, alternative in ipairs(stop.alternativeTerminals) do
+				if alternative.station == s - 1 and alternative.terminal == t - 1 then used = true end
+			end
+			if not used then return s, t end
+		end
+	end
+end
+
+--- Number of alternative terminals of the first stop of `line`.
+local function alternatives(line)
+	return #api.engine.getComponent(line, api.type.ComponentType.LINE).stops[1].alternativeTerminals
 end
 
 --- Any player line other than `line`.
@@ -446,6 +478,7 @@ local checks = {
 		check = function(ctx)
 			if not ctx.terminal_line then return true, "skipped: no line" end
 			local shown = visible("uio.terminals.usage.1")
+			if EASY_TERMINALS then return not shown, "Easy Terminal Assignment's popover, ours visible=" .. tostring(shown) end
 			return shown, "usage buttons of terminal 1 visible=" .. tostring(shown)
 		end,
 	},
@@ -456,6 +489,114 @@ local checks = {
 		check = function()
 			local shown = visible("uio.terminals.usage.1")
 			return not shown, "popover closed=" .. tostring(not shown)
+		end,
+	},
+	{
+		-- Terminal Selector opens a popover named TerminalSelection with parameters of its own; the mod
+		-- must leave it alone (the stand-in renders) instead of showing an empty popover.
+		name = "foreign_terminal_popover_untouched",
+		act = function(ctx)
+			if ctx.terminal_line then api.gui.fireReactEvent("uio.debug.foreign_terminals", ctx.terminal_line) end
+		end,
+		wait = 60,
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			local ours, stand_in = visible("uio.terminals.usage.1"), visible("probe.fake_terminals")
+			local details = string.format("ours=%s stand-in=%s", tostring(ours), tostring(stand_in))
+			-- Easy Terminal Assignment takes this popover over too (its own issue, not ours)
+			if EASY_TERMINALS then return not ours, details .. " (Easy Terminal Assignment active)" end
+			return stand_in and not ours, details
+		end,
+	},
+	{
+		name = "station_terminal_buttons",
+		act = function(ctx)
+			api.gui.fireReactEvent("uio.debug.foreign_terminals", nil)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			local component = ctx.terminal_line and api.engine.getComponent(ctx.terminal_line, api.type.ComponentType.LINE)
+			ctx.terminal_station = component and component.stops[1].stationGroup
+			if ctx.terminal_station then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.terminal_station, stack = false })
+			end
+		end,
+		wait = 90,
+		shot = "station_terminal_buttons",
+		check = function(ctx)
+			if not ctx.terminal_station then return true, "skipped: no line" end
+			local shown = visible("uio.terminals.station." .. tostring(ctx.terminal_line) .. ".0")
+			if TERMINAL_SELECTOR then
+				return not shown, "Terminal Selector's station window, ours visible=" .. tostring(shown)
+			end
+			return shown, "button of the line's first stop visible=" .. tostring(shown)
+		end,
+	},
+	{
+		name = "line_window_terminal_button",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			if ctx.terminal_line then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.terminal_line, stack = false })
+			end
+		end,
+		wait = 90,
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			local shown = visible("uio.terminals.stops." .. tostring(ctx.terminal_line) .. ".0")
+			return shown, "button of stop 1 visible=" .. tostring(shown)
+		end,
+	},
+	{
+		name = "terminal_button_popover",
+		act = function(ctx)
+			if ctx.terminal_line then api.gui.fireReactEvent("uio.debug.terminal_button", ctx.terminal_line) end
+		end,
+		wait = 60,
+		shot = "terminal_button_popover",
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			local shown = visible("uio.terminals.usage.1")
+			if EASY_TERMINALS then return not shown, "Easy Terminal Assignment's popover, ours visible=" .. tostring(shown) end
+			return shown, "usage buttons of terminal 1 visible=" .. tostring(shown)
+		end,
+	},
+	{
+		-- A real change through the buttons' parameters (on the savegame copy), undone by the next check.
+		name = "terminal_change_add",
+		act = function(ctx)
+			api.gui.fireReactEvent("uio.debug.terminal_button", nil)
+			if not ctx.terminal_line then return end
+			ctx.free_station, ctx.free_terminal = free_terminal(ctx.terminal_line)
+			ctx.alternatives_before = alternatives(ctx.terminal_line)
+			if ctx.free_station then
+				api.gui.fireReactEvent("uio.debug.terminal_change", {
+					line = ctx.terminal_line, station = ctx.free_station, terminal = ctx.free_terminal, add = true,
+				})
+			end
+		end,
+		wait = 60,
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			if not ctx.free_station then return true, "skipped: no free terminal at the first stop" end
+			local after = alternatives(ctx.terminal_line)
+			return after == ctx.alternatives_before + 1,
+				string.format("alternatives %d -> %d", ctx.alternatives_before, after)
+		end,
+	},
+	{
+		name = "terminal_change_remove",
+		act = function(ctx)
+			if ctx.terminal_line and ctx.free_station then
+				api.gui.fireReactEvent("uio.debug.terminal_change", {
+					line = ctx.terminal_line, station = ctx.free_station, terminal = ctx.free_terminal, add = false,
+				})
+			end
+		end,
+		wait = 60,
+		check = function(ctx)
+			if not ctx.terminal_line or not ctx.free_station then return true, "skipped" end
+			local after = alternatives(ctx.terminal_line)
+			return after == ctx.alternatives_before, string.format("alternatives back to %d (expect %d)", after,
+				ctx.alternatives_before)
 		end,
 	},
 	-- Notification ridge grouping (gui/notifications.lua). The ridge's module lives in the GUI's Lua

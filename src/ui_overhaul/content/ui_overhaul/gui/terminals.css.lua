@@ -18,5 +18,13 @@ function data()
 	add("R::TerminalSelection ToggleButtonGroup!horizontal ToggleButton!unchecked", {
 		backgroundColor1 = colorDefault.BaseDark,
 	})
+
+	-- "Select Terminals" button in the station and line windows: a small icon button like the
+	-- vanilla locate button in entity window lists (entity_window.css.lua, 22 x 22).
+	add("R::UioTerminalButton Button!uio-terminal-button", { size = { 22, 22 }, padding = { 1, 1, 1, 1 } })
+	add("Table::TableLayout R::UioTerminalButton Button!uio-terminal-button", { gravity = { 0, -1 } })
+	add("R::TerminalStops Component!uio-station-terminal R::UioTerminalButton", { margin = { 0, 6, 0, 6 } })
+	-- inside the 300 wide station cell (cards.css.lua), clear of the waiting count
+	add("R::UioStopCell R::UioTerminalButton", { margin = { 0, 10, 0, 0 } })
 	return result
 end

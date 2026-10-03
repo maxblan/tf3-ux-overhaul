@@ -9,6 +9,7 @@ function data()
 	add("R::UioStopsTable R::UioStopWaitingCell", { size = { 98, -1 } })
 	-- fixed widths like the vanilla vehicle cell (NameTextView 180 there), so the pins line up
 	add("R::UioStopCell TextView!uio-stop-index", { size = { 34, -1 }, maxSize = { 34, -1 } })
-	add("R::UioStopsTable R::UioStopCell R::NameTextView", { size = { 230, -1 }, maxSize = { 230, -1 } })
+	-- 34 + 220 + the terminal button (22, margin 10) fit the 300 wide cell
+	add("R::UioStopsTable R::UioStopCell R::NameTextView", { size = { 220, -1 }, maxSize = { 220, -1 } })
 	return result
 end

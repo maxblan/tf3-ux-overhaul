@@ -2,20 +2,24 @@
 # In-game integration test: deploys the mod and the testbench mod, launches Transport Fever 3
 # with the testbench's app script, waits for the scenarios to finish and prints their results.
 #
-# Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME]
-#   --save NAME  run on a copy of the savegame NAME (without .sav) instead of a new small map. The
-#                copy is called uio_fixture; it and its autosaves are deleted afterwards.
+# Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME] [--with-mod ID ...]
+#   --save NAME    run on a copy of the savegame NAME (without .sav) instead of a new small map. The
+#                  copy is called uio_fixture; it and its autosaves are deleted afterwards.
+#   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
+#                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
 set -euo pipefail
 
 timeout=900
 keep_testbench=0
 save=""
+with_mods=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--timeout) timeout="$2"; shift 2 ;;
 		--keep-testbench) keep_testbench=1; shift ;;
 		--save) save="$2"; shift 2 ;;
+		--with-mod) with_mods+=("$2"); shift 2 ;;
 		*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 done
@@ -56,14 +60,21 @@ fi
 remove_fixture() {
 	rm -f "$saves/$fixture_name".* "$saves/autosave_$fixture_name"_*
 }
+fixture_save=nil
 if [ -n "$save" ]; then
 	[ -f "$saves/$save.sav" ] || { echo "savegame not found: $saves/$save.sav" >&2; exit 1; }
 	remove_fixture
 	cp "$saves/$save.sav" "$saves/$fixture_name.sav"
 	[ -f "$saves/$save.jpg" ] && cp "$saves/$save.jpg" "$saves/$fixture_name.jpg"
-	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
-	printf -- '-- Written by spec/ingame/run.sh --save %s\nreturn { save = "%s" }\n' "$save" "$fixture_name" > "$staged_fixture"
+	fixture_save="\"$fixture_name\""
 	echo "running on a copy of savegame '$save' ($fixture_name)"
+fi
+if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ]; then
+	extra=""
+	for m in "${with_mods[@]}"; do extra="$extra\"$m\", "; done
+	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
+	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s} }\n' "$fixture_save" "$extra" > "$staged_fixture"
+	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
 fi
 
 launched_at=$(date +%s)

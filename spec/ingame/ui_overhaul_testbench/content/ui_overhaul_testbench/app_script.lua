@@ -2,7 +2,8 @@
 --   TransportFever3.exe --script ui_overhaul_testbench_1::/ui_overhaul_testbench/app_script.lua
 -- (see spec/ingame/run.sh; --script takes a game resource path, not a file path).
 -- From the main menu, starts a small test game with the mod and the testbench enabled, or loads the
--- savegame copy named in fixture.lua with both mods added. The engine calls update() every frame.
+-- savegame copy named in fixture.lua with both mods added; the fixture's extra mods are added either
+-- way. The engine calls update() every frame.
 -- @module ui_overhaul_testbench.app_script
 local app_script = {}
 
@@ -12,6 +13,7 @@ local MODS = { "urbangames_no_costs_1", "ui_overhaul_1", "ui_overhaul_testbench_
 local START_AFTER_FRAMES = 120
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
+for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
 
 local frames, started = 0, false
 local pending_load -- { id = SavegameId, info = Async<SaveGameData> } while the savegame metadata loads
@@ -58,7 +60,9 @@ local function load_fixture_game()
 	for _, mod in ipairs(details.mods) do
 		mods[#mods + 1], names[#names + 1] = mod, mod.name
 	end
-	for _, name in ipairs({ "ui_overhaul_1", "ui_overhaul_testbench_1" }) do
+	local added = { "ui_overhaul_1", "ui_overhaul_testbench_1" }
+	for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
+	for _, name in ipairs(added) do
 		local mod = api.type.ModId.new()
 		mod.name = name
 		mods[#mods + 1], names[#names + 1] = mod, name

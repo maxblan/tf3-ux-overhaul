@@ -22,9 +22,10 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Line Manager | model row above the vehicle list, *In all lines*, Shift+click selects a model | `lvm_models.lua`, `lvm_tweaks.lua` | replaces `vehicle_list_react_util.VehicleList`; wraps the manager's `selectVehicles` |
 | Line Manager | station click with several lines selected does not move their vehicles | `lvm_tweaks.lua` | wraps `commonParams.newLine` |
 | Line Manager | confirmation before cloning, replacing or modifying more than one vehicle; reopening selects the last line | `lvm_tweaks.lua` | patches `react.fireEvent` (`duplicateVehicles`) and `vehicle_react_util.HandleVehicleChanges`; uses the tool stack's pop hook |
-| Line Manager | *Select Terminals* with three buttons per terminal | `terminals.lua` | wraps the module function `popover_react_util.PopoverWindowContent` |
+| Line Manager | *Select Terminals* with three buttons per terminal | `terminals.lua` | wraps the module function `popover_react_util.PopoverWindowContent`; swaps only a popover with the Line Manager's parameters |
+| Station window | *Select Terminals* button for each line stop in the Terminals list | `station_terminals.lua`, `terminals.lua` | wraps the global `orderedPairs` and `gui_react_util.makeHorizontalSpacer` while the file-local recipe `TerminalStops` renders; off while another mod replaces the station window |
 | Line window | *Add Vehicle* and *Remove Vehicle* in the Vehicles card | `line_vehicles.lua` | replaces `line_eow.LineVehiclesPlugin` |
-| Line window | Stops card | `cards.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
+| Line window | Stops card, with a *Select Terminals* button per stop | `cards.lua`, `terminals.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
 | Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
 | Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |
@@ -109,6 +110,13 @@ Community mods that use the same hooks:
   - replaces `popover_react_util.PopoverWindowContent` and a scroll container;
   - patches `line_util.makeLineActionDescriptor` and `builtin.Button`.
   - UI Overhaul does not replace those recipes. The terminal buttons wrap the module field `popover_react_util.PopoverWindowContent`, which `PopoverWindow` looks up on each render, so Auto Assign Terminals keeps its replacement and sees the same parameters.
+- `terminal_selector`
+  - replaces `station_group.StationGroupWindowContent` with a copy that has a terminal button per line stop;
+  - registers its own popover recipe under the name `TerminalSelection`, with parameters `lineEntity` and `stopIndex0`.
+  - UI Overhaul swaps only a `TerminalSelection` popover with the Line Manager's parameters (`viaState`, `commonParams`), so this popover keeps its own content. The station buttons turn off while the station window is replaced (`_react.recipeReplace`), so no row has two buttons.
+- `zhenya_easy_terminal_assignment`
+  - wraps `popover_react_util.PopoverWindowContent` (order 100) and swaps every popover named `TerminalSelection` for its own.
+  - UI Overhaul's popover is registered under that name, so Easy Terminal Assignment wins in either wrapping order. The popover that the station and line window buttons open has the Line Manager's parameters, and `commonParams.lineState:old()` returns the same table until a change, so its in-place edit before `changeMainTerminal` is kept.
 - `auto_line_namer` has only `rename_scheme` data and a game script, so it does not conflict.
 
 ## Risks

@@ -73,8 +73,32 @@ local popover_react_util = require("::/gui/main/popover_react_util.tl")
 local line_util = require("::/gui/line_vehicle_mgmt/line_util.tl")
 
 local FakeTerminalSelection = react.RegisterRecipe("TerminalSelection", function()
-	return builtin.BoxLayout{ children = { builtin.TextView{ text = "base terminal selection (hook missing)" } } }
+	return builtin.BoxLayout{ children = {
+		builtin.TextView{ meta = { id = "probe.fake_terminals" }, text = "stand-in terminal selection" },
+	} }
 end)
+
+-- The mod's terminal module (same Lua state, so the same instance the mod uses), for the events below.
+local function mod_terminals()
+	return require("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
+end
+
+-- A terminal of the stop's station group that is neither preferred nor alternative: station and
+-- terminal (1-based), or nil.
+local function free_terminal(line, stop_index0)
+	local stop = api.engine.getComponent(line, api.type.ComponentType.LINE).stops[stop_index0 + 1]
+	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	for s, station_entity in ipairs(group.stations) do
+		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		for t = 1, #station.terminals do
+			local used = stop.station == s - 1 and stop.terminal == t - 1
+			for _i, alternative in ipairs(stop.alternativeTerminals) do
+				if alternative.station == s - 1 and alternative.terminal == t - 1 then used = true end
+			end
+			if not used then return s, t end
+		end
+	end
+end
 
 probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	react.onEvent("uio.probe", function(_e, variant)
@@ -85,6 +109,43 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			windows.addSingletonWindow(ProbeWindow, { variant = variant })
 			api.gui.byId.setVisible("probe.window", true)
 		end
+	end)
+
+	-- The popover of the mod's terminal buttons (station and line window), as a click opens it.
+	react.onEvent("uio.debug.terminal_button", function(_e, line)
+		local windows = game_react_globals.getDefaultWindowApi()
+		windows.removeAllWindows(popover_react_util.PopoverWindow)
+		if line then mod_terminals().open(line, 0, { x = 700, y = 300 }, "Select Terminals") end
+	end)
+
+	-- A terminal change through the parameters of those buttons: { line, add } adds (add = true) or
+	-- removes a free terminal of the line's first stop as an alternative. Logs the terminal.
+	react.onEvent("uio.debug.terminal_change", function(_e, p)
+		local params = mod_terminals().popover_params(p.line, 0)
+		local s, t = p.station, p.terminal
+		if not s then s, t = free_terminal(p.line, 0) end
+		if not s then
+			debugPrint("[testbench] terminal change: no free terminal")
+			return
+		end
+		params.commonParams.selectAlternativeTerminal(params.stopNumber, s, t, p.add)
+		debugPrint("[testbench] terminal change: ", p.add and "added " or "removed ", s, ",", t)
+	end)
+
+	-- A popover of the base name with other parameters, as Terminal Selector opens it from the station
+	-- window: the mod must leave it alone (the stand-in renders).
+	react.onEvent("uio.debug.foreign_terminals", function(_e, line)
+		local windows = game_react_globals.getDefaultWindowApi()
+		windows.removeAllWindows(popover_react_util.PopoverWindow)
+		if not line then return end
+		windows.addWindow(popover_react_util.PopoverWindow, "uio-test-foreign-terminals", {
+			onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
+			x = 700, y = 300,
+			windowTitle = "Select Terminals",
+			windowClass = "select-terminal, management",
+			recipe = FakeTerminalSelection,
+			params = { lineEntity = line, stopIndex0 = 0 },
+		})
 	end)
 
 	react.onEvent("uio.debug.terminals", function(_e, line)
