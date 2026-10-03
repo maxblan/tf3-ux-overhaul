@@ -1,5 +1,7 @@
 # UI Overhaul
 
+[mod.io page](https://mod.io/g/transportfever3/m/ui-overhaul)
+
 A Transport Fever 3 mod that makes the game's own screens quicker to read and to act in. It adds no new windows and no notifications. The vanilla Line Manager, Statistics, entity windows and construction menu show more and need fewer clicks, so there is nothing new to learn.
 
 ## What changes
@@ -75,6 +77,8 @@ make test-ingame                   # in-game checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make validate                      # the game's mod validator
 ```
+
+`_metadata/mod.io_fileid.txt` links the mod to its mod.io entry. Keep it in the repository: `make deploy` copies it to the staging area, so publishing from the game updates the existing mod instead of creating a new one.
 
 The in-game checks take screenshots of every changed screen into `spec/ingame/results/`. [CONTRIBUTING.md](CONTRIBUTING.md) explains the rules that keep the game's UI from breaking.
 
