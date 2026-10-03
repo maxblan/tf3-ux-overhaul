@@ -30,6 +30,9 @@
         "ux_overhaul/gui/statistics_lines.lua",
         "ux_overhaul/gui/statistics_lines.res.lua",
         "ux_overhaul/gui/statistics_lines.script.lua",
+        "ux_overhaul/gui/tool_stack.lua",
+        "ux_overhaul/gui/tool_stack.res.lua",
+        "ux_overhaul/gui/tool_stack.script.lua",
         "ux_overhaul/gui/ui.lua",
         "ux_overhaul/logger.lua"
     ]

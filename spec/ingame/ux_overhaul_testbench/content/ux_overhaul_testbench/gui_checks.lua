@@ -69,20 +69,38 @@ local checks = {
 		check = function() return visible("uxo.statistics.totals"), "filtered table shown" end,
 	},
 	{
-		name = "reference_line_manager",
+		name = "windows_side_by_side",
 		act = function(ctx)
 			api.gui.fireReactEvent("uxo.statistics.filter", "all")
-			api.gui.fireReactEvent("closeStatisticsWindow", nil)
 			ctx.card_line = busiest_line()
 			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line })
 		end,
 		wait = 120,
-		shot = "line_manager",
-		check = function() return true, "reference screenshot" end,
+		shot = "statistics_and_line_manager",
+		check = function()
+			local stats, lvm = visible("menu.statistics.window"), visible("menu.management")
+			return stats and lvm, string.format("statistics=%s line manager=%s", tostring(stats), tostring(lvm))
+		end,
+	},
+	{
+		name = "map_click_keeps_windows",
+		act = function(ctx)
+			local component = ctx.card_line and api.engine.getComponent(ctx.card_line, api.type.ComponentType.LINE)
+			ctx.card_station = component and component.stops[1] and component.stops[1].stationGroup
+			-- what a map click does on PC: select without stacking
+			if ctx.card_station then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_station, stack = false }) end
+		end,
+		wait = 90,
+		shot = "map_click_with_windows",
+		check = function()
+			local stats, lvm = visible("menu.statistics.window"), visible("menu.management")
+			return stats and lvm, string.format("statistics=%s line manager=%s", tostring(stats), tostring(lvm))
+		end,
 	},
 	{
 		name = "line_window_card",
 		act = function(ctx)
+			api.gui.fireReactEvent("closeStatisticsWindow", nil)
 			api.gui.fireReactEvent("closeVehicleManager", nil)
 			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = false }) end
 		end,
@@ -94,8 +112,22 @@ local checks = {
 		end,
 	},
 	{
+		name = "manage_line_keeps_line_window",
+		act = function(ctx)
+			if ctx.card_line then api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line }) end
+		end,
+		wait = 120,
+		shot = "line_window_and_line_manager",
+		check = function(ctx)
+			if not ctx.card_line then return true, "skipped: no line" end
+			local line_window, lvm = visible("uxo.card.line.stops"), visible("menu.management")
+			return line_window and lvm, string.format("line window=%s line manager=%s", tostring(line_window), tostring(lvm))
+		end,
+	},
+	{
 		name = "reference_station_window",
 		act = function(ctx)
+			api.gui.fireReactEvent("closeVehicleManager", nil)
 			local component = ctx.card_line and api.engine.getComponent(ctx.card_line, api.type.ComponentType.LINE)
 			ctx.card_station = component and component.stops[1] and component.stops[1].stationGroup
 			if ctx.card_station then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_station, stack = false }) end
