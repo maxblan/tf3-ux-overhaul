@@ -85,6 +85,43 @@ local checks = {
 		end,
 	},
 	{
+		name = "line_window_card",
+		act = function(ctx)
+			ctx.card_line = busiest_line()
+			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = true }) end
+		end,
+		wait = 90,
+		check = function(ctx)
+			if not ctx.card_line then return true, "skipped: no line" end
+			return visible("uxo.card.line.vehicles"), "line card visible=" .. tostring(visible("uxo.card.line.vehicles"))
+		end,
+	},
+	{
+		name = "station_window_card",
+		act = function(ctx)
+			local component = ctx.card_line and api.engine.getComponent(ctx.card_line, api.type.ComponentType.LINE)
+			ctx.card_station = component and component.stops[1] and component.stops[1].stationGroup
+			if ctx.card_station then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_station, stack = true }) end
+		end,
+		wait = 90,
+		check = function(ctx)
+			if not ctx.card_station then return true, "skipped: no station" end
+			return visible("uxo.card.station.lines"), "station card visible=" .. tostring(visible("uxo.card.station.lines"))
+		end,
+	},
+	{
+		name = "vehicle_window_card",
+		act = function(ctx)
+			ctx.card_vehicle = ctx.card_line and oldest_vehicle(ctx.card_line)
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = true }) end
+		end,
+		wait = 90,
+		check = function(ctx)
+			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
+			return visible("uxo.card.vehicle.age"), "vehicle card visible=" .. tostring(visible("uxo.card.vehicle.age"))
+		end,
+	},
+	{
 		name = "action_add_vehicle",
 		act = function(ctx)
 			ctx.line, ctx.before = busiest_line()

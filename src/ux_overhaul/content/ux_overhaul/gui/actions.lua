@@ -60,14 +60,12 @@ local function feedback(message)
 	debugPrint(TAG, " ", tostring(message))
 end
 
---- Buys a copy of the line's newest vehicle and sends it onto the line. Uses the base
--- "duplicateVehicles" handler (vehicle window "Clone"), which also checks money and mission locks.
--- Returns false if the line has no vehicle to copy.
-function actions.add_vehicle(line)
-	local template = line_vehicle(line, true)
-	if not template then return false end
+--- Buys an identical vehicle and sends it onto the same line, like the vehicle window's "Clone".
+-- Uses the base "duplicateVehicles" handler, which also checks money and mission locks.
+function actions.clone_vehicle(vehicle)
+	if not vehicle or not api.engine.entityExists(vehicle) then return false end
 	react.fireEvent(nil, "duplicateVehicles", {
-		vehicleEntities = { template },
+		vehicleEntities = { vehicle },
 		addFeedback = feedback,
 		-- Without onBuy the base handler buys the clone but leaves it in the depot.
 		onBuy = function() store.invalidate() end,
@@ -75,22 +73,31 @@ function actions.add_vehicle(line)
 	return true
 end
 
---- Sends the line's oldest vehicle to a depot, where it is sold on arrival.
--- Returns false if the line has no vehicle.
-function actions.remove_vehicle(line)
-	local oldest = line_vehicle(line, false)
-	if not oldest then return false end
-	api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(oldest, true), function(_e, success)
+--- Sends the vehicle to a depot, where it is sold on arrival.
+function actions.retire_vehicle(vehicle)
+	if not vehicle or not api.engine.entityExists(vehicle) then return false end
+	api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(vehicle, true), function(_c, success)
 		if not success then feedback("vehicle could not be sent to a depot") end
 		store.invalidate()
 	end)
 	return true
 end
 
+--- One more vehicle like the line's newest. Returns false if the line has no vehicle to copy.
+function actions.add_vehicle(line)
+	return actions.clone_vehicle(line_vehicle(line, true))
+end
+
+--- Retires the line's oldest vehicle. Returns false if the line has no vehicle.
+function actions.remove_vehicle(line)
+	return actions.retire_vehicle(line_vehicle(line, false))
+end
+
 --- Event that runs an action by name; param { name, entity }.
 actions.ACTION_EVENT = "uxo.action"
 
-local BY_NAME = { "add_vehicle", "remove_vehicle", "open_entity", "open_line_manager" }
+local BY_NAME = { "add_vehicle", "remove_vehicle", "clone_vehicle", "retire_vehicle", "open_entity",
+	"open_line_manager" }
 
 --- Runs the action `param.name` on `param.entity`; logs and ignores unknown names.
 function actions.run(param)
