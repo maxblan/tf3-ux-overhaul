@@ -29,6 +29,14 @@ function entry.render()
 		end
 		vehicle_react_util.HandleVehicleChanges(changes, {}, nil, nil, nil, nil)
 	end)
+	-- testbench: the bulldozer warning for a proposal that removes `entity`
+	react.onEvent("uxo.debug.bulldoze", function(_e, entity)
+		local construction = require("ux_overhaul_1::/ux_overhaul/gui/construction.lua")
+		local fake = { toRemove_native = { size = function() return 1 end, at = function() return entity end } }
+		for _i, text in ipairs(construction.station_warnings(fake)) do
+			debugPrint("[ux_overhaul] bulldozer warning: ", text)
+		end
+	end)
 	-- testbench: send a clone of `vehicles` the way the Line Manager does; expects the confirmation
 	react.onEvent("uxo.debug.clone", function(_e, vehicles)
 		react.fireEvent(nil, "duplicateVehicles", {

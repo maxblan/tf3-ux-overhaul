@@ -212,6 +212,17 @@ local checks = {
 		end,
 	},
 	{
+		name = "bulldozer_station_warning",
+		act = function(ctx)
+			local component = ctx.card_station
+				and api.engine.getComponent(ctx.card_station, api.type.ComponentType.STATION_GROUP)
+			local station = component and component.stations[1]
+			if station then api.gui.fireReactEvent("uxo.debug.bulldoze", station) end
+		end,
+		wait = 30,
+		check = function() return true, "see the bulldozer warning log line" end,
+	},
+	{
 		name = "construction_rail_menu",
 		act = function()
 			api.gui.fireReactEvent("closeAllWindows", nil)
