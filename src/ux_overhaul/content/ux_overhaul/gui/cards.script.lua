@@ -6,10 +6,8 @@ local CARDS = "ux_overhaul_1::/ux_overhaul/gui/cards.lua"
 
 local stub = {}
 
--- Entity-window extension points are ordinary (non-wrapper) ones and accept any recipe.
+-- The line-window extension point is an ordinary (non-wrapper) ones and accept any recipe.
 stub.UxoLineCard = react.RegisterRecipe("UxoLineCard", guard.plugin(CARDS, "line"))
-stub.UxoStationCard = react.RegisterRecipe("UxoStationCard", guard.plugin(CARDS, "station"))
-stub.UxoVehicleCard = react.RegisterRecipe("UxoVehicleCard", guard.plugin(CARDS, "vehicle"))
 
 -- The engine loads *.script.lua resources by calling data().
 function data()

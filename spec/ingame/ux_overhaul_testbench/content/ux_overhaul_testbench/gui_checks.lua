@@ -43,7 +43,8 @@ end
 local checks = {
 	{
 		name = "gui_fixture_facts",
-		wait = 60,
+		wait = 120,
+		shot = "game_bar",
 		check = function()
 			local player = api.engine.util.getPlayer()
 			local lines = api.engine.system.lineSystem.getLinesForPlayer(player)
@@ -52,67 +53,38 @@ local checks = {
 		end,
 	},
 	{
-		name = "status_strip_visible",
-		wait = 120,
-		shot = "status_strip",
-		check = function()
-			return visible("uxo.status.problems"), "problems chip visible=" .. tostring(visible("uxo.status.problems"))
-				.. " cashflow chip visible=" .. tostring(visible("uxo.status.cashflow"))
-		end,
-	},
-	{
-		name = "launcher_visible",
-		check = function()
-			local shown = api.gui.byId.isVisible("uxo.launcher.control_center")
-			return shown, "control center button visible=" .. tostring(shown)
-		end,
-	},
-	{
-		name = "control_center_problems_tab",
-		act = function() api.gui.fireReactEvent("uxo.open", { tab = "problems" }) end,
-		wait = 60,
-		shot = "control_center_problems",
-		check = function()
-			return visible("uxo.cc.window") and visible("uxo.cc.problems"),
-				string.format("window=%s problems=%s", tostring(visible("uxo.cc.window")), tostring(visible("uxo.cc.problems")))
-		end,
-	},
-	{
-		name = "control_center_lines_tab",
-		act = function() api.gui.fireReactEvent("uxo.open", { tab = "lines", filter = "all" }) end,
-		wait = 60,
-		shot = "control_center_lines",
-		check = function()
-			return visible("uxo.cc.filter.losing") and visible("uxo.cc.lines"),
-				string.format("filters=%s lines=%s", tostring(visible("uxo.cc.filter.losing")), tostring(visible("uxo.cc.lines")))
-		end,
-	},
-	{
-		name = "vanilla_statistics_reference",
-		act = function()
-			api.gui.fireReactEvent("uxo.close", nil)
-			api.gui.fireReactEvent("openStatisticsWindow", "Line")
-		end,
+		name = "reference_statistics_lines",
+		act = function() api.gui.fireReactEvent("openStatisticsWindow", "Line") end,
 		wait = 90,
-		shot = "vanilla_statistics_lines",
+		shot = "statistics_lines",
+		check = function() return true, "reference screenshot" end,
+	},
+	{
+		name = "reference_line_manager",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeStatisticsWindow", nil)
+			ctx.card_line = busiest_line()
+			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line })
+		end,
+		wait = 120,
+		shot = "line_manager",
 		check = function() return true, "reference screenshot" end,
 	},
 	{
 		name = "line_window_card",
 		act = function(ctx)
-			api.gui.fireReactEvent("closeStatisticsWindow", nil)
-			ctx.card_line = busiest_line()
+			api.gui.fireReactEvent("closeVehicleManager", nil)
 			if ctx.card_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = false }) end
 		end,
 		wait = 90,
 		shot = "line_window",
 		check = function(ctx)
 			if not ctx.card_line then return true, "skipped: no line" end
-			return visible("uxo.card.line.vehicles"), "line card visible=" .. tostring(visible("uxo.card.line.vehicles"))
+			return visible("uxo.card.line.stops"), "line card visible=" .. tostring(visible("uxo.card.line.stops"))
 		end,
 	},
 	{
-		name = "station_window_card",
+		name = "reference_station_window",
 		act = function(ctx)
 			local component = ctx.card_line and api.engine.getComponent(ctx.card_line, api.type.ComponentType.LINE)
 			ctx.card_station = component and component.stops[1] and component.stops[1].stationGroup
@@ -120,27 +92,22 @@ local checks = {
 		end,
 		wait = 90,
 		shot = "station_window",
-		check = function(ctx)
-			if not ctx.card_station then return true, "skipped: no station" end
-			return visible("uxo.card.station.lines"), "station card visible=" .. tostring(visible("uxo.card.station.lines"))
-		end,
+		check = function() return true, "reference screenshot" end,
 	},
 	{
-		name = "vehicle_window_card",
+		name = "reference_vehicle_window",
 		act = function(ctx)
 			ctx.card_vehicle = ctx.card_line and oldest_vehicle(ctx.card_line)
 			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = false }) end
 		end,
 		wait = 90,
 		shot = "vehicle_window",
-		check = function(ctx)
-			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
-			return visible("uxo.card.vehicle.age"), "vehicle card visible=" .. tostring(visible("uxo.card.vehicle.age"))
-		end,
+		check = function() return true, "reference screenshot" end,
 	},
 	{
 		name = "action_add_vehicle",
 		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
 			ctx.line, ctx.before = busiest_line()
 			if ctx.line then api.gui.fireReactEvent("uxo.action", { name = "add_vehicle", entity = ctx.line }) end
 		end,

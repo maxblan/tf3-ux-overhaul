@@ -9,13 +9,6 @@ local actions = {}
 
 local TAG = "[ux_overhaul]"
 
---- Event that opens the Control Center; param { tab = "problems"|"lines", filter = <lines filter> }.
-actions.OPEN_EVENT = "uxo.open"
-
-function actions.open_control_center(tab, filter)
-	react.fireEvent(nil, actions.OPEN_EVENT, { tab = tab, filter = filter })
-end
-
 --- Opens the entity's window on top of the others and moves the camera to it.
 function actions.open_entity(entity)
 	if not entity or not api.engine.entityExists(entity) then return end
@@ -88,9 +81,15 @@ function actions.add_vehicle(line)
 	return actions.clone_vehicle(line_vehicle(line, true))
 end
 
---- Retires the line's oldest vehicle. Returns false if the line has no vehicle.
-function actions.remove_vehicle(line)
-	return actions.retire_vehicle(line_vehicle(line, false))
+--- Retires the line's oldest vehicle. `is_protected(vehicle)` (optional) reports mission locks, which
+-- only entity-window plugins can read. Returns false if there is nothing to retire.
+function actions.remove_vehicle(line, is_protected)
+	local oldest = line_vehicle(line, false)
+	if oldest and is_protected and is_protected(oldest) then
+		feedback("vehicle is protected by a mission")
+		return false
+	end
+	return actions.retire_vehicle(oldest)
 end
 
 --- Event that runs an action by name; param { name, entity }.

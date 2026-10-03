@@ -70,9 +70,10 @@ launched_at=$(date +%s)
 shots_dir="$results_dir/shots-$(date +%Y%m%d-%H%M%S)"
 
 # Screenshots for visual review: the testbench logs "[testbench] SHOT <name>" and holds still for a
-# few seconds; this captures the whole screen into $shots_dir/<name>.png (the game runs in front).
+# few seconds; this captures the primary screen (where the game runs, in front) into
+# $shots_dir/<name>.png. Other monitors are left out on purpose.
 capture_screen() {
-	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Left,\$b.Top,0,0,\$bmp.Size); \$bmp.Save('$1')" < /dev/null > /dev/null 2>&1
+	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Left,\$b.Top,0,0,\$bmp.Size); \$bmp.Save('$1')" < /dev/null > /dev/null 2>&1
 }
 watch_shots() {
 	local taken=0 names
