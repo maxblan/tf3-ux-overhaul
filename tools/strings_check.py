@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Lists the mod's translatable strings (_("...") in src) that neither the base game nor the mod's
-strings.json translate for every language in strings.json. Exit code 1 if any are missing.
-Usage: tools/strings_check.py [--prune]   (--prune drops keys from strings.json that the code no longer uses)"""
+strings.json translate, for every language in strings.json. Exit code 1 if any are missing.
+
+Usage: tools/strings_check.py [--prune] [--no-game]
+  --prune    drop keys from strings.json that the code no longer uses
+  --no-game  without the game's catalogs (CI): only check that every language has the same keys and
+             that every key is used in the code"""
 import glob, gettext, json, re, sys
 
 GAME = "/mnt/c/Program Files (x86)/Steam/steamapps/common/Transport Fever 3/base/strings"
@@ -11,6 +15,18 @@ used = set()
 for path in glob.glob("src/ui_overhaul/content/**/*.lua", recursive=True):
     used.update(re.findall(r'_\(\s*"((?:[^"\\]|\\.)*)"\s*\)', open(path, encoding="utf-8").read()))
 mod = json.load(open(STRINGS, encoding="utf-8"))
+if "--no-game" in sys.argv:
+    problems = []
+    keys = {lang: set(mod[lang]) for lang in mod}
+    for lang in mod:
+        for other in mod:
+            for key in sorted(keys[lang] - keys[other]):
+                problems.append(f"{other} lacks {key!r} (in {lang})")
+    for key in sorted(set().union(*keys.values()) - used):
+        problems.append(f"unused key {key!r}")
+    for line in problems:
+        print(line)
+    sys.exit(1 if problems else 0)
 missing = []
 for lang in mod:
     if lang == "en":

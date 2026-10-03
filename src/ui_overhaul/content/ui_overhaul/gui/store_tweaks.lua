@@ -2,8 +2,8 @@
 -- first one) is the newest instead of the oldest, and keeps the player's sort choice for the session.
 -- The store's sort state is a local React state created as
 --   react.useState({ mode = "YearFrom", ascending = true, groupTypes = true })
--- (line_vehicle_mgmt/vehicle_store_window.tl); react.useState is wrapped to recognise exactly that
--- initial value (three keys, these values) and start from the remembered or the newest-first sort.
+-- (line_vehicle_mgmt/vehicle_store_window.tl). The wrapped react.useState recognises exactly that
+-- initial value (three keys, these values) and starts from the remembered or the newest-first sort.
 -- Any other state is untouched. Installed before the UI starts (store_tweaks.script.lua).
 -- The table layout of the store keeps the base sorting.
 -- @module ui_overhaul.gui.store_tweaks

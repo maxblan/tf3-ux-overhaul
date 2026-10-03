@@ -1,57 +1,86 @@
 # UI Overhaul
 
-A Transport Fever 3 mod that makes the game's own screens faster to read and quicker to act in. It adds no new windows or notifications: the vanilla Line Manager, Statistics, entity windows and construction menu simply show more and need fewer clicks, so there is nothing new to learn.
+A Transport Fever 3 mod that makes the game's own screens quicker to read and to act in. It adds no new windows and no notifications. The vanilla Line Manager, Statistics, entity windows and construction menu show more and need fewer clicks, so there is nothing new to learn.
 
 ## What changes
 
-**Line Manager**
-- Every line row shows its vehicle count and 12-month balance (red when losing money); every vehicle row shows its age (red once the lifespan is reached).
-- Reopening it selects the line you had selected before.
-- Cloning several vehicles at once, or replacing several, asks first, using the Line Manager's own prompt. With two or more lines ticked, clicking a station creates a new line without moving all their vehicles onto it.
+### Line Manager
 
-**Line window**
-- The Vehicles card has *Add Vehicle* (a copy of the line's newest vehicle) and *Remove Vehicle* (sends the oldest to a depot and sells it there).
-- A *Stops* card lists every stop with its waiting passengers (cargo in the tooltip).
+- Line rows show the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
+- Reopening the Line Manager selects the line you had selected before.
+- Cloning or replacing more than one vehicle asks first, in the Line Manager's own prompt.
+- With two or more lines ticked, clicking a station creates the new line without moving all their vehicles onto it.
 
-**Statistics**
-- Lines: quick filters *All / Losing money / Problems / No vehicles*, and the totals of the rows shown (lines, vehicles, balance). Vehicles sort by count, Balance sorts by the value it shows.
+### Line window
 
-**Windows**
-- Statistics, Line Manager, Finances, Company and the notification log can be open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
-- Sections you opened in entity windows stay open the next time, and several can be open at once.
-- *Sell* in the vehicle window asks once more before selling.
+- The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there.
+- A Stops card lists every stop with its waiting passengers. The tooltip adds waiting cargo.
 
-**Town and company**
-- The town window names what limits growth ("Limited by Traffic") and shows the progress to the next level as text.
-- A perk that is locked although the game bar already shows the required rank says *Promotion pending - open the Company window*.
+### Statistics
 
-**Construction**
-- The Rail and Tracks menus show each other's tabs, as do Road and Roads; each button still opens on its own first tab.
-- Tracks are listed fastest first (available ones before future ones), so the default track is the best you can build.
-- *Configure* on a station opens Tracks, Platforms, Road Access or Building first instead of Decoration.
-- The bulldozer's tooltip warns before removing a station that lines stop at.
+The Lines, Vehicles and Stations tabs get quick filters above the table and the totals of the rows shown.
 
-**Game bar and store**
-- The Earnings tooltip also shows the cash flow of the last 30 days and the 30 days before.
-- The vehicle store lists the newest models first (and preselects the newest) and keeps your sort for the session.
+| Tab | Quick filters | Totals |
+|---|---|---|
+| Lines | All, Losing money, Problems, No vehicles | lines, vehicles, balance |
+| Vehicles | All, Losing money, Problems, Old | vehicles, balance |
+| Stations | All, Problems, Crowded, No lines | stations, upkeep |
+
+Sorting is fixed where vanilla sorts by something other than what it shows: line vehicle counts, line balance, vehicle age (ascending is now youngest first) and station utilization. Vehicle ages are red once the lifespan is reached. *No lines* lists your stations that no line uses, which vanilla hides.
+
+### Windows
+
+- Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
+- Sections you open in an entity window stay open the next time, and several can be open at once.
+- *Sell* in the vehicle window needs a second click.
+
+### Towns and company
+
+- The town window names what limits growth ("Limited by Traffic") and shows the progress to the next town level as text.
+- A perk that is still locked although the game bar shows the required rank says *Promotion pending - open the Company window to unlock*.
+
+### Construction
+
+- The Rail and Tracks menus show each other's tabs, and so do Road and Roads. Each game-bar button still opens on its own first tab.
+- Tracks are listed fastest first, and tracks you can already build come before future ones, so the preselected track is the best one available.
+- *Configure* on a station opens the Tracks, Platforms, Road Access or Building tab instead of Decoration.
+- The bulldozer's tooltip warns before it removes a station that lines stop at.
+
+### Game bar and vehicle store
+
+- The Earnings tooltip also shows the cash flow of the last 30 days and of the 30 days before.
+- The vehicle store lists the newest models first and preselects the newest one. Your sort choice is kept until you leave the game. This applies to the list layout; the table layout keeps the vanilla order.
 
 ## Compatibility
 
-- Safe to add to and remove from savegames: the mod changes only the user interface and adds no game script.
-- Built on the game's official UI extension points and recipe replacement. Every change falls back to the vanilla screen if it fails, so an error never takes the game's UI down.
-- Other mods that replace the same vanilla UI parts (the Line Manager's vehicle list, the Statistics lines tab, the line window's vehicle card, the earnings display, the tool stack, the action bar) conflict with it; tested together with *Timetables* and *Auto Line Namer*.
+- You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
+- It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
+- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list and row icons, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the window stack and the entity windows' action bar. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
 - English and German.
 
 ## Development
 
-This repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-template): `make lint test` (offline), `make test-ingame` (in-game checks on a small new map) or `make test-ingame SAVE="<savegame>"` (on a temporary copy of a savegame), which also takes screenshots of each UI state into `spec/ingame/results/`.
+The repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-template).
 
-- `docs/inventory/`: code-level inventory of the game's UI, the basis of the mod.
-- `docs/PLAN.md`, `docs/flows_audit_v2.md`: plan and the ranked list of further improvements.
-- `docs/api_cookbook.md`: engine API reference for GUI work.
-- `tools/extract_game_sources.sh`: extracts the game's GUI sources to `.game/` for reference.
-- `src/ui_overhaul/content/ui_overhaul/gui/`: one module per change, each installed through a guarded stub (`*.script.lua`, `guard.lua`).
+```bash
+make deps                          # once
+make lint test                     # luacheck and offline specs
+make test-ingame                   # in-game checks on a small new map
+make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
+make validate                      # the game's mod validator
+```
+
+The in-game checks take screenshots of every changed screen into `spec/ingame/results/`. [CONTRIBUTING.md](CONTRIBUTING.md) explains the rules that keep the game's UI from breaking.
+
+| Path | Content |
+|---|---|
+| `src/ui_overhaul/content/ui_overhaul/gui/` | one module per change; each is installed through a small guarded stub (`*.script.lua`, `guard.lua`) |
+| `docs/inventory/` | inventory of the game's UI, read from its source |
+| `docs/flows_audit_v2.md` | ranked list of further improvements, with status |
+| `docs/api_cookbook.md` | engine API notes for GUI work |
+| `docs/PLAN.md` | the project plan and its history |
+| `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 
 ## License
 
-[MIT](LICENSE). Transport Fever 3 is a trademark of Urban Games; this project is not affiliated with Urban Games or Paradox Interactive.
+[MIT](LICENSE). Transport Fever 3 is a trademark of Urban Games. This project is not affiliated with Urban Games or Paradox Interactive.

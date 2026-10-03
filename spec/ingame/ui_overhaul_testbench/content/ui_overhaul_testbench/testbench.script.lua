@@ -3,8 +3,8 @@
 -- On game start, unpauses the simulation, finds flat land and runs every scenario of
 -- scenarios.lua in turn: build, wait, check, log "[testbench] PASS|FAIL <name> <details>".
 -- In parallel, guiUpdate runs the GUI checks of gui_checks.lua the same way. Ends with
--- "[testbench] DONE" once both are finished. Progress lives in the game script state, because the engine runs
--- game scripts in changing Lua states. spec/ingame/run.sh collects the "[testbench]" lines.
+-- "[testbench] DONE" once both are finished. Progress lives in the game script state, because the
+-- engine runs game scripts in changing Lua states. spec/ingame/run.sh collects the "[testbench]" lines.
 -- @module ui_overhaul_testbench.testbench
 local scenarios = require("/ui_overhaul_testbench/scenarios.lua")
 local gui_checks = require("/ui_overhaul_testbench/gui_checks.lua")

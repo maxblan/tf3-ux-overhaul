@@ -1,4 +1,4 @@
---- The game bar's "Earnings" display with a richer tooltip: besides the earnings of the current
+--- The game bar's "Earnings" display with a longer tooltip: besides the earnings of the current
 -- year it shows the cash flow of the last 30 days and of the 30 days before, so a trend is visible
 -- without opening the finance window. Nothing else changes on screen.
 -- Copy of the base plugin recipe GameBarEarningsPlugin (game_bar_display_earnings.script.tl),

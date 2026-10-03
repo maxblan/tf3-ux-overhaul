@@ -1,5 +1,6 @@
---- Network health from a plain snapshot of the game (see engine/snapshot.lua): the counters of the
--- status strip and the ranked problem list of the Control Center. Pure Lua, no engine access.
+--- Network health from a plain snapshot of the game (see engine/snapshot.lua): counters and a
+-- ranked problem list (written for the status strip and the Control Center, both since removed).
+-- Pure Lua, no engine access.
 --
 -- Snapshot shape:
 --   finance  = { cash, loan, cashflow_month, cashflow_last_month }        money in game units
@@ -40,7 +41,7 @@ function health.has_issue(line)
 	return line.issues ~= nil and #line.issues > 0
 end
 
---- Counters for the status strip.
+--- Counters: money, lines, vehicles and the number of problems and cautions.
 function health.summarize(snapshot, thresholds)
 	local t = settings(thresholds)
 	local finance = snapshot.finance or {}

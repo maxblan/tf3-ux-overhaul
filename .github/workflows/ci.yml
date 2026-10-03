@@ -1,0 +1,60 @@
+name: CI
+
+# The mod runs inside Transport Fever 3, which is not available on a runner. The in-game tests
+# (make test-ingame) and the game's own validator (make validate) start the game, so they run
+# locally before a release. CI runs the part that needs no game: luacheck with the Lua 5.2 syntax
+# rules, the offline specs on fengari, the translation file and the content index.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint and offline specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      # fengari (Lua 5.3 in node) for the specs, the luacheck sources and the SVG renderer.
+      - name: Install the tooling
+        run: make deps
+
+      # Besides luacheck, `make lint` rejects syntax the game's Lua 5.2 does not understand and a bare
+      # `return react.CallOriginalRecipe(...)`. Both only show up at runtime, where they break the game's whole UI.
+      - name: Lint
+        run: make lint
+
+      - name: Offline specs
+        run: make test
+
+  consistency:
+    name: Translations and content index
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The full check also compares against the game's German catalog, which only exists on a machine
+      # with the game. Here: every language has the same keys, and every key is used in the code.
+      - name: Translation keys
+        run: python3 tools/strings_check.py --no-game
+
+      # The game only loads files listed in _content.json. A file added without `make content` is
+      # silently missing in the game.
+      - name: Content index is up to date
+        run: |
+          tools/content_index.sh src/ui_overhaul spec/ingame/ui_overhaul_testbench
+          git diff --exit-code -- '*/_content.json'

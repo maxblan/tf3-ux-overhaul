@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: What the mod changes
+    url: https://github.com/maxblan/ui-overhaul#what-changes
+    about: The list of changed screens, before reporting something as a bug.
+  - name: Building and contributing
+    url: https://github.com/maxblan/ui-overhaul/blob/main/CONTRIBUTING.md
+    about: How to run the tests, and the rules that keep the game's UI from breaking.

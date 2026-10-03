@@ -1,0 +1,39 @@
+name: Feature request
+description: A vanilla screen that should show more or need fewer clicks.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One rule decides most requests: **the mod improves the game's own screens and adds as little as
+        possible.** That means no new windows or notifications and nothing a player has to learn. Good fits are
+        a number in a list the game already shows, a confirmation before an action that cannot be undone, or a
+        window that stops closing itself. A new dashboard is almost certainly out of scope, though you can still
+        argue for it.
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What takes too many clicks today
+      description: The task, and the clicks or windows it needs in the vanilla game.
+      placeholder: "To see which of my trucks are old I open Statistics, Vehicles, sort by age and scroll."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screen
+    attributes:
+      label: Which screen should change
+      description: Where you would expect the information or the button, in a screen that already exists.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This changes an existing screen instead of adding a new one.
+          required: false
+        - label: It is about gameplay, not about saving, loading or the main menu.
+          required: false

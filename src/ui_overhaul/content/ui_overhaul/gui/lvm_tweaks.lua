@@ -5,8 +5,8 @@
 --   * replacing or modifying more than one vehicle at once asks first, with the count and the net
 --     cost, in the Line Manager's question prompt
 --   * cloning more than one vehicle asks first, with the Line Manager's own question prompt (as it
---     already does before selling): clicking a line selects all its vehicles, and "Clone" then
---     silently doubled the whole fleet
+--     already does before selling): clicking a line selects all its vehicles, so "Clone" used to
+--     double the whole fleet without asking
 --   * reopening the Line Manager without a target (game bar button, hotkey) selects the line that
 --     was selected when it was closed, instead of starting empty
 -- The confirmation wraps react.fireEvent for "duplicateVehicles" (installed before the UI starts,

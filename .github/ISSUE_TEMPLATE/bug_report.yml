@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in a changed screen looks wrong, does not react, or the game's UI disappears.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The game writes its log to `stdout.txt`. Please attach it from the session where the problem happened:
+
+        `C:\Program Files (x86)\Steam\userdata\<your id>\3493540\local\crash_dump\stdout.txt`
+
+        Lines starting with `[ui_overhaul]` are from this mod. The file is rewritten at every game start, so
+        copy it before you start the game again.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. A screenshot helps a lot for layout problems.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to get there
+      description: Which window you opened and what you clicked.
+      placeholder: |
+        1. Opened the Line Manager with L
+        2. Clicked a line with 12 vehicles
+        3. The balance in the row stayed at $0
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: stdout.txt
+      description: Attach the file, or paste the part around the problem.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: game-version
+    attributes:
+      label: Game version
+      description: Shown in the main menu.
+    validations:
+      required: true
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: Mod version
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-mods
+    attributes:
+      label: Other mods you have enabled
+      description: |
+        Mods that change the same vanilla screens can conflict: the Line Manager's vehicle list, the Statistics
+        tabs, the line window's vehicle card, the game bar's earnings display, the window stack and the entity
+        windows' action bar. Timetables and Auto Line Namer are tested together with this mod.
+    validations:
+      required: true

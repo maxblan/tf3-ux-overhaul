@@ -1,4 +1,4 @@
---- Small fixes inside existing windows, nothing new to learn:
+--- Small fixes inside existing windows:
 --   * sections of entity windows (Suppliers, Stocks, Passengers ...) stay open when the window is
 --     opened again, and opening one no longer closes the others
 --   * "Sell" in the vehicle window asks first: the first click turns the button into "Sell?", the

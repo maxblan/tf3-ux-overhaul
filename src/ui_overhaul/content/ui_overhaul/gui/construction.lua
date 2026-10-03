@@ -9,11 +9,10 @@
 --     (Switching the tab by event is not safe: the base handler mixes up tab indices when a menu has
 --     hidden tabs and raises a Lua error, observed in-game.)
 --   * the bulldozer's tooltip warns when the removal includes a station that lines stop at:
---     "Removes Blumenstrasse - 2 lines stop here" (the game has no undo; a confirmation dialog is not
---     possible from a mod, the tooltip is the last moment before the click)
+--     "Removes Blumenstrasse - 2 lines stop here" (the game has no undo and a mod cannot show a
+--     confirmation dialog, so the tooltip is the last moment before the click)
 -- Patches the exported functions construction_react_util.getMenuCategories and getActionParams
--- before the UI starts
--- (construction.script.lua); any error leaves the base result unchanged.
+-- before the UI starts (construction.script.lua); any error leaves the base result unchanged.
 -- @module ui_overhaul.gui.construction
 local construction_react_util = require("::/gui/construction/construction_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")

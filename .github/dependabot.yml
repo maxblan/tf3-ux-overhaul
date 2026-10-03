@@ -1,0 +1,13 @@
+version: 2
+
+# GitHub Actions only. The npm tooling under tools/ is pinned by its lock files and only used for
+# lint, specs and the preview image; bump it by hand when needed.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

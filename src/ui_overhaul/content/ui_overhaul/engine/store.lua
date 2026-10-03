@@ -1,5 +1,5 @@
 --- Shared snapshot for all of the mod's widgets. The always-mounted entry point refreshes it on a
--- timer (store.REFRESH_SECONDS, see gui/control_center.lua); every widget only reads the cached
+-- timer (store.REFRESH_SECONDS, see gui/entry.lua); every widget only reads the cached
 -- result. Lives in the GUI's React Lua state, which keeps module state for the whole session.
 --
 -- Observed in-game: calling api.util.getApplicationTime() ("GUI thread only") inside a

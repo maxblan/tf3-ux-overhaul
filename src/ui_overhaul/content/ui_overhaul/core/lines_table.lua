@@ -1,5 +1,6 @@
---- Rows of the Control Center's Lines tab: quick filters, sorting and the totals row. Works on the
--- line records of a snapshot (see core/health.lua). Pure Lua, no engine access.
+--- Rows of a lines table: quick filters, sorting and the totals row (written for the Control Center's
+-- Lines tab, since removed). Works on the line records of a snapshot (see core/health.lua). Pure Lua,
+-- no engine access.
 -- @module ui_overhaul.core.lines_table
 local health = require("/ui_overhaul/core/health.lua")
 

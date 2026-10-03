@@ -2,7 +2,7 @@
 
 Derived only from the extracted game source of the build in `.game/game/` (see `docs/inventory/README.md`).
 Every snippet is copied from base code and converted from Teal to plain Lua (type annotations and `as X` casts
-removed; `api.type["enum"]` written as `api.type.enum`). **All file:line refs are relative to `.game/game/`**
+removed; `api.type["enum"]` written as `api.type.enum`). All file:line refs are relative to `.game/game/`
 unless a section declares a short form (`G/` = `gui/gui/`, `LVM/` = `gui/gui/line_vehicle_mgmt/`,
 `EOW/` = `gui/gui/entity_window/`, `NM/` = `game_mechanics/game_mechanics/notifications/`, `T/` = `NM/types/`).
 Bare names like `statistic_lines.tl:120` refer to the file in the module folder named in the same subsection.
@@ -26,13 +26,13 @@ Contents: [0 Ground rules](#0-ground-rules-threads-polling-cost) · [1 Money](#1
 | Hook | What it does | Ref |
 |---|---|---|
 | `useStepStateTimer(getFromEngine, interval=0.5, equals=table_util.deepEquals)` | calls `getFromEngine(old)` every `interval` real seconds (deferred via `react.onStepTimer` → `enqueueDeferredStep`), sets state only if not deep-equal | `engine_react_util.tl:126-157`, `main/react.lua:525-534` |
-| `useStepState(getFromEngine, makeCommand?, equals?, onChange?, once?)` → `state, commit` | runs `getFromEngine` on **every step** (`react.onStep`); pauses while a committed command is in flight | `engine_react_util.tl:59-124` |
+| `useStepState(getFromEngine, makeCommand?, equals?, onChange?, once?)` → `state, commit` | runs `getFromEngine` on every step (`react.onStep`); pauses while a committed command is in flight | `engine_react_util.tl:59-124` |
 | `useStepStateTimerWithCommit(getFromEngine, interval, makeCommand?, ...)` | timer variant with commit fn | `engine_react_util.tl:159-201` |
-| `useStepStateParallel(useFnName, params, finalize, ...)` | first value computed synchronously; afterwards **every step** `react.enqueueParallel(useFnName, params, join)` → `api.gui.react.enqueueParallelWorkItem` runs the fn on a worker; `finalize(result, params, old)` runs on the GUI thread next frame | `engine_react_util.tl:203-260`, `main/react.lua:56-65` |
+| `useStepStateParallel(useFnName, params, finalize, ...)` | first value computed synchronously; afterwards every step `react.enqueueParallel(useFnName, params, join)` → `api.gui.react.enqueueParallelWorkItem` runs the fn on a worker; `finalize(result, params, old)` runs on the GUI thread next frame | `engine_react_util.tl:203-260`, `main/react.lua:56-65` |
 | `useStepStateParallelSimple(useFnName, params, equals?)` | same, finalize = identity | `engine_react_util.tl:262-265` |
 
-- `useFnName` format is `"<res path without ext>@<table>.<field>"`, resolved by `util.useFn` (`scripts/scripts/util.tl:5-29`; it registers the ref with `loaderHelper:useFn(ref)` and walks `game[<path>][<table>][<field>]`). Base example: `"::/game_mechanics/towns/town_util_parallel.script@town_util_parallel.getTownCapacityUsages"` (`gui/gui/entity_window/town/town_eow.script.tl:32`). The worker module returns `{ town_util_parallel = town_util_parallel }` and its functions copy userdata into **plain Lua tables** before returning (`game_mechanics/game_mechanics/towns/town_util_parallel.script.tl:298-314`, end of file).
-- **Base usage of parallel state is tiny**: only the town window (`town_eow.script.tl:27,32,1110`). Statistics, LVM and game bar all use `useStepStateTimer` with the default 0.5 s (e.g. `gui/gui/statistics/statistics.tl:105-114` uses `react.onStepTimer(..., 0.5)`). So "scan all lines every 0.5 s on the GUI thread" is what the base statistics window does while open; a permanently mounted dashboard should use 1-5 s or a parallel fn.
+- `useFnName` format is `"<res path without ext>@<table>.<field>"`, resolved by `util.useFn` (`scripts/scripts/util.tl:5-29`; it registers the ref with `loaderHelper:useFn(ref)` and walks `game[<path>][<table>][<field>]`). Base example: `"::/game_mechanics/towns/town_util_parallel.script@town_util_parallel.getTownCapacityUsages"` (`gui/gui/entity_window/town/town_eow.script.tl:32`). The worker module returns `{ town_util_parallel = town_util_parallel }` and its functions copy userdata into plain Lua tables before returning (`game_mechanics/game_mechanics/towns/town_util_parallel.script.tl:298-314`, end of file).
+- Base usage of parallel state is tiny: only the town window (`town_eow.script.tl:27,32,1110`). Statistics, LVM and game bar all use `useStepStateTimer` with the default 0.5 s (e.g. `gui/gui/statistics/statistics.tl:105-114` uses `react.onStepTimer(..., 0.5)`). So "scan all lines every 0.5 s on the GUI thread" is what the base statistics window does while open; a permanently mounted dashboard should use 1-5 s or a parallel fn.
 - Cheap change detection: `api.engine.getRevision(entity)` (`apidef/api/engine.d.tl:1718`; used in `gui/gui/entity_window/view_manager.tl:145-208`).
 
 Minimal mod recipe skeleton (plain Lua, a recipe must return a layout as root):
@@ -58,7 +58,7 @@ return M
 
 **Units.** Money is a plain `integer` in currency units (no ×1000 scaling): loans are created as
 `math.random(...) * 1000000` = millions (`game_mechanics/game_mechanics/finance/loan_util.tl:198`) and passed straight
-to `api.util.formatMoney(loan.amount)` (`finances_loan_gui.tl:270`, DefaultLoanCard). Time is an `integer` game time in **ms**
+to `api.util.formatMoney(loan.amount)` (`finances_loan_gui.tl:270`, DefaultLoanCard). Time is an `integer` game time in ms
 (`GameTime.gameTime`, `apidef/api/engine.d.tl:425-438`); intervals in base use the *default-speed* constants
 `api.util.getDefaultDayDuration() / getDefaultMonthDuration() / getDefaultYearDuration()` (`apidef/api/util.d.tl:110-120`),
 e.g. `loan_util.tl:120` converts a duration to "minutes" with `/ 60000`.
@@ -81,14 +81,14 @@ builtin.TextView{
 }
 -- game_bar.tl:293: text = api.util.getAppConfig().moneyPrefix
 ```
-- Signature: `getPlayersBalance(player) : integer` — **`nil` when money is infinite** (sandbox/"no costs") (`apidef/api/engine/util.d.tl:858-861`). All formatters accept `nil` (`util.d.tl:56-68`).
+- Signature: `getPlayersBalance(player) : integer`. It returns **`nil` when money is infinite** (sandbox/"no costs") (`apidef/api/engine/util.d.tl:858-861`). All formatters accept `nil` (`util.d.tl:56-68`).
 - Cost: cheap; base polls it with `useStepState` (every step). Same call in `construction_react_util.tl:1226`, `vehicle_store_window.tl:3530`.
 - Alternative (not used by base): component `api.type.ComponentType.ACCOUNT` → `Engine.Component.Account { balance : integer, loan : integer }` (`apidef/api/engine.d.tl:22-29`, `:1668`). No base file reads it; prefer `getPlayersBalance`.
 
 ### 1.2 Loans / debt / "max loan"
-TF3 has **no single loan amount + max loan** like TPF2. Loans are discrete offers managed by a base **game script**
+TF3 has no single loan amount + max loan like TPF2. Loans are discrete offers managed by a base game script
 (`game_mechanics/game_mechanics/finance/loan.gs.lua`), at most `loan_util.maximalObtainableLoans = 4` concurrent loans
-(`loan_util.tl:184-186`). "Max loan" = **NOT FOUND**.
+(`loan_util.tl:184-186`). "Max loan" = NOT FOUND.
 
 Total debt (as shown in Finances → Overview "Debt" chart and Assets tab):
 ```lua
@@ -99,7 +99,7 @@ local result = api.engine.util.finance.getDebtChart(player, config, currentDebt)
 ```
 `CompanyValue { balance, totalAssets, debt : integer, numberOfLines, totalStations, railVehicles, ... }`
 (`apidef/api/type.d.tl:108-141`; `getCompaniesValue` `apidef/api/engine/util.d.tl:901`). Assets tab polls it with
-`useStepState` (`finances_assets.tl:462-465`). Cost: aggregates the whole company — poll with `useStepStateTimer` ≥ 1 s in a dashboard.
+`useStepState` (`finances_assets.tl:462-465`). Cost: it aggregates the whole company, so poll it with `useStepStateTimer` ≥ 1 s in a dashboard.
 
 Individual loans (read the base game script's state, exactly as the Loans tab does):
 ```lua
@@ -124,7 +124,7 @@ local moneyToPayLeft = loan_util.getPaymentLeftoverRounded(loan.amount, loan.dur
 Loans are disabled when balance is `nil` (`account.tl:14-18`).
 
 ### 1.3 Cash flow per period (finance window "Finances" tab)
-The finance table is **per year, not per month**: 4 columns, header strings supplied by the engine.
+The finance table is per year, not per month: 4 columns, header strings supplied by the engine.
 ```lua
 -- game_mechanics/game_mechanics/finance/finances_table.tl:570-578 (FinancesTable)
 local makeTableState = function()
@@ -137,9 +137,9 @@ local isTableEqual = function(a, b) return a == b end
 local tableState = engine_react_util.useStepStateTimer(makeTableState, nil, isTableEqual)   -- 0.5 s default
 ```
 `FinanceData` (`apidef/api/type.d.tl:5695-5713`), each value list is one integer per column:
-- `header : {string}` column titles; `total` → row **"Earnings"** (`finances_table.tl:629`); `balance` → row "Bank Account" (`:636`);
+- `header : {string}` column titles; `total` → row "Earnings" (`finances_table.tl:629`); `balance` → row "Bank Account" (`:636`);
   `loan` → row "Debt" (negated, `:638-642`); `interest` → "Loan Interest" (`:625`); `loanBorrowing`, `loanRepayment`.
-- `transport[carrier][key] = {..}`, `investment[key]`, `other` — iterate with `data:foreach_carrier(fn(carrier, t))`,
+- `transport[carrier][key] = {..}`, `investment[key]`, `other`: iterate with `data:foreach_carrier(fn(carrier, t))`,
   `data:foreach_transport(fn(key, values), carrier)`, `foreach_investment`, `foreach_other`; `data:unfoldKey(key)` →
   `{Type, Maintenance, Construction}`; labels via `finances_util.getCarrierLabel/getKeyLabel` (`finances_util.d.tl`).
 - Supports `==` (`equals`). Cost: moderate (journal aggregation); base runs it on the GUI thread with the 0.5 s timer, only while the tab is open.
@@ -160,7 +160,7 @@ local prevMonth = api.engine.util.finance.calculateBalance({player}, math.max(gt
 ```
 Passing the player entity is unverified (the doc says "entities (having an account)"; the player has an account, see
 `getAccountChart(player)`). Calendar month boundaries: no inverse of `getCalendarDate` exists; `GameTime.dates : {{integer, Date}}`
-is undocumented — **verify in-game**. Also available: `calcIncomeSince(time, player) : number` and
+is undocumented; verify in-game. Also available: `calcIncomeSince(time, player) : number` and
 `getLastIncomeTime(player) : integer` (game-script use in `achievements.script.tl:121,202-204`).
 
 ### 1.4 "Earnings" in the game bar
@@ -179,7 +179,7 @@ year-to-date, same meaning as the "Earnings" row of the finance table. Tooltip `
 
 ### 1.5 Time & date reading
 ```lua
--- game time (ms) — used everywhere, e.g. line_react_util.tl:623-625
+-- game time (ms), used everywhere, e.g. line_react_util.tl:623-625
 local gameTimeComponent = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME)
 local toTime = gameTimeComponent.gameTime
 local fromTime = math.max(toTime - api.util.getDefaultYearDuration(), 0)     -- base "last 12 months" window
@@ -190,7 +190,7 @@ local date = api.engine.util.getCalendarDate(gameTimeComponent.gameTime)     -- 
 local gameSpeed = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_SPEED)
 ```
 Note: calendar speed is decoupled from simulation: `getYearDuration(millisPerDay)` / `getMonthDuration(millisPerDay)`
-(`util.d.tl:100-108`) give the calendar-adjusted length; the base 12-month balance windows use the **default** year duration,
+(`util.d.tl:100-108`) give the calendar-adjusted length; the base 12-month balance windows use the default year duration,
 not the calendar one. Age-in-years style values should therefore divide by `api.util.getDefaultYearDuration()`.
 
 ---
@@ -200,7 +200,7 @@ not the calendar one. Age-in-years style values should therefore divide by `api.
 Common facts for this section:
 - All paths are relative to `.game/game/`. Snippets are base Teal with annotations and casts removed. `api.type["enum"].X` in Teal is written as `api.type.enum.X` in plain Lua (`enum` is a Teal keyword but not a Lua one).
 - Every engine call below is a read from `api.engine.*`. The base calls these from GUI recipes, and `notifications.script.tl` calls the same `api.engine.util.line.*` functions from the engine-side game script. They work in both states.
-- **The base never uses `useStepStateParallel` for lines or stations.** The only parallel user is the town window. Statistics and the LVM use `useStepStateTimer` (default 0.5 s) or `useStepState` (every step), once per visible table cell.
+- The base never uses `useStepStateParallel` for lines or stations. The only parallel user is the town window. Statistics and the LVM use `useStepStateTimer` (default 0.5 s) or `useStepState` (every step), once per visible table cell.
 - Money values are raw integers; pass them to `api.util.formatMoney`. Time values are game-time ticks (`GAME_TIME.gameTime`, integer); `api.util.getDefaultYearDuration()` = "game ticks per year" (`apidef/api/util.d.tl:118-120`).
 
 ### 2.1 Lines of the player
@@ -208,7 +208,7 @@ Common facts for this section:
 local keys = api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
 ```
 - `gui/gui/statistics/statistic_lines.tl:380`. Returns `{Engine.Entity}` (`apidef/api/engine/system.d.tl:17-20`).
-- Cheap: cached by the LineSystem. Statistics calls it **every step** (`useStepState(makeTableState)`, `statistic_lines.tl:379-389`).
+- Cheap: cached by the LineSystem. Statistics calls it every step (`useStepState(makeTableState)`, `statistic_lines.tl:379-389`).
 - Other calls: `getLines()` returns all lines; `getLinesForStationGroup(sg)`; `getLineStops(sg) -> {{line, stopIndex0}}` (`system.d.tl:13-47`).
 
 ### 2.2 Name and color
@@ -274,7 +274,7 @@ local toTime = gameTimeComponent.gameTime
 local fromTime = math.max(toTime - api.util.getDefaultYearDuration(), 0)
 return api.engine.util.finance.calculateBalance({lineEntity}, fromTime, toTime, true)
 ```
-- This is a **rolling 12-month** window, not a calendar year. The line window labels it "Last Year" (`gui/gui/entity_window/line/line_eow.script.tl:305-311`); the LVM tooltip says "Annual profit or loss." (`manager_window.tl:4003-4008`).
+- This is a rolling 12-month window, not a calendar year. The line window labels it "Last Year" (`gui/gui/entity_window/line/line_eow.script.tl:305-311`); the LVM tooltip says "Annual profit or loss." (`manager_window.tl:4003-4008`).
 - `calculateBalance(entities, startTime, endTime, maintenanceIncomeOnly, maintenanceType?) -> integer` (`apidef/api/engine/util.d.tl:841-848`). With `true`, only maintenance and income journal entries count.
 - **Inconsistency in base:** the displayed cell passes `{lineEntity}`, but the statistics *sort* value passes the line's vehicles: `calculateBalance(getLineVehicles(line), fromTime, toTime, true)` (`statistic_lines.tl:289-294`). The two can differ, for example for vehicles that were moved between lines. To match what the player sees, use `{lineEntity}`.
 - Cost: one native journal sum. `LineBalance{entity=, stepTimer=true}` polls every 0.5 s; with `stepTimer=false` it polls every step (`line_react_util.tl:628`). Ready widget: `line_react_util.LineBalance{ entity = line, stepTimer = true }` (red/green text, `formatMoney`).
@@ -288,7 +288,7 @@ local last12  = api.engine.util.finance.calculateBalance({line}, math.max(now - 
 local prev12  = api.engine.util.finance.calculateBalance({line}, math.max(now - 2*Y, 0), math.max(now - Y, 0), true)
 ```
 - Per-year bars as in the line window's Balance chart: `api.engine.util.finance.getAccountChart(entity, config)` with `config = api.type.ChartConfig.new(); config.count = <years>` (`gui/gui/entity_window/entity_window_util.tl:868-883`). The line window uses `chartType = "account"` with labels `{_("Income"), _("Running Costs")}` (`line_eow.script.tl:658-675`).
-- `ChartResult.series : {{{number}}}` (`apidef/api/type.d.tl:5624-5639`). The exact point layout (`{x, y}` per point, one series per label) is **needs in-game verification**.
+- `ChartResult.series : {{{number}}}` (`apidef/api/type.d.tl:5624-5639`). The exact point layout (`{x, y}` per point, one series per label) needs in-game verification.
 - Transported items over the last 12 months: `api.engine.util.logbook.getLogValuePerYear(line, "itemsTransported")` (`line_react_util.tl:642-645`).
 
 ### 2.6 Load / Capacity / Utilization / Satisfaction (statistics columns)
@@ -304,7 +304,7 @@ return statistics_react_util.calculateCargoColumnData(cargoTypeInfos)
 -- -> { supply = sum(count), demand = sum(capacity), coverage = supply/demand, averageQuality = mean }
 ```
 - The column mapping (`statistic_lines.tl:408-411`) is "Load" = `supply`, "Capacity" = `demand`, "Utilization" = `coverage` (fraction 0..1, shown with `api.util.toStringPercentPrecision(v, 0)`, `statistic_lines.tl:148-172`), "Satisfaction" = `averageQuality` (0..1).
-- LVM tooltips (`manager_window.tl:3945-3967`): Capacity = "Maximum load of all vehicles combined."; Utilization = "Percentage of the capacity that is currently used." It is a **snapshot of current on-board load**, not a time average.
+- LVM tooltips (`manager_window.tl:3945-3967`): Capacity = "Maximum load of all vehicles combined."; Utilization = "Percentage of the capacity that is currently used." It is a snapshot of current on-board load, not a time average.
 - Native core underneath (`gui/gui/main/cargo_util.tl:707-722`):
   ```lua
   local capacities = api.engine.util.line.getLineCapacityUsages(lineEntity, false)  -- false = current load config
@@ -313,7 +313,7 @@ return statistics_react_util.calculateCargoColumnData(cargoTypeInfos)
   ```
   Cheap version for a dashboard (derived): sum `used` and `capacity` over `pairs(getLineCapacityUsages(line, false))`, then utilization = used/capacity. Unlike `calculateCargoColumnDataForLine`, this skips the quality lookups (`getCargoQualityDataForLine` per cargo type).
 - **Surprise:** the type says `{CargoTypeId : LineCapacityUsage}` (`apidef/api/engine/util.d.tl:198`), but base code treats it as 1-based (`cargo_util.tl:710`, `cargo_util.tl:897-898`: `cargoTypeId = cargoTypeIndex - 1`).
-- Cost: statistics recomputes `calculateCargoColumnDataForLine` **4 times per row** (separate Load/Capacity/Utilization/Satisfaction cells, each with its own `useStepStateTimer` at 0.5 s), plus once more per sort compare.
+- Cost: statistics recomputes `calculateCargoColumnDataForLine` 4 times per row (separate Load/Capacity/Utilization/Satisfaction cells, each with its own `useStepStateTimer` at 0.5 s), plus once more per sort compare.
 
 ### 2.7 Frequency (interval)
 ```lua
@@ -322,7 +322,7 @@ local maxFrequency = api.engine.util.line.getMaxFrequency(entityId)
 if maxFrequency < 0.0001 then return 0 end
 return math.floor(1.0 / maxFrequency)
 ```
-- Returns an integer **interval in seconds**; 0 means none.
+- Returns an integer interval in seconds; 0 means none.
 - Display:
   - statistics: `api.util.formatMinutesSeconds(sec)` (`statistic_lines.tl:200-218`);
   - line window: `api.util.formatSeconds(sec)` for the label and `formatMinutesSeconds` for the tooltip, with `"--"` when 0 (`line_eow.script.tl:56-78`).
@@ -333,7 +333,7 @@ return math.floor(1.0 / maxFrequency)
 local rate = api.engine.util.line.calcLineStationThroughput(lineEntity)   -- integer
 ```
 - `statistic_lines.tl:220-230`, `line_eow.script.tl:34-54`.
-- Unit: "Amount of cargo or passengers a line can transport **per year**" (`manager_window.tl:3989-3999`). Display it with `lang_util.formatInt(rate)`.
+- Unit: "Amount of cargo or passengers a line can transport per year" (`manager_window.tl:3989-3999`). Display it with `lang_util.formatInt(rate)`.
 
 ### 2.9 Stops (station group + name per stop)
 ```lua
@@ -358,10 +358,10 @@ local qualityData = api.engine.util.cargo.getCargoQualityDataAtStop(lineEntity, 
 ```
 - `CargoQualityData` is defined at `apidef/api/engine/util.d.tl:716-723`. It is userdata; call `:clone()` before you keep it in state (`cargo_react_util.tl:380`).
 - Count only, without quality: `api.engine.system.simEntityAtTerminalSystem.getLineStopSimEntitiesCount(line, stopIndex0, cargoTypeId)` (`system.d.tl:186-199`). It exists in the API but the base never calls it.
-- Waiting passengers grouped by destination stop: `getLineStopSimEntities(line, stopIndex0, passengerId)`, then `SIM_ENTITY_AT_TERMINAL.lineStop1` (`station_group.tl:648-690`). This is **heavy**: one component read per passenger.
-- **Cargo:** the base shows **no waiting-cargo count per stop** anywhere. The station window counts passengers only.
-  - In TF3, cargo is loaded from the **stock lists of catchable industries and warehouses** (`cargo_util.getInputOutputStocksForStation` → `catchmentAreaSystem.getStationCatchables(station, true)`, `cargo_util.tl:544-563`).
-  - The `getCargoQualityDataAt*` docs say "cargo type (passengers allowed)", so calling `getCargoQualityDataAtStop(line, stopIndex0, cargoTypeId)` for each type from `getConfiguredStopCargoTypes` is the closest API. Whether it returns non-zero for cargo **needs in-game verification**.
+- Waiting passengers grouped by destination stop: `getLineStopSimEntities(line, stopIndex0, passengerId)`, then `SIM_ENTITY_AT_TERMINAL.lineStop1` (`station_group.tl:648-690`). This is heavy: one component read per passenger.
+- Cargo: the base shows no waiting-cargo count per stop anywhere. The station window counts passengers only.
+  - In TF3, cargo is loaded from the stock lists of catchable industries and warehouses (`cargo_util.getInputOutputStocksForStation` → `catchmentAreaSystem.getStationCatchables(station, true)`, `cargo_util.tl:544-563`).
+  - The `getCargoQualityDataAt*` docs say "cargo type (passengers allowed)", so calling `getCargoQualityDataAtStop(line, stopIndex0, cargoTypeId)` for each type from `getConfiguredStopCargoTypes` is the closest API. Whether it returns non-zero for cargo needs in-game verification.
   - Line-wide cargo on board: `cargo_util.calculateSortedLineCargoInfo(line)` returns `{ {cargoType, capacity, fill, vehicleEntities, ...} }` (`cargo_util.tl:352-355`).
 
 ### 2.11 Problems / issues per line with reason text
@@ -377,14 +377,14 @@ local lineStationProbs   = api.engine.util.line.getLineStationProblems() -- {{li
   - `LineIssue` (5716-5728) = `{ type : LineIssue.Type (NowhereToLoad|NowhereToUnload|NoVehicleToLoadCargo|VehicleUseless|LineCargoConfig|None), stopIndex, cargoType }`.
 - Enum access:
   - `api.type.enum.LineProblem.NO_PATH`;
-  - `api.type.LineIssue.Type.NowhereToLoad` (note: **not** under `enum`, `line_warning.script.tl:15`).
+  - `api.type.LineIssue.Type.NowhereToLoad` (note: not under `enum`, `line_warning.script.tl:15`).
 - Per-line detail: `api.engine.util.line.getLineIssues(line, false)`, and `getDetailedLineProblems(line) -> {{StopState}}` (segments → stops with `noPath`, `duplicateStop`, `incompatibleStop`, `noPathToAlternative`, `noPathFromAlternative`; `apidef/api/engine/util.d.tl:177-210`).
-- `lineSystem.getProblemLines(player)` exists (`system.d.tl:44-46`) but is **not used by the base**.
+- `lineSystem.getProblemLines(player)` exists (`system.d.tl:44-46`) but is not used by the base.
 - Cost:
   - The notification script splits the work: line problems run on tick % 4 == 0, line-station problems on tick % 4 == 1 (`notifications.script.tl:13,49,122,180`).
   - The LVM time-slices `getDetailedLineProblems` over 4 lines per step and rotates the system-wide calls (`getVehicleProblems`, `getVehiclesWithRoundTripCount`, `getLinesIssues`) round-robin, one per step (`gui/gui/line_vehicle_mgmt/manager_window.tl:5958-6066`). Copy that pattern for a dashboard.
 
-**Human-readable text.** The base text lives in the **local** `getDescription` of the notification type. It is not exported, so you cannot call it. Either mirror the strings (exact base strings, `game_mechanics/game_mechanics/notifications/types/line_warning.script.tl:6-142`):
+**Human-readable text.** The base text lives in the local `getDescription` of the notification type. It is not exported, so you cannot call it. Either mirror the strings (exact base strings, `game_mechanics/game_mechanics/notifications/types/line_warning.script.tl:6-142`):
 
 | Source | Short text (`iconExplainTooltip`) | Long text (`description`) |
 |---|---|---|
@@ -400,11 +400,11 @@ local lineStationProbs   = api.engine.util.line.getLineStationProblems() -- {{li
 | `BAD_ALTERNATIVE_TERMINAL` | "Could Not Connect Alternative Terminals" | "Could not connect all alternative terminals on {line}: {reason}." |
 
 - `{cargoType}` = `api.res.cargoTypeRep.get(cargoTypeId).name`. `{stopNumber}` = `stopIndex + 1`.
-- `{reason}` = `line_util.getRelaxationText(line_util.getRelaxationType(okModes, relaxedModes, allowedModes))`. It is **exported**, `line_util.tl:1966-2031`, and returns "Missing catenaries" / "Missing tram lane" / "Missing tram tracks" / "Missing train tracks" / "Missing road". `okModes`, `relaxedModes` and `allowedModes` come from `lineAndProblem[3]` (`PathProblemLocation`, `apidef/api/engine/util.d.tl:150-166`).
+- `{reason}` = `line_util.getRelaxationText(line_util.getRelaxationType(okModes, relaxedModes, allowedModes))`. It is exported, `line_util.tl:1966-2031`, and returns "Missing catenaries" / "Missing tram lane" / "Missing tram tracks" / "Missing train tracks" / "Missing road". `okModes`, `relaxedModes` and `allowedModes` come from `lineAndProblem[3]` (`PathProblemLocation`, `apidef/api/engine/util.d.tl:150-166`).
 - Station-stop texts are in `game_mechanics/game_mechanics/notifications/types/line_station_warning.script.tl:5-100`. Example: `StopUseless` → "Stop Not Compatible With Current Vehicles" / "Stop of {line} at {station} cannot be used with current vehicles."
 - Wrap mirrored strings in `_()` so the base translations apply.
 
-…or **read the active persistent notifications** for the line and render their own `title`/`description`. This is what the statistics Problems column and the LVM do:
+…or read the active persistent notifications for the line and render their own `title`/`description`. This is what the statistics Problems column and the LVM do:
 ```lua
 -- statistic_lines.tl:384 (once per table refresh)
 local entity2ids = notification_util.getPersistingEntity2NotificationFromNative(
@@ -425,7 +425,7 @@ local dataState = dataStateFn and dataStateFn(n.params, n.simParams) or nil
   - `notification_util` = `game_mechanics/game_mechanics/notifications/notification_util.tl` (functions at lines 12, 280, 294, 376);
   - `util` = `scripts/scripts/util.tl`.
 - **Hook rule:** `useDataState` calls `useStepStateTimer` internally (`line_warning.script.tl:181`). Call it only inside a dedicated child recipe with `meta = { localKey = tostring(id) }`, as `WarningIcon` (`statistics_react_util.tl:317-344`) and `ManagerNotificationWidgetEntry` do. Never call it in a variable-length loop inside one recipe.
-- `line_station_warning` notifications persist on **both** the line and the station group (`entities = {line, stationGroup}`, `notifications.script.tl:187-192`), so they appear under the line too.
+- `line_station_warning` notifications persist on both the line and the station group (`entities = {line, stationGroup}`, `notifications.script.tl:187-192`), so they appear under the line too.
 - Problem notifications are created even when their type is ignored, which is the default for line, station and overcrowding, `initiallyIgnoredType = true` in `types/line_warning.res.lua:8`. They are only marked `dismissed=true, tracked=false`. They are dropped only when `ignored.fully` is set (`game_mechanics/game_mechanics/notifications/notification_util.tl:137-146`). So reading persisting notifications works in free play.
 - Ready-made cell: `statistics_react_util.ProblemsCell` (DataTable cell; needs `userParam.notificationState = entity2ids`, `statistics_react_util.tl:346-367`).
 
@@ -440,7 +440,7 @@ Paths are relative to `.game/game/`. Short forms used below: `LVM/` = `gui/gui/l
 - Durations in calendar terms:
   - `api.util.getDefaultYearDuration()`, `getDefaultMonthDuration()`, `getDefaultDayDuration()` give ticks at default calendar speed (`apidef/api/util.d.tl:110-120`).
   - `api.util.getYearDuration(millisPerDay)` gives ticks at the current calendar speed (`util.d.tl:105-108`).
-  - `millisPerDay` comes from the `GAME_SPEED` component (`apidef/api/engine.d.tl:415-422`). It is **0 when paused**, so guard against it as `finances_loan_gui.tl:55-58` does.
+  - `millisPerDay` comes from the `GAME_SPEED` component (`apidef/api/engine.d.tl:415-422`). It is 0 when paused, so guard against it as `finances_loan_gui.tl:55-58` does.
 - Money values are plain integers in game currency. Format them with `api.util.formatMoney(int)`.
 
 ### 3.0 Component and enum reference (verified)
@@ -455,22 +455,22 @@ Paths are relative to `.game/game/`. Short forms used below: `LVM/` = `gui/gui/l
 | `userStopped` | the user stopped the vehicle |
 | `depot` | depot entity if the vehicle is in a depot or heading to one |
 | `sellOnArrival` | the vehicle will be sold at the depot |
-| `line`, `stopIndex` | assigned line; next stop index (**0-based**) |
+| `line`, `stopIndex` | assigned line; next stop index (0-based) |
 | `noPath` | the vehicle has no path |
 | `daysInDepot`, `daysAtTerminal` | integer days |
 | `maintenanceStation` | -1 if the vehicle is not maintained |
 | `loadState`, `timeUntilDeparture`, `lastLineStopDeparture`, `sectionTimes`, `lineStopDepartures` | scheduling data |
 
-`TransportVehicleState` (`apidef/api/type.d.tl:438-447`) has **only 4 values**: `IN_DEPOT`, `EN_ROUTE`, `AT_TERMINAL`, `GOING_TO_DEPOT`. Read them as `api.type.enum.TransportVehicleState.X`. "Stopped by user" is **not** a state; it is the separate flag `userStopped`.
+`TransportVehicleState` (`apidef/api/type.d.tl:438-447`) has only 4 values: `IN_DEPOT`, `EN_ROUTE`, `AT_TERMINAL`, `GOING_TO_DEPOT`. Read them as `api.type.enum.TransportVehicleState.X`. "Stopped by user" is not a state; it is the separate flag `userStopped`.
 
 Base polling hooks (`gui/gui/main/engine_react_util.tl`):
 - `useStepState(fn)` re-evaluates every frame.
 - `useStepStateTimer(fn, interval=0.5)` re-evaluates every 0.5 s by default (`engine_react_util.tl:126-157`).
 
-Both run on the GUI thread. The base computes **no** vehicle data with `useStepStateParallel`.
+Both run on the GUI thread. The base computes no vehicle data with `useStepStateParallel`.
 
 ### 3.1 Line (and "In Depot" / "Going to Depot")
-Base treats `tv.line` as valid **only** while the state is `EN_ROUTE` or `AT_TERMINAL` (`EOW/vehicle/vehicle.tl:157`, `EOW/vehicle/vehicle_eow.script.tl:901-909`, `gui/gui/statistics/statistic_vehicles.tl:280-286`):
+Base treats `tv.line` as valid only while the state is `EN_ROUTE` or `AT_TERMINAL` (`EOW/vehicle/vehicle.tl:157`, `EOW/vehicle/vehicle_eow.script.tl:901-909`, `gui/gui/statistics/statistic_vehicles.tl:280-286`):
 ```lua
 -- statistic_vehicles.tl:280-286
 local getLineCompareValue = function(vehicleEntity)
@@ -580,13 +580,13 @@ end
 ```
 
 ### 3.5 No-path and stuck detection (three sources)
-1. **Per-vehicle flag:** `tv.noPath` (above).
-2. **Engine list:**
+1. Per-vehicle flag: `tv.noPath` (above).
+2. Engine list:
    - `api.engine.system.transportVehicleSystem.getNoPathVehicles() -> {entity}` (`engine/system.d.tl:372-373`). No base GUI call site was found.
    - `api.engine.util.vehicle.getVehicleProblems() -> {{ {entities}, VehicleProblem }}` (`engine/util.d.tl:484-486`). `VehicleProblem` is one of `NoPathElectric | NoPathShip | NoPathAircraft | NoPathGeneric | Blocked` (`apidef/api/type.d.tl:2158-2164`). One problem can name several vehicles; `Blocked` lists two trains.
    - Human-readable text for these problems: `game_mechanics/game_mechanics/notifications/types/vehicle_warning.script.tl:5-62`. Examples: short `_("No Electrified Path")`, `_("No Path at All")`, `_("Trains Are Blocking Each Other")`; long `lang_util.format(_("There is no path at all for {vehicle}."), {vehicle = name})`.
-   - **Cost:** this scans the whole system. The LVM calls it only every 3rd step, round-robin with `getVehiclesWithRoundTripCount` and `getLinesIssues` (`LVM/manager_window.tl:6048-6060`). The notifications game script calls it once per `NumNotificationsTypeSplit` ticks (`notifications.script.tl:49, 260-273`).
-3. **"Stuck" (base definition)** (`notifications.script.tl:545-570`):
+   - Cost: this scans the whole system. The LVM calls it only every 3rd step, round-robin with `getVehiclesWithRoundTripCount` and `getLinesIssues` (`LVM/manager_window.tl:6048-6060`). The notifications game script calls it once per `NumNotificationsTypeSplit` ticks (`notifications.script.tl:49, 260-273`).
+3. "Stuck" (base definition) (`notifications.script.tl:545-570`):
    ```lua
    if tv.state == api.type["enum"].TransportVehicleState.EN_ROUTE and not tv.userStopped then
      if api.engine.util.vehicle.getSpeed(vehicleEntity) == 0 then addProblem(vehicleEntity) end   -- remembers problemSince = gameTime
@@ -607,7 +607,7 @@ local balance = api.engine.util.finance.calculateBalance({vehicleEntity}, fromTi
 - Signature: `calculateBalance(entities, startTime, endTime, maintenanceIncomeOnly, maintenanceType?) -> integer` (`apidef/api/engine/util.d.tl:840-848`).
 - `maintenanceIncomeOnly = true` counts only income and running costs, without purchase or sale. This is a rolling window of the last default year, although the vehicle window labels it "Last Year" (`vehicle_eow.script.tl:753-773`).
 - The statistics cell uses `VehicleBalance{entity = v, stepTimer = true}` (0.5 s timer, `statistic_vehicles.tl:254-268`). Without `stepTimer` it re-evaluates every frame.
-- **Cost:** a native journal query per call. The statistics table runs one timer per visible cell, and sorting calls it for every vehicle.
+- Cost: a native journal query per call. The statistics table runs one timer per visible cell, and sorting calls it for every vehicle.
 - Per-year chart data: `entity_window_util.EntityDiagramWidget{ chartType = "account", ... }` (`vehicle_eow.script.tl:786-850, 1195-1225`).
 
 ### 3.7 Model name, vehicle name, icons
@@ -645,7 +645,7 @@ api.engine.forEachEntityWithComponent(function(entity)
   end
 end, api.type.ComponentType.STATION_GROUP)
 ```
-- This runs **every step** while the stations tab is open (`useStepState(makeTableState)`). `entity_util` = `scripts/scripts/entity_util.tl`.
+- This runs every step while the stations tab is open (`useStepState(makeTableState)`). `entity_util` = `scripts/scripts/entity_util.tl`.
 - STATION_GROUP component = `{ stations = {stationEntity} }` (`apidef/api/engine.d.tl:1121-1126`). Name: `api.engine.util.getEntityName(sg)`.
 - Station group of a station: `api.engine.system.stationGroupSystem.getStationGroup(station)`.
 
@@ -665,7 +665,7 @@ local q = api.engine.util.cargo.getCargoQualityDataAtStationGroup(sg, cargo_util
 ```
 - Sources: `statistic_stations.tl:154-156`, `gui/gui/main/hud_icon_toolbox.tl:234-238`.
 - Per terminal: `getCargoQualityDataAtTerminal(sg, stationTerminal, passengerId)` (`hud_icon_toolbox.tl:219`). Per station: `getCargoQualityDataAtStation(station, cargoTypeId)`. Per line stop: §2.10.
-- Cargo types: the base **never** queries per-cargo waiting counts at stations. The API accepts any `cargoTypeId` ("passengers allowed", `apidef/api/engine/util.d.tl:743-764`), so loop `api.res.cargoTypeRep.getAll()` ids (as `cargo_util.getCargoTypesCount`, `cargo_util.tl:6-14`). Whether cargo yields counts **needs in-game verification**: TF3 cargo is loaded from catchment stock lists (§4.5), not stored at the station.
+- Cargo types: the base never queries per-cargo waiting counts at stations. The API accepts any `cargoTypeId` ("passengers allowed", `apidef/api/engine/util.d.tl:743-764`), so loop `api.res.cargoTypeRep.getAll()` ids (as `cargo_util.getCargoTypesCount`, `cargo_util.tl:6-14`). Whether cargo yields counts needs in-game verification: TF3 cargo is loaded from catchment stock lists (§4.5), not stored at the station.
 
 ### 4.4 Capacity / overcrowding
 ```lua
@@ -678,7 +678,7 @@ end
 -- displayed as "{used}/{capacity}" with capacity = usage.capacity + usage.waitingHallCapacity  (statistic_stations.tl:131-140)
 ```
 - `StationGroupCapacityUsage = { capacity, waitingHallCapacity, used : integer, overflow : boolean }` (`apidef/api/engine/util.d.tl:541-552`). The second argument is a flat terminal index, or -1 for the whole group.
-- **Overcrowding** = `calculateStationGroupCargo(sg, -1).overflow`. This is exactly what the "Station Overcrowded" notification uses (`notifications.script.tl:589`; type `types/overcrowding.res.lua`: `guiType = "Caution"`, `initiallyIgnoredType = true`).
+- Overcrowding = `calculateStationGroupCargo(sg, -1).overflow`. This is exactly what the "Station Overcrowded" notification uses (`notifications.script.tl:589`; type `types/overcrowding.res.lua`: `guiType = "Caution"`, `initiallyIgnoredType = true`).
 - Per terminal and waiting hall, as in the station window (`station_group.tl:641-646, 757-797`). This is passenger stations only:
   ```lua
   if api.engine.util.station.isStationOfType(stationId, false) then          -- false = passenger
@@ -690,10 +690,10 @@ end
 - Station-level: `api.engine.util.station.calculateStationUsage(station) -> {totalUsed, overflow, poolCapacity, terminalCapacity}` (`util.d.tl:526-532`). The base uses it only in `game_mechanics/game_mechanics/emission/emissions.script.tl:213`.
 - Station type: `statistics_react_util.getStationGroupType(sg)` returns `"Passenger"|"Cargo"|"Mixed"|nil` via `isStationOfType` (`statistics_react_util.tl:13-41`).
 - Upkeep: `api.engine.util.maintenance.calcMaintenanceForStationGroup(sg)` returns an integer money value, shown with `formatMoney` (`statistic_stations.tl:189-205`).
-- Problems on a station: read the persisting notifications of the group **and** of each station entity, as the station window does (`station_group.tl:859-862`). Types are `overcrowding`, `station_useless` and `line_station_warning`.
+- Problems on a station: read the persisting notifications of the group and of each station entity, as the station window does (`station_group.tl:859-862`). Types are `overcrowding`, `station_useless` and `line_station_warning`.
 - Cost:
   - Statistics uses `useStepStateTimer` (0.5 s) per cell.
-  - The station window rebuilds the full terminal/stop state **every step** (`useStepState(makeTerminalsAndStopsState)`, `station_group.tl:819`), including per-passenger destination tooltips. Avoid copying that wholesale.
+  - The station window rebuilds the full terminal/stop state every step (`useStepState(makeTerminalsAndStopsState)`, `station_group.tl:819`), including per-passenger destination tooltips. Avoid copying that wholesale.
 
 ### 4.5 Catchment (towns / industries), cheap variants
 ```lua
@@ -710,7 +710,7 @@ return town
 - Industries and warehouses: `api.engine.system.catchmentAreaSystem.getStationCatchables(stationEntity, true)` returns `{entity}` holding a StockList (`false` = PersonCapacity entities; `system.d.tl:445-448`). Base uses:
   - `cargo_util.getInputOutputStocksForStation(station)` → `inputCargoTypes, inputCount, outputCargoTypes, outputCount` (`cargo_util.tl:544-563`);
   - `station_useless` detection (`notifications.script.tl:601`).
-- Mapping a catchable stock-list entity back to its industry (for a name) is **NOT FOUND** in base code. `cargo_util.getStockListEntityFromOwner` only goes owner → stockList (`cargo_util.tl:565-581`). The reverse needs in-game verification, e.g. `getEntityName(stockList)` or `streetConnectorSystem.getConstructionEntityForSubconstruction`.
+- Mapping a catchable stock-list entity back to its industry (for a name) is NOT FOUND in base code. `cargo_util.getStockListEntityFromOwner` only goes owner → stockList (`cargo_util.tl:565-581`). The reverse needs in-game verification, e.g. `getEntityName(stockList)` or `streetConnectorSystem.getConstructionEntityForSubconstruction`.
 - Cost: getStationCatchables is a cached system lookup. Per-stock reads (`calculateStockConfigs`) are heavier, so poll them at 1 s or more.
 
 ---
@@ -734,7 +734,7 @@ Module paths for `require`: `"::/game_mechanics/notifications/notification_util.
 - Persistent entries are recomputed by the game script in 4 round-robin slices
   (`currentTick % 4`, `notifications.script.tl:13,49`) and diffed by `updatePersistentNotifications`
   (`notification_util.tl:205-258`).
-- **Thread:** the state belongs to the game-script (engine) side. The GUI reads it read-only through the
+- Thread: the state belongs to the game-script (engine) side. The GUI reads it read-only through the
   GameScript component (`notification_util.externalGetNotificationsStateNative`, `notification_util.tl:280-285`).
   It changes it only by sending script events (§5.4-5.6).
 
@@ -748,8 +748,8 @@ Module paths for `require`: `"::/game_mechanics/notifications/notification_util.
 local notifications = params.gameCtx.accessNotificationCacheFn(entity)   -- {Notification}, each with .notificationId
 ```
 Implementation (`T/notification_react_util.tl:89-114`): it re-reads the native state and rebuilds
-`entity → {id}` **on every step** (`react.onStep`). The lookup itself is cheap. The `.d.tl` comment says
-"use as little as possible for whole game (once, if possible)" (`notification_react_util.d.tl:28`), so do **not**
+`entity → {id}` on every step (`react.onStep`). The lookup itself is cheap. The `.d.tl` comment says
+"use as little as possible for whole game (once, if possible)" (`notification_react_util.d.tl:28`), so do not
 call `createNotificationCacheAccessFn()` yourself per widget.
 Base consumer: `NotificationHudIcons` polls it with `useStepStateTimer` (`notification_react_util.tl:146-166`).
 
@@ -776,22 +776,22 @@ local makeState = function()
 end
 local state = engine_react_util.useStepStateTimer(makeState, 1.0)
 ```
-- `getPersistingEntity2NotificationFromNative` (`notification_util.tl:294-322`) maps **every** entity in
+- `getPersistingEntity2NotificationFromNative` (`notification_util.tl:294-322`) maps every entity in
   `persisting`. Multi-entity notifications appear under each entity. For example `line_station_warning`
   persists `{line, stationGroup}` (`notifications.script.tl:189-192`).
 - Filters used by base: statistics "Problems" column = only `guiType == "Problem"` (`G/statistics/statistics_react_util.tl:261-285`);
   LVM icons = `"Problem"` or `"Caution"` (`G/line_vehicle_mgmt/line_react_util.tl:107-125`); EOW widget = all.
 - The persistent set ignores `dismissed`/`tracked`. Problems that are hidden by default (`initiallyIgnoredType`)
-  are **still listed here**. Only `ignored.fully` (missions) suppresses entries.
-- **Cost:** `getPersistingEntity2NotificationFromNative` walks the whole history (≤100 non-persistent + all
+  are still listed here. Only `ignored.fully` (missions) suppresses entries.
+- Cost: `getPersistingEntity2NotificationFromNative` walks the whole history (≤100 non-persistent + all
   persistent entries) through native-table `find()` calls. Base runs it every step in several places
   (`useStepState` in `NotificationWidget`/`ManagerNotificationWidget`, the table state in the statistics). For a
   dashboard, one `useStepStateTimer(…, 0.5-1 s)` per window is enough. Nothing in base runs it in parallel.
 
 **Title / description text.** The text comes from the type's GUI module `type .. "@useDataState"`.
-`useDataState` **is a hook**: it calls `useStepStateTimer` internally, see `T/stuck_vehicle.script.tl:39` and the
+`useDataState` is a hook: it calls `useStepStateTimer` internally, see `T/stuck_vehicle.script.tl:39` and the
 `.d.tl` warning in `NM/notifications.d.tl:46-49` ("only use in recipe WITHOUT another DEPENDENT state … use as last
-state … use localKey in parent"). So you must render **one child recipe per notification**, keyed by id.
+state … use localKey in parent"). So you must render one child recipe per notification, keyed by id.
 The base pattern is from `G/statistics/statistics_react_util.tl:317-343` (WarningIcon) and `entity_window_util.tl:2060-2127`:
 
 ```lua
@@ -816,7 +816,7 @@ end)
 (persistent only, icon above the entity), `lvmIcon` (shown in LVM), `iconExplainTooltip`, `previewImage`,
 `soundOnMount`, `wouldClick()`, `onClick(stack, dryRun?)`, `status` ("Pending"|"Failed"), `progress`/`progresses`.
 - Base titles are generic per type, for example `"Line Problem"` (`T/line_warning.script.tl:208`). The
-  **human-readable reason is in `description`**, which is built from `LineProblem`/`LineIssue` in
+  human-readable reason is in `description`, which is built from `LineProblem`/`LineIssue` in
   `T/line_warning.script.tl:6-160`.
 - **Hook-free alternative:** the static per-type label from the resource:
   `notification_util.getNotificationType2Label()` → `{typeName : label}` (`notification_util.tl:44-57`). It
@@ -826,7 +826,7 @@ end)
 
 ### 5.3 Defining a notification type (`notification` generic resource)
 
-A type is a pair of files with the **same base path**. The resource name `X.res` maps to the type string `X.script`
+A type is a pair of files with the same base path. The resource name `X.res` maps to the type string `X.script`
 by `gsub(".res$", ".script")` (`notification_util.tl:38,52,95`). The GUI module is loaded through
 `util.useFn(type .. "@useDataState")`.
 
@@ -849,7 +849,7 @@ All `data` fields read by code: `guiType` (`notification_util.tl:22,76,92`), `la
 An official mod uses the minimum, `data = { guiType = "Info" }`
 (`urbangames_campaign_mission_05::/mission/tasks/drilling/mission_drilling_notification.res.lua`).
 
-- `simUpdateScript` → `updateData(params, oldSimParams) → simParams` runs in the **game script** at add time
+- `simUpdateScript` → `updateData(params, oldSimParams) → simParams` runs in the game script at add time
   (`notification_util.tl:149-156`) and then every 30 ticks per id (`notifications.script.tl:14,72-80`). Base uses
   it to cache names for when an entity has gone (e.g. `T/vehiclecondition.sim.script.tl:6-28`). The result is
   passed as the 2nd arg to `useDataState`.
@@ -862,7 +862,7 @@ An official mod uses the minimum, `data = { guiType = "Info" }`
 ### 5.4 Ignored-types set at runtime (`updateIgnoredTypes`)
 
 The handler is in `NM/notifications.script.tl:741-764`:
-- It **replaces** `ignored` with `{types = param.ignoredTypes or {}, fully = true}`.
+- It replaces `ignored` with `{types = param.ignoredTypes or {}, fully = true}`.
 - It adds every type of each `param.ignoredGuiTypes` entry.
 - It then sets `fully = param.ignoreFully` if that is given.
 - The state is only written if `param ~= nil`.
@@ -891,11 +891,11 @@ if not ignored.fully then                                      -- base log refus
 end
 ```
 Caveat: `dismissed`/`tracked` are fixed when an entry is created (`notification_util.tl:145-146`). Changing the set
-does **not** re-show entries that already exist. They show only after they expire and come back.
+does not re-show entries that already exist. They show only after they expire and come back.
 Other events of this script: `enlist {id}` (show in popups), `dismiss {id}`, `pause bool`, `initialSound {notificationId}`
 (`notifications.script.tl:733-786`).
 
-### 5.5 Adding NEW persistent notifications from a mod (`updatePersistent`)
+### 5.5 Adding new persistent notifications from a mod (`updatePersistent`)
 
 Handler (`NM/notifications.script.tl:719-725`): `param` is a `PersistentNotifications` (`NM/notifications.d.tl:60-68`):
 ```lua
@@ -908,27 +908,27 @@ Handler (`NM/notifications.script.tl:719-725`): `param` is a `PersistentNotifica
   passOnlyParam = true,  -- true: notification.params = param;  false/nil: params = {entities=..., param=...}
 }
 ```
-- **Diff semantics** (`notification_util.tl:205-258`): for this `type`, every existing persistent entry whose
-  `entities`+params are **not** in the new list is ended (`persisting=nil, dismissed=true, expired=true`). New
-  ones are added. So **send the whole set each time**, and an empty `entitiesAndParam = {}` clears all of them.
+- Diff semantics (`notification_util.tl:205-258`): for this `type`, every existing persistent entry whose
+  `entities`+params are not in the new list is ended (`persisting=nil, dismissed=true, expired=true`). New
+  ones are added. So send the whole set each time, and an empty `entitiesAndParam = {}` clears all of them.
   Base never touches foreign types (`getPersistentHistoryByType` groups by type, `notification_util.tl:341-374`).
 - To end a single one: `removePersistent { type, entities }` (`notifications.script.tl:726-732`, `notification_util.tl:260-278`).
-- With `passOnlyParam=false`, entries also auto-expire when **all** `params.entities` changed revision
+- With `passOnlyParam=false`, entries also auto-expire when all `params.entities` changed revision
   (`notifications.script.tl:94-107`). With `passOnlyParam=true` that check finds no `params.entities`.
 - `add` (one-shot) is ignored while `paused` (missions, `:712-715`). `updatePersistent` has no paused check.
 
 **Who may send it.** Any code that can call `api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Notifications", name, param))`
 (`apidef/api/cmd.d.tl:788`). The event is routed by `id == "Notifications"` to the notification game script,
 which subscribes to `"updatePersistent"` (`notifications.script.tl:22-31`). Verified senders:
-- **Game script** (engine thread): official mod `urbangames_campaign_mission_05::/mission/tasks/drilling/drilling.tl:45-53`
+- Game script (engine thread): official mod `urbangames_campaign_mission_05::/mission/tasks/drilling/drilling.tl:45-53`
   (sends `updatePersistent` with `passOnlyParam = true`) and `:17-23` (`removePersistent`). Base game scripts send `add` the same way
   (`game_mechanics/game_mechanics/company/company.script.tl:111-118`). In `update()` such commands are executed
   immediately (comment `company.script.tl:96`). Do not pass a callback there.
-- **GUI** (react state): the base GUI sends events of the same script with the same command
+- GUI (react state): the base GUI sends events of the same script with the same command
   (`notification_log.tl:468`, `notification_popups.tl:107,287`). So a GUI-only mod can send `updatePersistent` from a
   recipe (e.g. a ModEntryPoint `react.onStepTimer`). Only send when your set changed (compare with `table_util.deepEquals`),
   because every command mutates and saves the state.
-- `game.interface.*` / `sendScriptEvent`: **NOT FOUND** anywhere in TF3 sources or apidef. Use `makeScriptingSendEventCmd`.
+- `game.interface.*` / `sendScriptEvent`: NOT FOUND anywhere in TF3 sources or apidef. Use `makeScriptingSendEventCmd`.
 - Console one-liner from base: `api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Notifications", "add", { title = "A Notification" }))`
   (`notifications.script.tl:11`).
 
@@ -1028,7 +1028,7 @@ General rules:
 - **Respect mission locks** as the base does:
   - `gameCtx.filters:get().protectedEntities[entity]` (truthy means protected; type `{entity : ProtectionConfig|boolean}`, `gui/gui/main/game_context.d.tl:38-58`);
   - `game_react_globals.getDisableFeatures()[feature]`, where the features are `CreateNewLine`, `GameSpeedControl`, `GameSpeedPause`, `HudIconMaster`, `Layers`, `OpenEntityWindow`, `PerkHudIcons` (`gui/gui/main/disable_features.d.tl:3-11`).
-  - Only EOW plugins receive `gameCtx`. `protectedEntities` is set via the `setProtectedEntities` event (`game.tl:156-159`) and **cannot be read without gameCtx**. Mods that act outside an EOW should route through the base events (`duplicateVehicles`, or the vehicle window), which perform these checks themselves.
+  - Only EOW plugins receive `gameCtx`. `protectedEntities` is set via the `setProtectedEntities` event (`game.tl:156-159`) and cannot be read without gameCtx. Mods that act outside an EOW should route through the base events (`duplicateVehicles`, or the vehicle window), which perform these checks themselves.
 
 ### 6.1 Clone a vehicle into its line: event `duplicateVehicles`
 Handler: `LVM/manager_window.tl:8494-8561`, mounted in `ManagerEntryPoint`. Param type `DuplicateVehiclesParam` (`LVM/manager_window.d.tl:131-140`):
@@ -1076,7 +1076,7 @@ else                                                              -- replace
 end
 ```
 - **Surprise:** pass a non-nil `onBuy`; otherwise the clone stays in the depot. The vehicle window passes an empty function for this reason.
-- `vehicle_react_util.onBuy` does **NOT EXIST**. `onBuy` is a callback parameter, and `vehicle_react_util.getLineAndDepot` does not exist either.
+- `vehicle_react_util.onBuy` does NOT EXIST. `onBuy` is a callback parameter, and `vehicle_react_util.getLineAndDepot` does not exist either.
 - `makeVehicleBuyCmd(player, depot, tvc) -> VehicleBuyCommandData{ resultVehicleEntity }` (`cmd.d.tl:892, 425-433`) and `makeVehicleSetLineCmd(vehicle, line, stopIndex0)` (`cmd.d.tl:922`).
 
 ### 6.2 Send to depot (optionally sell on arrival)
@@ -1087,9 +1087,9 @@ api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(vehicleEntity, false), fun
 end)
 ```
 - Signature: `makeVehicleSendToDepotCmd(vehicle, sellOnArrival, jumpToDepotEntity?)` (`apidef/api/cmd.d.tl:910-915`). The command goes to the nearest reachable depot, and the optional third argument teleports the vehicle there.
-- **The base never passes `sellOnArrival = true`**: there are no call sites. Read the flag back via `tv.sellOnArrival`.
+- The base never passes `sellOnArrival = true`: there are no call sites. Read the flag back via `tv.sellOnArrival`.
 - The base enables the button only while `state ~= IN_DEPOT and state ~= GOING_TO_DEPOT` (`vehicle.tl:352-355`).
-- `line_util.sendVehiclesToDepot`, `sendVehiclesToLine` and `sellVehicle` are **not module functions**. They are fields of the LVM-internal `commonParams` record, declared in `line_util.d.tl:551-561` and implemented in `manager_window.tl:7208-7264`, and are unusable from a mod.
+- `line_util.sendVehiclesToDepot`, `sendVehiclesToLine` and `sellVehicle` are not module functions. They are fields of the LVM-internal `commonParams` record, declared in `line_util.d.tl:551-561` and implemented in `manager_window.tl:7208-7264`, and are unusable from a mod.
 
 ### 6.3 Sell
 ```lua
@@ -1104,7 +1104,7 @@ The LVM bulk sell asks for confirmation first, using `addFeedback(text, "Questio
 
 ### 6.4 Replace with another model
 - UI path: `react.fireEvent(nil, "replaceVehicles", VehicleStoreEventParam{ vehicleEntities, carrier, transportModes, filterTags, openedFromEOW, onClose })`. Base call: `EOW/vehicle/vehicle.tl:440-468`, which takes `carrier` and `transportModes` from `line_util.getLineAndVehicleCompatibleTransportModesAndCarrier({v})` and `filterTags` from `vehicle_store_util.getVehicleFilterTags({v})`. The handler is at `LVM/vehicle_store_window.tl:4895-4930` and opens the store in "Replace" mode.
-- **How the base builds the new config.** The base does **not** auto-pick a model; the player chooses in the store. Buy-immediately carriers (no cart) take a single part (`vehicle_store_window.tl:4042-4060`):
+- **How the base builds the new config.** The base does not auto-pick a model; the player chooses in the store. Buy-immediately carriers (no cart) take a single part (`vehicle_store_window.tl:4042-4060`):
   ```lua
   local part = vehicle_util.makePart(modelId, true, color)      -- LVM/vehicle_util.tl:8-29: modelId, reversed=not forward, one LoadConfig(0) per compartment, optional color
   local config = api.type.TransportVehicleConfig.new()
@@ -1127,7 +1127,7 @@ react.fireEvent(nil, "openVehicleManager", { openWithLineEntity = lineEntity })
 --   openWithVehicleEntities = {v...}, sendToLineMode = true   -- "Send to Line" (EOW/vehicle/vehicle.tl:398-404)
 --   openWithDepotEntity = depot                             -- (statistic_depots.tl:35, view_manager.tl:563)
 ```
-The handler (`LVM/manager_window.tl:8447-8490`) resets the selection, closes the vehicle store, and **pushes `ManagerTool` on the tool stack**, which closes other tool windows such as Statistics or Finances. Close it with the `closeVehicleManager` event (`:8491`).
+The handler (`LVM/manager_window.tl:8447-8490`) resets the selection, closes the vehicle store, and pushes `ManagerTool` on the tool stack, which closes other tool windows such as Statistics or Finances. Close it with the `closeVehicleManager` event (`:8491`).
 
 ### 6.6 Open an entity window (stacked): event `selectEntity`
 ```lua
@@ -1188,7 +1188,7 @@ app.saveGame(name, function() log.verbose("Save successful: " .. name) end, isMa
 -- isMapEditorRef holds api.gui.game.isMapEditor() (game.tl:731); a mod can call api.gui.game.isMapEditor() directly
 ```
 - Signature: `app.saveGame(name, callBack, isMapEditor, skipSetName?)` (`apidef/app.d.tl:84-88`).
-- The global `app` is declared in `apidef/api.d.tl:16` and **is accessible in the in-game React state**: `game.tl` itself calls it.
+- The global `app` is declared in `apidef/api.d.tl:16` and is accessible in the in-game React state: `game.tl` itself calls it.
 - `isMapEditor` comes from `api.gui.game.isMapEditor()` (`game.tl:731`).
 - The pause-menu "Save Game" button opens the save page, which calls `app.saveGame(name, cb, isMapEditor, false)` (`gui/gui/menu/save_game_page.tl:189-204`). With `skipSetName = false`, that save becomes the new default name. The pause menu shows the name via `getDefaultSavegameId()` (`main/pause_menu.tl:394`).
 
@@ -1237,7 +1237,7 @@ exact and api.util.formatMinutesSeconds(frequency) or api.util.formatSeconds(fre
 **Translation** (`base/base/mod.lua:158-184`): `_(id)` = `pGetText(nil, id)`; `pGetText(context, id)` (e.g.
 `pGetText("financial", "Assets")`, `account.tl:88`); `nGetText(singular, plural, n)`; `npGetText(context, singular, plural, n)`.
 These are globals (`base/base/init.lua:29-38`). In GUI code they translate immediately when `_getTextNow` is set; in
-`data()` resource files `pGetText` returns the (context-prefixed) **id** for later translation (`mod.lua:163-167`). Passing a table
+`data()` resource files `pGetText` returns the (context-prefixed) id for later translation (`mod.lua:163-167`). Passing a table
 to `_` logs a warning and returns it unchanged. A mod's own strings come from its `strings.lua` (per tf3-modding skill; not in base GUI source).
 
 ---
@@ -1246,10 +1246,10 @@ to `_` logs a warning and returns it unchanged. A mod's own strings come from it
 
 **Root rule.** Every recipe must return a *layout* builtin as root (`BoxLayout`, `FloatingLayout`, …) and put
 plain components (`TextView`, `Button`, `Component`, `DataTable`) inside it.
-- This is **not** enforced in Lua. `react.lua:262-295` only checks *wrapper* recipes (0 or 1 child of the wrapped
+- This is not enforced in Lua. `react.lua:262-295` only checks *wrapper* recipes (0 or 1 child of the wrapped
   builtin). The C++ framework enforces it: a non-layout root logs `Recipe child must be a layout` →
   `ReactFramework::Load() failed`, and the **whole game UI** drops. This was verified in the project spike
-  (`docs/PLAN.md:134-135`, tf3-modding `references/engine.md:152-155`).
+  (`docs/PLAN.md:163`, tf3-modding `references/engine.md:152-155`).
 - Base follows it everywhere: even `LinesStatistic` returns `builtin.FloatingLayout` (`G/statistics/statistic_lines.tl:436`).
   Window wrapper recipes return `builtin.Window` (`RegisterWrapperRecipe`).
 - `builtin.Component{ layout = BoxLayout{…} }` is how a component gets children (`scripts/scripts/builtin.d.tl:760-766`).
@@ -1261,7 +1261,7 @@ Requires (plain Lua mod): `local line_react_util = require "::/gui/line_vehicle_
 ### 8.1 `line_react_util.LineBalance{ entity, stepTimer }`
 - Signature: `LineBalance : Recipe<{entity : Engine.Entity, stepTimer : boolean}>` (`G/line_vehicle_mgmt/line_react_util.d.tl:65-69`).
 - What it shows: `api.util.formatMoney(calculateBalance({line}, now - 1 year, now, true))` with class `positive`/`negative`
-  (`line_react_util.tl:621-640`). It is a rolling **12 months** of maintenance+income, despite the "Last Year" label in the line window.
+  (`line_react_util.tl:621-640`). It is a rolling 12 months of maintenance+income, despite the "Last Year" label in the line window.
 - Cost: `stepTimer=true` → `useStepStateTimer` (0.5 s); `false` → `useStepState` (every step). In lists, use `true`.
 - Base usage (`G/statistics/statistic_lines.tl:232-245`; also `G/line_vehicle_mgmt/manager_window.tl:4007`, `G/entity_window/line/line_eow.script.tl:308`):
 ```lua
@@ -1269,7 +1269,7 @@ return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, chi
   line_react_util.LineBalance{ entity = entity, stepTimer = true },
 }}
 ```
-- Surprise: the statistics **sort value** sums the line's *vehicles* (`calculateBalance(getLineVehicles(line), …)`,
+- Surprise: the statistics sort value sums the line's *vehicles* (`calculateBalance(getLineVehicles(line), …)`,
   `statistic_lines.tl:286-291`), while the displayed cell passes `{line}`. The two may differ.
 - Sibling: `LineTransported{entity, stepTimer}` → `logbook.getLogValuePerYear(entity, "itemsTransported")` (`line_react_util.tl:642-658`).
 
@@ -1291,7 +1291,7 @@ children[#children + 1] = line_react_util.ColorWidget{
 - Implementation (`vehicle_react_util.tl:51-72`): `useStepState` (every step) of
   `vehicle_util.getAvgMaintenanceState(v)` → `getConditionIcon`/`getConditionText`. It renders an icon Button with
   the text as tooltip, and a click fires `selectEntity{stack=false}`. `ConditionTextView` (`:39-49`) is a text link to the vehicle window (tab 1).
-- Base usage: **only commented out** (`G/line_vehicle_mgmt/vehicle_list_react_util.tl:456`). Usage is positional:
+- Base usage: only commented out (`G/line_vehicle_mgmt/vehicle_list_react_util.tl:456`). Usage is positional:
 ```lua
 builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = {
   vehicle_react_util.ConditionIcon(vehicleEntity),
@@ -1352,8 +1352,8 @@ return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, child
   `headerStyleClass`, `weight`, `recipe` (cell recipe receiving `Builtin.TableCellParam {rowKey, colKey, userParam}`, `:1125-1129`),
   `getCompareValue(rowKey) → any` (C++ sort; strings use natural compare unless `forceLexicographicalStringComparison`).
 - `DataTableParam` (`builtin.d.tl:1160-1181`): `columns`, `rowKeys : {integer}`, `preferredInitialSelectionRowKey`,
-  `disableSortKey`, `iaSort`, `compareFn` (**deprecated**, use `getCompareValue`), `userParam` (given only to
-  **newly created** cells, existing cells are not updated), `fnUserFilter(rowKey)`, `initialSortColumn = {colIndex, asc}`,
+  `disableSortKey`, `iaSort`, `compareFn` (deprecated, use `getCompareValue`), `userParam` (given only to
+  newly created cells, existing cells are not updated), `fnUserFilter(rowKey)`, `initialSortColumn = {colIndex, asc}`,
   `onSortColumnChange`, `scrollPolicyHorizontal/Vertical`, `keyboardNavigation`. `columnWeights` has been removed.
   API: `scrollToRowKey(rowKey, forceTopAlign)` (`:1155-1158`).
 - Base, condensed from `G/statistics/statistic_lines.tl:200-218, 376-457`:
@@ -1473,7 +1473,7 @@ return builtin.BoxLayout{ children = {
 ```
 
 ### 8.12 Polling hooks used by all of the above (`G/main/engine_react_util.d.tl:3-49`)
-- `useStepState(get, makeCommand?, equals?, onChange?, once?)` → `(state, commit)`: re-evaluates **every step**.
+- `useStepState(get, makeCommand?, equals?, onChange?, once?)` → `(state, commit)`: re-evaluates every step.
   `commit(value[, cmd, cb])` sends the command and keeps an optimistic local value.
 - `useStepStateTimer(get, interval = 0.5 s, equals = deepEquals)` → `state` (`engine_react_util.tl:126-152`, via `react.onStepTimer`).
 - `useStepStateTimerWithCommit(get, interval, makeCommand, …)`: the notification ridge uses it (`NM/gui/notification_popups.tl:277`).
