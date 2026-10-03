@@ -103,7 +103,9 @@ local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 	end, REFRESH)
 	return horizontal{
 		builtin.DataTable{
-			meta = { class = "line-vehicles-table", id = "uio.card.line.stops" },
+			-- The id must be unique: with side-by-side windows two line windows can be open, and a
+			-- duplicate id is a React error ("stolen component id", observed in-game).
+			meta = { class = "line-vehicles-table", id = "uio.card.line.stops." .. tostring(line) },
 			columns = {
 				builtin.ColumnDesc{ name = _("Station"), recipe = UioStopCell, weight = 1,
 					getCompareValue = function(index) return index end },

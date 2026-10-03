@@ -29,6 +29,17 @@ local function busiest_line()
 	return best, best_count
 end
 
+local function stops_card(line)
+	return line and visible("uio.card.line.stops." .. tostring(line))
+end
+
+--- Any player line other than `line`.
+local function other_line(line)
+	for _i, candidate in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		if candidate ~= line then return candidate end
+	end
+end
+
 local function oldest_vehicle(line)
 	local best, best_time
 	for _i, vehicle in ipairs(line_vehicles(line)) do
@@ -195,7 +206,7 @@ local checks = {
 		shot = "line_window",
 		check = function(ctx)
 			if not ctx.card_line then return true, "skipped: no line" end
-			return visible("uio.card.line.stops"), "line card visible=" .. tostring(visible("uio.card.line.stops"))
+			return stops_card(ctx.card_line), "line card visible=" .. tostring(stops_card(ctx.card_line))
 		end,
 	},
 	{
@@ -207,8 +218,24 @@ local checks = {
 		shot = "line_window_and_line_manager",
 		check = function(ctx)
 			if not ctx.card_line then return true, "skipped: no line" end
-			local line_window, lvm = visible("uio.card.line.stops"), visible("menu.management")
+			local line_window, lvm = stops_card(ctx.card_line), visible("menu.management")
 			return line_window and lvm, string.format("line window=%s line manager=%s", tostring(line_window), tostring(lvm))
+		end,
+	},
+	{
+		-- Two line windows side by side: each Stops card needs its own id (run.sh fails on React errors).
+		name = "two_line_windows",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeVehicleManager", nil)
+			ctx.second_line = other_line(ctx.card_line)
+			if ctx.second_line then api.gui.fireReactEvent("selectEntity", { entity = ctx.second_line, stack = true }) end
+		end,
+		wait = 90,
+		shot = "two_line_windows",
+		check = function(ctx)
+			if not ctx.second_line then return true, "skipped: only one line" end
+			local first, second = stops_card(ctx.card_line), stops_card(ctx.second_line)
+			return first and second, string.format("first=%s second=%s", tostring(first), tostring(second))
 		end,
 	},
 	{

@@ -133,8 +133,9 @@ echo "--- testbench output ---"
 grep -a "\[testbench\]\|\[$mod\]" "$saved" | sed 's/^\[[^]]*\]  //' || true
 echo "--- engine errors ---"
 # "Script component root failed": a recipe broke the GUI tree and the engine dropped the whole game UI.
-gui_failures=$(grep -ac "ReactFramework::Load() failed\|Script component root failed" "$saved" || true)
-grep -a -A6 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error\|ReactFramework::Load() failed" \
+# "React: ..." errors (e.g. a duplicate component id) leave the UI running but in a broken state.
+gui_failures=$(grep -ac "ReactFramework::Load() failed\|Script component root failed\|\] *+\? *React: " "$saved" || true)
+grep -a -A6 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error\|ReactFramework::Load() failed\|React: " \
 	"$saved" | cut -c1-300 | head -60 || true
 
 passed=$(grep -ac "\[testbench\] PASS" "$saved" || true)
