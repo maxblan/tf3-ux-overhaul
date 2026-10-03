@@ -65,6 +65,16 @@ ProbeWindow = react.RegisterWrapperRecipe("UioProbeWindow", builtin.Window, func
 	}
 end)
 
+-- Opens the "Select Terminals" popover the way a stop row does (a check cannot click that button). The
+-- stand-in recipe has the base recipe's name, so the mod's wrapper swaps it for the terminal usage buttons;
+-- if the hook is missing, the stand-in renders and the check fails.
+local popover_react_util = require("::/gui/main/popover_react_util.tl")
+local line_util = require("::/gui/line_vehicle_mgmt/line_util.tl")
+
+local FakeTerminalSelection = react.RegisterRecipe("TerminalSelection", function()
+	return builtin.BoxLayout{ children = { builtin.TextView{ text = "base terminal selection (hook missing)" } } }
+end)
+
 probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	react.onEvent("uio.probe", function(_e, variant)
 		debugPrint("[testbench] probe variant ", variant)
@@ -74,6 +84,39 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			windows.addSingletonWindow(ProbeWindow, { variant = variant })
 			api.gui.byId.setVisible("probe.window", true)
 		end
+	end)
+
+	react.onEvent("uio.debug.terminals", function(_e, line)
+		local windows = game_react_globals.getDefaultWindowApi()
+		windows.removeAllWindows(popover_react_util.PopoverWindow)
+		if not line then return end
+		local path = line_util.getReactLineFromGameState(line).path
+		local function logged(name)
+			return function(...) debugPrint("[testbench] terminals ", name, " ", table.concat({ ... }, ",")) end
+		end
+		windows.addWindow(popover_react_util.PopoverWindow, "uio-test-terminals", {
+			onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
+			x = 700, y = 300,
+			windowTitle = "Select Terminals",
+			windowClass = "select-terminal, management",
+			recipe = FakeTerminalSelection,
+			params = {
+				commonParams = {
+					iconPaths = {
+						problemAlert = "::/gui/statistics/icons/alert.tga",
+						problemArrow = "::/gui/line_vehicle_mgmt/icons/special_arrow_down.tga",
+					},
+					changeMainTerminal = logged("main"),
+					selectAlternativeTerminal = logged("alternative"),
+				},
+				viaState = { old = function() return path end },
+				lineEntity = line,
+				stopNumber = 1, -- path index of the first stop
+				stopIndex = 0,  -- API stop index (0-based)
+				stopCount = #path,
+				index2problems = {},
+			},
+		})
 	end)
 	return builtin.BoxLayout{}
 end)

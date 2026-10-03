@@ -40,6 +40,67 @@ local function other_line(line)
 	end
 end
 
+--- Composition key of a vehicle, as lvm_models.model_key builds it.
+local function model_key(vehicle)
+	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+	if not tv then return nil end
+	local counts, order = {}, {}
+	for _i, part in ipairs(tv.transportVehicleConfig.vehicles) do
+		local id = part.part.modelId
+		if not counts[id] then order[#order + 1] = id end
+		counts[id] = (counts[id] or 0) + 1
+	end
+	table.sort(order)
+	local parts = {}
+	for i, id in ipairs(order) do parts[i] = id .. "x" .. counts[id] end
+	return table.concat(parts, ",")
+end
+
+--- A player line whose list shows the model row: two or more models on the line, or a model that
+-- another line uses too. Returns the line and a description, or nil.
+local function model_row_line()
+	local lines = api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
+	local key_lines = {} -- key -> number of lines using it
+	local line_keys = {}
+	for _i, line in ipairs(lines) do
+		local keys, count = {}, 0
+		for _j, v in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
+			local key = model_key(v)
+			if key and not keys[key] then keys[key] = true count = count + 1 end
+		end
+		line_keys[line] = { keys = keys, count = count }
+		for key in pairs(keys) do key_lines[key] = (key_lines[key] or 0) + 1 end
+	end
+	for _i, line in ipairs(lines) do
+		if line_keys[line].count >= 2 then return line, "models=" .. line_keys[line].count end
+	end
+	for _i, line in ipairs(lines) do
+		for key in pairs(line_keys[line].keys) do
+			if key_lines[key] >= 2 then return line, "model shared with another line" end
+		end
+	end
+	return nil
+end
+
+--- A player line with one model that no other line uses (the row stays hidden), or nil.
+local function single_model_line()
+	local lines = api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
+	local key_lines, line_key = {}, {}
+	for _i, line in ipairs(lines) do
+		local keys, count, last = {}, 0, nil
+		for _j, v in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
+			local key = model_key(v)
+			if key and not keys[key] then keys[key] = true count = count + 1 last = key end
+		end
+		if count == 1 then line_key[line] = last end
+		for key in pairs(keys) do key_lines[key] = (key_lines[key] or 0) + 1 end
+	end
+	for _i, line in ipairs(lines) do
+		if line_key[line] and key_lines[line_key[line]] == 1 then return line end
+	end
+	return nil
+end
+
 local function oldest_vehicle(line)
 	local best, best_time
 	for _i, vehicle in ipairs(line_vehicles(line)) do
@@ -284,6 +345,145 @@ local checks = {
 		end,
 		wait = 30,
 		check = function() return true, "see the bulldozer warning log line" end,
+	},
+	{
+		name = "line_manager_cargo_icons",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.cargo_line = busiest_line()
+			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.cargo_line })
+		end,
+		wait = 180, -- row info refreshes every 2 s
+		shot = "line_manager_cargo_icons",
+		check = function(ctx)
+			if not ctx.cargo_line then return true, "skipped: no line" end
+			local cargo_util = require("::/gui/main/cargo_util.tl")
+			local ids = cargo_util.getSortedProducedCargoTypes(
+				{ lineEntity = ctx.cargo_line, getTendency = true, showEmpty = true }, "CAPACITY", true, nil, true)
+			local column = visible("uio.lvm.cargo." .. tostring(ctx.cargo_line))
+			return column and #ids > 0, string.format("line %d cargo types=%d column visible=%s",
+				ctx.cargo_line, #ids, tostring(column))
+		end,
+	},
+	{
+		name = "lvm_models_row",
+		act = function(ctx)
+			api.gui.fireReactEvent("clearToolStack", nil)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.models_line, ctx.models_why = model_row_line()
+			if ctx.models_line then
+				api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.models_line })
+			end
+		end,
+		wait = 120,
+		shot = "line_manager_models",
+		check = function(ctx)
+			if not ctx.models_line then return true, "skipped: no line with two models or a shared model" end
+			local row = api.gui.byId.isVisibleRecursive("uio.lvm.models")
+			return row, string.format("line %d (%s) model row visible=%s", ctx.models_line, ctx.models_why, tostring(row))
+		end,
+	},
+	{
+		-- clicking the first model button: exactly that model's vehicles end up selected
+		name = "lvm_models_select",
+		act = function(ctx)
+			if ctx.models_line then api.gui.fireReactEvent("uio.debug.lvm_models", { action = "select", index = 1 }) end
+		end,
+		wait = 30,
+		shot = "line_manager_models_selected",
+		check = function(ctx)
+			if not ctx.models_line then return true, "skipped: no model row" end
+			return api.gui.byId.isVisibleRecursive("menu.management"),
+				"see '[ui_overhaul] lvm models: select ... ok' (MISMATCH = wrong selection)"
+		end,
+	},
+	{
+		-- "In all lines": the model's vehicles from every line join the list, selected
+		name = "lvm_models_pull",
+		act = function(ctx)
+			if ctx.models_line then api.gui.fireReactEvent("uio.debug.lvm_models", { action = "pull", index = 1 }) end
+		end,
+		wait = 60,
+		shot = "line_manager_models_all_lines",
+		check = function(ctx)
+			if not ctx.models_line then return true, "skipped: no model row" end
+			return api.gui.byId.isVisibleRecursive("menu.management"),
+				"see '[ui_overhaul] lvm models: pull ... ok' (MISMATCH = wrong selection)"
+		end,
+	},
+	{
+		name = "lvm_models_hidden_for_one_model",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeVehicleManager", nil)
+			ctx.single_line = single_model_line()
+		end,
+		wait = 30,
+		check = function(ctx)
+			if not ctx.single_line then return true, "skipped: no line with a model of its own" end
+			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.single_line })
+			return true, "opened line " .. tostring(ctx.single_line)
+		end,
+	},
+	{
+		name = "lvm_models_hidden_shot",
+		wait = 120,
+		shot = "line_manager_one_model",
+		check = function(ctx)
+			if not ctx.single_line then return true, "skipped: no line with a model of its own" end
+			local row = api.gui.byId.isVisibleRecursive("uio.lvm.models")
+			return not row, "model row visible=" .. tostring(row) .. " (expect false)"
+		end,
+	},
+	{
+		name = "terminal_usage_buttons",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.terminal_line = busiest_line()
+			if ctx.terminal_line then api.gui.fireReactEvent("uio.debug.terminals", ctx.terminal_line) end
+		end,
+		wait = 90,
+		shot = "terminal_popover",
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			local shown = visible("uio.terminals.usage.1")
+			return shown, "usage buttons of terminal 1 visible=" .. tostring(shown)
+		end,
+	},
+	{
+		name = "terminal_popover_closes",
+		act = function() api.gui.fireReactEvent("uio.debug.terminals", nil) end,
+		wait = 30,
+		check = function()
+			local shown = visible("uio.terminals.usage.1")
+			return not shown, "popover closed=" .. tostring(not shown)
+		end,
+	},
+	-- Notification ridge grouping (gui/notifications.lua). The ridge's module lives in the GUI's Lua
+	-- state and cannot be loaded here (its recipes would register twice), so the check groups a fresh
+	-- read of the game's notifications with the same core module and logs the expected numbers; compare
+	-- them with the ridge's own "[ui_overhaul] notification ridge: ..." lines. run.sh fails the run if
+	-- the ridge fell back to the base one.
+	{
+		name = "notification_ridge_groups",
+		wait = 60,
+		shot = "notification_ridge",
+		check = function()
+			local groups = require("ui_overhaul_1::/ui_overhaul/core/notification_groups.lua")
+			local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
+			local native = notification_util.externalGetNotificationsStateNative()
+			if not native then return true, "skipped: no notification state" end
+			local entries = native:find("notifications")
+			local items = {}
+			for _i, id in ipairs(notification_util.getHistoryFromNative(native)) do
+				local native_entry = entries:find(id)
+				if native_entry ~= nil and not native_entry:find("dismissed") then
+					local entry = notification_util.getNotificationEntryFromNative(native, id)
+					items[#items + 1] = { id = id, timestamp = entry.timestamp, notification = entry.notification }
+				end
+			end
+			return true, string.format("game: %d notifications in %d groups (compare the ridge's log line)",
+				#items, #groups.build(items))
+		end,
 	},
 	{
 		name = "construction_rail_menu",

@@ -9,6 +9,9 @@
 --     double the whole fleet without asking
 --   * reopening the Line Manager without a target (game bar button, hotkey) selects the line that
 --     was selected when it was closed, instead of starting empty
+--   * a row of the list's vehicle models above the vehicle list, and Shift+click on a vehicle row
+--     to select its model (lvm_models.lua); a new line started from vehicles of two or more lines
+--     starts empty, like one started with several lines selected
 -- The confirmation wraps react.fireEvent for "duplicateVehicles" (installed before the UI starts,
 -- see lvm_tweaks.script.lua); the memory uses the tool stack's pop hook (tool_stack.lua) and the
 -- entry point's per-frame step (entry.lua).
@@ -19,6 +22,7 @@ local lang_util = require("::/scripts/lang_util.tl")
 local vehicle_list_react_util = require("::/gui/line_vehicle_mgmt/vehicle_list_react_util.tl")
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
 local tool_stack = require("/ui_overhaul/gui/tool_stack.lua")
+local lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
 
 local lvm_tweaks = {}
 
@@ -66,12 +70,18 @@ local function selected_line_count(common)
 	return state and state.lineListEntitiesSelected and #state.lineListEntitiesSelected or 0
 end
 
+local function vehicles_from_several_lines(vehicles)
+	local ok, count = pcall(lvm_models.line_count, vehicles, 2)
+	return ok and count >= 2
+end
+
 local function wrap_new_line(common)
 	local original = common.newLine
 	if type(original) ~= "function" or wrapped_new_line[original] then return end
 	local wrapper = function(station, vehicles, ...)
-		if vehicles and #vehicles > 0 and selected_line_count(common) >= 2 then
-			vehicles = {} -- the vehicles were selected by selecting lines, not deliberately
+		if vehicles and #vehicles > 0
+			and (selected_line_count(common) >= 2 or vehicles_from_several_lines(vehicles)) then
+			vehicles = {} -- selected by selecting lines or a model across lines, not one line's vehicles
 		end
 		return original(station, vehicles, ...)
 	end
@@ -79,7 +89,54 @@ local function wrap_new_line(common)
 	common.newLine = wrapper
 end
 
+-- Shift+click on a vehicle row selects its model. The rows' cells keep the userParam of the render
+-- that created them (DataTable), so the click handler is one stable function reading the latest
+-- parameters (lvm_models.live). The check box calls the manager's selectVehicles directly, so that
+-- is wrapped too (also reached from the map and the HUD).
+local function shift_select(entities)
+	return #entities == 1 and lvm_models.shift_held() and lvm_models.select_same_model(entities[1])
+end
+
+local function on_click_select_vehicle(entity, ...)
+	local ok, done = pcall(shift_select, { entity })
+	if ok and done then return end
+	if not ok then debugPrint("[ui_overhaul] Shift+click model selection failed: ", tostring(done)) end
+	local params = lvm_models.live.params
+	if params and type(params.onClickSelectVehicle) == "function" then return params.onClickSelectVehicle(entity, ...) end
+end
+
+local wrapped_select = setmetatable({}, { __mode = "k" }) -- selectVehicles wrappers we created
+
+local function wrap_select_vehicles(params)
+	local manager = params.managerRef and params.managerRef:get()
+	local vm_api = manager and manager:getApi()
+	local original = type(vm_api) == "table" and vm_api.selectVehicles
+	if type(original) ~= "function" or wrapped_select[original] then return end
+	local wrapper = function(entities, selected, ...)
+		local ok, done = pcall(shift_select, entities or {})
+		if ok and done then return end
+		return original(entities, selected, ...)
+	end
+	wrapped_select[wrapper] = true
+	vm_api.selectVehicles = wrapper
+end
+
+--- The list's parameters with the stable click handler and a local key that keeps the list's
+-- identity while the model row comes and goes.
+local function list_params(params)
+	local copy = {}
+	for k, v in pairs(params) do copy[k] = v end
+	copy.onClickSelectVehicle = on_click_select_vehicle
+	copy.meta = { localKey = "uio-lvm-list" }
+	return copy
+end
+
 local VehicleList = react.RegisterRecipe("VehicleList", function(params)
+	react.onEvent("uio.debug.lvm_models", function(_e, param)
+		local ok, err = pcall(lvm_models.debug, param)
+		if not ok then debugPrint("[ui_overhaul] lvm models debug failed: ", tostring(err)) end
+	end)
+	local row, original_params = nil, params
 	local ok, err = pcall(function()
 		if params and params.commonParams then
 			current = params.commonParams
@@ -87,7 +144,16 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 		end
 	end)
 	if not ok then debugPrint("[ui_overhaul] Line Manager params not captured: ", tostring(err)) end
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(vehicle_list_react_util.VehicleList, params) } }
+	ok, err = pcall(function()
+		if not (params and params.commonParams and params.commonParams.vehicleManagerStateRef) then return end
+		original_params = list_params(params)
+		pcall(wrap_select_vehicles, params)
+		row = lvm_models.update(params)
+	end)
+	if not ok then debugPrint("[ui_overhaul] Line Manager models failed: ", tostring(err)) end
+	local list = react.CallOriginalRecipe(vehicle_list_react_util.VehicleList, original_params)
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical,
+		children = row and { row, list } or { list } }
 end)
 
 -- Replace confirmation ----------------------------------------------------------------------------

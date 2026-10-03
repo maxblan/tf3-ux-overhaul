@@ -6,10 +6,12 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 
 ### Line Manager
 
-- Line rows show the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
+- Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
+- A row above the vehicle list shows each vehicle model in it with its count. Clicking a model selects exactly those vehicles; *In all lines* adds that model's vehicles from every line, so one Replace, Sell or Send to Depot reaches all of them. Shift+click on a vehicle selects all listed vehicles of its model.
+- In *Select Terminals*, each terminal has three buttons (Don't Use, Alternative, Preferred) instead of a drop-down list, so a change takes one click.
 - Reopening the Line Manager selects the line you had selected before.
 - Cloning or replacing more than one vehicle asks first, in the Line Manager's own prompt.
-- With two or more lines ticked, clicking a station creates the new line without moving all their vehicles onto it.
+- With two or more lines ticked, or vehicles from several lines selected, clicking a station creates the new line without moving those vehicles onto it.
 
 ### Line window
 
@@ -46,6 +48,10 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - *Configure* on a station opens the Tracks, Platforms, Road Access or Building tab instead of Decoration.
 - The bulldozer's tooltip warns before it removes a station that lines stop at.
 
+### Notifications
+
+- Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
+
 ### Game bar and vehicle store
 
 - The Earnings tooltip also shows the cash flow of the last 30 days and of the 30 days before.
@@ -55,7 +61,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
 - It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list and row icons, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the window stack and the entity windows' action bar. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list and row icons, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar. It also wraps the popover window content to swap in the terminal buttons, which works together with Auto Assign Terminals. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
 - English and German.
 
 ## Development

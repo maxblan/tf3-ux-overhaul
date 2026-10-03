@@ -135,6 +135,8 @@ echo "--- engine errors ---"
 # "Script component root failed": a recipe broke the GUI tree and the engine dropped the whole game UI.
 # "React: ..." errors (e.g. a duplicate component id) leave the UI running but in a broken state.
 gui_failures=$(grep -ac "ReactFramework::Load() failed\|Script component root failed\|\] *+\? *React: " "$saved" || true)
+# A mod module that failed and fell back to vanilla logs "[ui_overhaul] disabled ..." or "... failed".
+mod_failures=$(grep -ac "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" || true)
 grep -a -A6 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error\|ReactFramework::Load() failed\|React: " \
 	"$saved" | cut -c1-300 | head -60 || true
 
@@ -147,4 +149,5 @@ if [ "$outcome" = "crash" ]; then
 	grep -a -B12 "MinidumpCallback\|Calling HandleCrash" "$saved" | cut -c1-200 | head -14 || true
 fi
 [ "$gui_failures" -eq 0 ] || echo "GUI failed to load ($gui_failures times), see engine errors above"
-[ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ] && [ "$gui_failures" -eq 0 ]
+[ "$mod_failures" -eq 0 ] || { echo "mod modules fell back to vanilla ($mod_failures lines):"; grep -a "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" | cut -c1-300 | head; }
+[ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ] && [ "$gui_failures" -eq 0 ] && [ "$mod_failures" -eq 0 ]
