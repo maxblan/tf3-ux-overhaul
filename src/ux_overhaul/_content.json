@@ -12,6 +12,9 @@
         "ux_overhaul/gui/cards.lua",
         "ux_overhaul/gui/cards.script.lua",
         "ux_overhaul/gui/cleanup.lua",
+        "ux_overhaul/gui/earnings.lua",
+        "ux_overhaul/gui/earnings.res.lua",
+        "ux_overhaul/gui/earnings.script.lua",
         "ux_overhaul/gui/entry.lua",
         "ux_overhaul/gui/entry.res.lua",
         "ux_overhaul/gui/entry.script.lua",
@@ -23,6 +26,10 @@
         "ux_overhaul/gui/lvm_rows.lua",
         "ux_overhaul/gui/lvm_rows.res.lua",
         "ux_overhaul/gui/lvm_rows.script.lua",
+        "ux_overhaul/gui/statistics_lines.css.lua",
+        "ux_overhaul/gui/statistics_lines.lua",
+        "ux_overhaul/gui/statistics_lines.res.lua",
+        "ux_overhaul/gui/statistics_lines.script.lua",
         "ux_overhaul/gui/ui.lua",
         "ux_overhaul/logger.lua"
     ]

@@ -3,7 +3,7 @@ std = "lua52"
 
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
-read_globals = { "api", "app", "debugPrint", "_" }
+read_globals = { "api", "app", "debugPrint", "_", "pGetText" }
 -- Variables named with a leading underscore are intentionally unused.
 ignore = { "21./_.*" }
 
@@ -23,3 +23,5 @@ files["tools/lua/busted.lua"] = { globals = { "describe", "it", "before_each", "
 files["tools/lua/lint.lua"] = { read_globals = { "read_file" } }
 
 max_line_length = 120
+-- Lua conversion of a base game file; keeps the base layout to ease diffing after game updates.
+files["src/ux_overhaul/content/ux_overhaul/gui/statistics_lines.lua"] = { max_line_length = 140 }

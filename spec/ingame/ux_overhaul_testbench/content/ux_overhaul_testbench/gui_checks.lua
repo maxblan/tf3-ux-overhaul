@@ -53,15 +53,25 @@ local checks = {
 		end,
 	},
 	{
-		name = "reference_statistics_lines",
+		name = "statistics_lines_tab",
 		act = function() api.gui.fireReactEvent("openStatisticsWindow", "Line") end,
 		wait = 90,
 		shot = "statistics_lines",
-		check = function() return true, "reference screenshot" end,
+		check = function()
+			return visible("uxo.statistics.totals"), "totals visible=" .. tostring(visible("uxo.statistics.totals"))
+		end,
+	},
+	{
+		name = "statistics_quick_filter_losing",
+		act = function() api.gui.fireReactEvent("uxo.statistics.filter", "losing") end,
+		wait = 90,
+		shot = "statistics_lines_losing",
+		check = function() return visible("uxo.statistics.totals"), "filtered table shown" end,
 	},
 	{
 		name = "reference_line_manager",
 		act = function(ctx)
+			api.gui.fireReactEvent("uxo.statistics.filter", "all")
 			api.gui.fireReactEvent("closeStatisticsWindow", nil)
 			ctx.card_line = busiest_line()
 			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line })
