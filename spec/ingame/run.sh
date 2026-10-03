@@ -83,6 +83,7 @@ watch_shots() {
 			while [ "$taken" -lt "${#names[@]}" ]; do
 				mkdir -p "$shots_dir"
 				capture_screen "$(wslpath -w "$shots_dir")\\${names[$taken]}.png"
+				echo "$(date +%H:%M:%S) captured ${names[$taken]}" >> "$shots_dir/captures.txt"
 				taken=$((taken + 1))
 			done
 		fi

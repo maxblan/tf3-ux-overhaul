@@ -98,6 +98,13 @@ local checks = {
 		end,
 	},
 	{
+		name = "statistics_quick_filter_problems",
+		act = function() api.gui.fireReactEvent("uxo.statistics.filter", "problems") end,
+		wait = 90,
+		shot = "statistics_lines_problems",
+		check = function() return visible("uxo.statistics.totals"), "filtered table shown" end,
+	},
+	{
 		name = "line_manager_remembers_line",
 		act = function()
 			api.gui.fireReactEvent("closeStatisticsWindow", nil)
@@ -181,8 +188,48 @@ local checks = {
 		check = function() return true, "reference screenshot" end,
 	},
 	{
+		name = "construction_rail_menu",
+		act = function()
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			api.gui.fireReactEvent("constructionMenuSetTab", { tabIndex = 2 })
+		end,
+		wait = 90,
+		shot = "construction_rail",
+		check = function() return true, "screenshot" end,
+	},
+	{
+		name = "construction_tracks_menu",
+		act = function()
+			api.gui.fireReactEvent("clearToolStack", nil)
+			api.gui.fireReactEvent("constructionMenuSetTab", { tabIndex = 17 })
+		end,
+		wait = 90,
+		shot = "construction_tracks",
+		check = function() return true, "screenshot" end,
+	},
+	{
+		name = "configure_opens_module_tab",
+		act = function(ctx)
+			api.gui.fireReactEvent("clearToolStack", nil)
+			local component = ctx.card_station
+				and api.engine.getComponent(ctx.card_station, api.type.ComponentType.STATION_GROUP)
+			local station = component and component.stations[1]
+			local construction = station and api.engine.system.streetConnectorSystem.getConstructionEntityForStation(station)
+			ctx.configure = construction
+			-- what the station window's "Configure" button does (entity_window_util.makeConfigureOnClickFunction)
+			if construction and construction >= 0 then
+				api.gui.fireReactEvent("setModuleBuilderEntity", construction)
+				api.gui.fireReactEvent("constructionMenuSetTab", { tabIndex = 9, allowStacking = true })
+			end
+		end,
+		wait = 120,
+		shot = "configure_modules",
+		check = function(ctx) return true, "construction=" .. tostring(ctx.configure) end,
+	},
+	{
 		name = "action_add_vehicle",
 		act = function(ctx)
+			api.gui.fireReactEvent("clearToolStack", nil)
 			api.gui.fireReactEvent("closeAllWindows", nil)
 			ctx.line, ctx.before = busiest_line()
 			if ctx.line then api.gui.fireReactEvent("uxo.action", { name = "add_vehicle", entity = ctx.line }) end

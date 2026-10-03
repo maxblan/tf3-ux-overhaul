@@ -179,13 +179,31 @@ end
 
 -- Quick filters and totals ------------------------------------------------------------------------
 
+-- getProblemsCompareValue returns { count, ids } (statistics_react_util.tl)
 local function hasProblems(notificationsState, lineEntity)
 	local value = statistics_react_util.getProblemsCompareValue(notificationsState or {}, lineEntity)
+	if type(value) == "table" then return (value[1] or 0) > 0 end
 	return type(value) == "number" and value > 0
 end
 
+-- Balances for the "Losing money" filter, refreshed at most once a second instead of every frame.
+local balance_cache = { time = -1, values = {} }
+
+local function cached_balance(lineEntity)
+	local gameTime = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
+	if gameTime - balance_cache.time > 1000 or gameTime < balance_cache.time then
+		balance_cache.time, balance_cache.values = gameTime, {}
+	end
+	local value = balance_cache.values[lineEntity]
+	if value == nil then
+		value = line_balance(lineEntity)
+		balance_cache.values[lineEntity] = value
+	end
+	return value
+end
+
 local function passesQuickFilter(filter, notificationsState, lineEntity)
-	if filter == "losing" then return line_balance(lineEntity) < 0 end
+	if filter == "losing" then return cached_balance(lineEntity) < 0 end
 	if filter == "problems" then return hasProblems(notificationsState, lineEntity) end
 	if filter == "empty" then return #api.engine.system.transportVehicleSystem.getLineVehicles(lineEntity) == 0 end
 	return true

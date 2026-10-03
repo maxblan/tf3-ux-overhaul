@@ -8,6 +8,7 @@ local store = require("/ux_overhaul/engine/store.lua")
 local actions = require("/ux_overhaul/gui/actions.lua")
 local cleanup = require("/ux_overhaul/gui/cleanup.lua")
 local lvm_tweaks = require("/ux_overhaul/gui/lvm_tweaks.lua")
+local defer = require("/ux_overhaul/gui/defer.lua")
 local ui = require("/ux_overhaul/gui/ui.lua")
 
 local entry = {}
@@ -27,6 +28,7 @@ function entry.render()
 	react.onStep(function()
 		cleanup.step()
 		lvm_tweaks.step()
+		defer.step()
 	end)
 	return ui.row({})
 end

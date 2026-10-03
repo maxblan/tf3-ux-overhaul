@@ -108,7 +108,7 @@ local function gui_step(g, engine_done)
 			log("SHOT", check.shot)
 			g.phase = "shot_wait"
 		end
-	elseif g.phase == "shot_wait" and g.frames >= 150 then
+	elseif g.phase == "shot_wait" and g.frames >= 400 then
 		g.phase, g.frames = "next", 0
 	elseif g.phase == "finished" and engine_done then
 		log("DONE")
