@@ -1,15 +1,10 @@
 --- Sliders on the gameplay screens:
---   * the mouse wheel moves a slider under the cursor: to the next snap point, or one step while
---     the game's precision key is held
---   * snap points every few percent of the range (core/slider_snap.lua), drawn as ticks; a dragged
---     slider sticks to one when it comes close, and the precision key turns that off
+--   * the mouse wheel moves a slider under the cursor one step (core/slider_values.lua)
 --   * a value can be typed: double-click a slider, or click the value next to a construction
 --     slider (a number spin box, as the Line Manager's wait times have)
 -- Construction sliders (and all other script parameters) move through a list of values, which their
 -- label shows (height "2.5 m", incline "3 %"); a typed value picks the entry whose label is nearest,
--- so it is always one the game offers. Evenly spaced lists (incline in 1 % steps, bend in 0.05
--- steps) get snap points every few positions, anchored at the neutral value (0 % incline, no bend),
--- drawn as ticks; the wheel moves from one to the next.
+-- so it is always one the game offers.
 --
 -- Two hooks, both installed before the UI starts (sliders.script.lua):
 --   * the module field builtin.Slider is wrapped: base recipes look it up when they render, so every
@@ -25,8 +20,9 @@ local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
 local script_param_util = require("::/gui/main/script_param_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
-local slider_snap = require("/ui_overhaul/core/slider_snap.lua")
+local slider_values = require("/ui_overhaul/core/slider_values.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 local sliders = {}
 
@@ -62,15 +58,7 @@ local sliders = {}
 ---@type table<string, boolean>
 local VANILLA_IN = { SettingsPage = true }
 
----@type table<string, boolean>
-local reported = {}
----@param key string
----@param err any the pcall error, any value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] sliders: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("sliders: ")
 
 ---@return boolean
 local function precise()
@@ -84,22 +72,9 @@ local function wheel_dir(evt)
 	return evt.yrel > 0 and 1 or -1
 end
 
----@generic T: table
----@param t T
----@return T
-local function copy(t)
-	-- keys and values of any type are copied as they are
-	---@type table<any, any>, table<any, any>
-	local result, source = {}, t
-	for k, v in pairs(source) do result[k] = v end
-	return result
-end
+local copy = guard.shallow_copy
 
----@return number?
-local function clock()
-	local ok, t = pcall(os.clock)
-	return ok and t or nil
-end
+local clock = guard.clock
 
 -- The wheel moves a slider only when the player is pointing at it: the mouse moved over it in the
 -- last moments, or the wheel already turned it just before. A panel that scrolls a slider under a
@@ -128,31 +103,6 @@ local function use_wheel_intent()
 	return intent
 end
 
--- After a drag that ended next to a snap point, the base slider's thumb rests where the mouse let go
--- while the value is the snap point (its value did not change, so nothing re-rendered it). The
--- slider is then mounted anew on release, which puts the thumb on the value.
----@return uo.sliders.ThumbSync
-local function use_thumb_sync()
-	local key = react.useState(0)
-	local pending = react.useRef(false)
-	---@class uo.sliders.ThumbSync
-	local sync = {}
-	-- a dragged value `raw` was set to `snapped`
-	---@param raw number
-	---@param snapped number
-	function sync.after(raw, snapped) pending:set(raw ~= snapped) end
-	function sync.released()
-		if pending:get() then
-			pending:set(false)
-			key:set(key:old() + 1)
-		end
-	end
-	-- the slider's localKey
-	---@return string
-	function sync.key() return "uio-slider-" .. tostring(key:old()) end
-	return sync
-end
-
 -- The base Slider (set by install), and the wrapper that replaces it.
 ---@type fun(p: uo.sliders.SliderParam, ...: any): react.TreeNodeId
 local base_slider
@@ -170,20 +120,18 @@ local function render_slider(params)
 	local own = react.useState(p.initialValue or p.value or p.min or 0)
 	local editing = react.useState(false)
 	local intent = use_wheel_intent()
-	local sync = use_thumb_sync()
 	-- set below; the mouse listener is set with the hooks and reads them when an event comes
-	---@type number, number, number, number?, number, number, fun(v: number)
-	local min, max, step, detent, anchor, value, commit
+	---@type number, number, number, number, fun(v: number)
+	local min, max, step, value, commit
 
 	react.onMouseEvent(function(evt)
 		local ok, consumed = pcall(function()
 			local types = api.gui.mouse.Event.Type
 			if evt.type == types.Moved then intent.moved() end
-			if evt.type == types.Released and evt.button == 0 then sync.released() end
 			if evt.handled then return false end
 			if evt.type == types.Wheel and evt.yrel ~= 0 then
 				if not intent.allows_wheel() then return false end
-				commit(slider_snap.wheel(value, min, max, step, detent, wheel_dir(evt), precise(), anchor))
+				commit(slider_values.wheel(value, min, max, step, wheel_dir(evt)))
 				return true
 			end
 			-- typing makes sense where the slider's number is what it shows (not for short lists)
@@ -200,12 +148,10 @@ local function render_slider(params)
 
 	min, max = p.min or 0, p.max or 100
 	step = (p.step and p.step > 0) and p.step or 1
-	detent = slider_snap.detent(min, max, step)
-	anchor = slider_snap.anchor(min, step)
 	value = p.value ~= nil and p.value or own:old()
 
 	commit = function(v)
-		v = slider_snap.on_grid(v, min, max, step)
+		v = slider_values.on_grid(v, min, max, step)
 		if v == value then return end
 		if p.value == nil then own:set(v) end
 		if p.onValueChange then p.onValueChange(v) end
@@ -226,19 +172,7 @@ local function render_slider(params)
 	local q = copy(p)
 	q.value = value
 	q.initialValue = nil
-	q.meta = copy(p.meta or {})
-	q.meta.localKey = sync.key()
-	q.onValueChange = function(raw)
-		local v = raw
-		if not precise() then v = slider_snap.on_grid(slider_snap.snap(raw, min, max, detent, anchor), min, max, step) end
-		sync.after(raw, v)
-		commit(v)
-	end
-	-- the base slider draws ticks from its minimum: only when they fall on the snap points
-	if detent and ((min - anchor) % detent) == 0 then
-		if q.withTicks == nil then q.withTicks = true end
-		if q.pageStep == nil then q.pageStep = detent end
-	end
+	q.onValueChange = commit
 	return builtin.BoxLayout{ children = { base_slider(q) } }
 end
 
@@ -313,19 +247,6 @@ local function label(scriptParam, value)
 	return lang_util.formatNumber(value, 3)
 end
 
--- Snap points of a value-list slider: detent interval (positions) and anchor position, or nil.
----@param scriptParam game.gui.main.script_param_util.ParamForUi
----@return integer? detent
----@return integer? anchor
-local function param_detents(scriptParam)
-	local numbers = scriptParam.numbers
-	if not numbers or not slider_snap.evenly_spaced(numbers) then return nil end
-	local anchor = index_of(scriptParam, 0)
-	if math.abs(numbers[anchor]) > math.abs(numbers[2] - numbers[1]) * 0.01 then anchor = 1 end
-	local detent = slider_snap.index_detent(#numbers, anchor)
-	return detent, anchor
-end
-
 ---@param param uo.sliders.ParamSliderParams
 ---@return react.TreeNodeId
 local function render_param_slider(param)
@@ -338,9 +259,6 @@ local function render_param_slider(param)
 	local mouse_pressed = react.useRef(false)
 	local editing = react.useState(false)
 	local intent = use_wheel_intent()
-	local sync = use_thumb_sync()
-	---@type integer?, integer?
-	local detent, anchor -- set below, after the mouse listener
 	local current = pending:old() or param.currentValue
 
 	---@param value number
@@ -356,7 +274,6 @@ local function render_param_slider(param)
 			if evt.button == 0 then
 				if evt.type == api.gui.mouse.Event.Type.Released then
 					mouse_pressed:set(false)
-					sync.released()
 					local held = pending:old()
 					if held ~= nil then
 						send(held)
@@ -373,11 +290,7 @@ local function render_param_slider(param)
 				local dir = wheel_dir(evt)
 				---@type number?
 				local value
-				if detent and not precise() then
-					local index = slider_snap.wheel(index_of(scriptParam, param.currentValue), 1, choices(scriptParam), 1,
-						detent, dir, false, anchor)
-					value = value_of(scriptParam, index)
-				elseif scriptParam.stepValueFn ~= nil then
+				if scriptParam.stepValueFn ~= nil then
 					value = scriptParam.stepValueFn(param.currentValue, dir, precise())
 				else
 					local index = math.max(1, math.min(choices(scriptParam), index_of(scriptParam, param.currentValue) + dir))
@@ -396,7 +309,6 @@ local function render_param_slider(param)
 		report("param mouse", consumed)
 		return false
 	end)
-	detent, anchor = param_detents(scriptParam)
 
 	local value_text = label(scriptParam, shown:old() or current)
 	---@type react.TreeNodeId
@@ -405,14 +317,14 @@ local function render_param_slider(param)
 		-- the number the label shows (in its unit); the typed number picks the nearest label
 		value_node = builtin.DoubleSpinBox{
 			meta = { class = "uio-slider-input" },
-			value = slider_snap.parse_number(value_text) or 0,
+			value = slider_values.parse_number(value_text) or 0,
 			step = 0.5,
 			startInEditMode = true,
 			onValueChange = function(typed)
 				---@type string[]
 				local labels = {}
 				for i = 1, choices(scriptParam) do labels[i] = label(scriptParam, value_of(scriptParam, i)) end
-				local index = slider_snap.nearest_label(labels, tostring(typed))
+				local index = slider_values.nearest_label(labels, tostring(typed))
 				if index then send(value_of(scriptParam, index)) end
 			end,
 			onStopEditMode = function() editing:set(false) end,
@@ -429,12 +341,8 @@ local function render_param_slider(param)
 		orientation = builtin.type.Orientation.Horizontal,
 		children = {
 			base_slider{
-				meta = { localKey = sync.key() },
 				value = index_of(scriptParam, current),
-				onValueChange = function(raw)
-					local index = raw
-					if detent and not precise() then index = slider_snap.snap(raw, 1, choices(scriptParam), detent, anchor) end
-					sync.after(raw, index)
+				onValueChange = function(index)
 					local value = value_of(scriptParam, index)
 					if not param.allowCoalesce or not mouse_pressed:get() then
 						send(value)
@@ -446,8 +354,7 @@ local function render_param_slider(param)
 				min = 1,
 				max = choices(scriptParam),
 				step = 1,
-				pageStep = detent or 10,
-				withTicks = detent ~= nil,
+				pageStep = 10,
 				disableGamepadNavigation = param.disableGamepadNavigation,
 			},
 			value_node,
@@ -525,7 +432,7 @@ function sliders.install(_replacement_api)
 	if type(build) == "function" and type(script_param_util.wrap) == "function" then
 		script_param_util.buildScriptParamCompSimple = wrap_build(build)
 	end
-	debugPrint("[ui_overhaul] slider wheel, snap points and typing installed")
+	debugPrint("[ui_overhaul] slider wheel and typing installed")
 end
 
 return sliders

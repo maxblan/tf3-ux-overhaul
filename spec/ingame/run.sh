@@ -115,6 +115,10 @@ powershell.exe -NoProfile -NonInteractive -Command \
 
 watch_shots &
 watcher=$!
+# the watcher loops forever: stop it however this script ends (Ctrl-C, an error under set -e)
+trap 'kill "$watcher" 2> /dev/null || true' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 outcome="timeout"
 seen=0
 missing=0

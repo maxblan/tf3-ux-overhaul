@@ -36,6 +36,7 @@ local styleutil = require("::/gui/main/styleutil.tl")
 local table_util = require("::/scripts/table_util.tl")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.terminals
 local terminals = {}
@@ -113,6 +114,7 @@ local terminals = {}
 ---@field id string component id, unique among all open windows
 ---@field line Engine.Entity
 ---@field stopIndex0 integer 0-based, without waypoints
+---@field problem? string why the line's vehicles cannot reach the stop, shown above the tooltip
 
 local BASE_NAME = "TerminalSelection"
 
@@ -124,15 +126,7 @@ local USAGES = { "Unused", "Alternative", "Main" }
 ---@type react.Recipe<uo.gui.terminals.Params>?
 local base_recipe
 
----@type table<string, true>
-local reported = {}
----@param key string
----@param err any the error value of a pcall
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] terminal selection: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("terminal selection: ")
 
 -- Terminals of the stop (base getter, unchanged except that the overlength check runs once per stop).
 -- Engine reads only; runs every step.
@@ -456,18 +450,12 @@ local function revision_key(line)
 	return table.concat({ r.num[1], r.num[2], r.num[3] }, ".")
 end
 
----@return number
-local function clock()
-	local ok, t = pcall(os.clock)
-	return ok and t or 0
-end
-
 -- The cached results of `line`'s stop `stop_index0` (number -> result or false), fresh if needed.
 ---@param line Engine.Entity
 ---@param stop_index0 integer
 ---@return table<integer, uo.gui.terminals.Issue|false>
 local function reach_entry(line, stop_index0)
-	local now = clock()
+	local now = guard.clock() or 0
 	local slot = tostring(line) .. "/" .. tostring(stop_index0)
 	local revision = revision_key(line)
 	local entry = reach_cache[slot]
@@ -699,7 +687,8 @@ local function render(params)
 		local problemTooltipThis = nil
 		for _i, problem in ipairs(problemsPrev) do
 			if params.stopNumber % params.stopCount == problem.stopAndTerminalNext.stop % params.stopCount then
-				if terminalNumber == problem.stopAndTerminalNext.terminal then
+				-- the alternative terminal the problem names, if any (line_problems.terminal_at)
+				if terminalNumber == line_problems.terminal_at(problem, "next") then
 					problemPrev = true
 					problemTooltipPrev = problem.tooltip
 				end
@@ -707,8 +696,8 @@ local function render(params)
 		end
 		for _i, problem in ipairs(problemsThis) do
 			if params.stopNumber == problem.stopAndTerminalThis.stop then
-				-- base: terminalNumber % stopCount == terminal % stopCount
-				if terminalNumber == problem.stopAndTerminalThis.terminal then
+				-- base: terminalNumber % stopCount == terminal % stopCount, always the preferred terminal
+				if terminalNumber == line_problems.terminal_at(problem, "this") then
 					problemThis = true
 					problemTooltipThis = problem.tooltip
 				end
@@ -887,11 +876,7 @@ function terminals.swap(p, recipe_name)
 	local params = p.params
 	if type(params) ~= "table" or params.viaState == nil or params.commonParams == nil then return p end
 	base_recipe = p.recipe
-	-- a shallow copy of every field, whatever their types (hence any)
-	---@type table<string, any>
-	local copy = {}
-	for k, v in pairs(p --[[@as table<string, any>]]) do copy[k] = v end
-	---@cast copy game.gui.main.popover_react_util.PopoverWindowParam -- p's fields, so the same shape
+	local copy = guard.shallow_copy(p)
 	copy.recipe = TerminalSelection
 	return copy
 end
@@ -1050,7 +1035,11 @@ function terminals.open(line, stop_index0, position, title)
 	-- required by a variable path, which the type checker cannot follow
 	local game_react_globals = require(GAME_REACT_GLOBALS) --[[@as game.gui.main.game_react_globals]]
 	local windows = game_react_globals.getDefaultWindowApi()
-	if not params or not windows then return end
+	if not params or not windows then
+		report("open", "no popover for line " .. tostring(line) .. " stop " .. tostring(stop_index0)
+			.. (windows and "" or " (no window api)"))
+		return
+	end
 	popovers_opened = popovers_opened + 1
 	windows.removeAllWindows(popover_react_util.PopoverWindow)
 	windows.addWindow(popover_react_util.PopoverWindow, "uio.terminals." .. popovers_opened, {
@@ -1076,7 +1065,8 @@ function(params)
 	return builtin.BoxLayout{
 		children = {
 			builtin.Button{
-				meta = { class = "uio-terminal-button", tooltip = title, id = params.id },
+				meta = { class = "uio-terminal-button", id = params.id,
+					tooltip = params.problem and params.problem .. "\n\n" .. title or title },
 				content = builtin.ImageView{ path = ICON, scaling = builtin.type.ImageViewScaling.AutoFit },
 				onClick = function()
 					local position = self_ref:get():getPosition(1.0, 0.0)

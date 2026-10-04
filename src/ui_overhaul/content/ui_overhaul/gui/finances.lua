@@ -22,6 +22,7 @@ local react = require("::/gui/main/react.lua")
 local base_finances_table = require("::/game_mechanics/finance/finances_table.tl")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
 local statements = require("/ui_overhaul/core/statements.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.finances
 local finances = {}
@@ -29,15 +30,7 @@ local finances = {}
 local VIEWS = { "income", "cashflow", "balance", "details" }
 local view = "income" -- kept for the session
 
----@type table<string, boolean>
-local reported = {}
----@param key string
----@param err any a pcall error: any value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] finances: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("finances: ")
 
 -- Data -------------------------------------------------------------------------------------------------
 

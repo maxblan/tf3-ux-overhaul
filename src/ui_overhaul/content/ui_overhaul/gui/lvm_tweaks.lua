@@ -166,8 +166,11 @@ local function wrap_select_vehicles(params)
 	---@param ... any passed on unchanged to the previous function
 	---@return any ... whatever the previous function returns
 	local wrapper = function(entities, selected, ...)
-		local ok, done = pcall(shift_select, entities or {})
-		if ok and done then return end
+		-- only a selection grows to the model; a deselection (Shift held or not) stays one vehicle
+		if selected ~= false then
+			local ok, done = pcall(shift_select, entities or {})
+			if ok and done then return end
+		end
 		return original(entities, selected, ...)
 	end
 	wrapped_select[wrapper] = true
@@ -192,6 +195,15 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 		local ok, err = pcall(lvm_models.debug, param)
 		if not ok then debugPrint("[ui_overhaul] lvm models debug failed: ", tostring(err)) end
 	end)
+	-- the Line Manager focuses this recipe through its vehicleListRef (gamepad): focus goes on to the
+	-- list, not to the model row above it
+	local list_ref = react.useNodeRef()
+	react.setPreferredFocusChild(list_ref)
+	-- a closed Line Manager's params must not take questions (the replace confirmation, below)
+	local captured = params and params.commonParams
+	react.onUnmount(function()
+		if captured ~= nil and current == captured then current = nil end
+	end)
 	local row, original_params = nil, params ---@type react.TreeNodeId?, uo.gui.lvm_tweaks.ListParams
 	local ok, err = pcall(function()
 		if params and params.commonParams then
@@ -207,7 +219,7 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 		row = lvm_models.update(params)
 	end)
 	if not ok then debugPrint("[ui_overhaul] Line Manager models failed: ", tostring(err)) end
-	local list = react.CallOriginalRecipe(vehicle_list_react_util.VehicleList, original_params)
+	local list = react.CallOriginalRecipe(vehicle_list_react_util.VehicleList, react.ref(list_ref), original_params)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical,
 		children = row and { row, list } or { list } }
 end)
@@ -233,7 +245,7 @@ local function patch_handle_vehicle_changes()
 	---@param ... any passed on unchanged to the previous function
 	---@return any ... whatever the previous function returns
 	vehicle_react_util.HandleVehicleChanges = function(changes, ...)
-		local args = { ... }
+		local args = table.pack(...) -- may hold nils (getFirstStopToSendTo without a line context)
 		local replaces = 0
 		for _i, change in ipairs(changes or {}) do
 			if change.vehicleEntity >= 0 and #change.config.vehicles > 0 then replaces = replaces + 1 end
@@ -247,7 +259,7 @@ local function patch_handle_vehicle_changes()
 						{ count = replaces, cost = api.util.formatMoney(cost) })
 					or lang_util.format(_("Replace {count} vehicles?"), { count = replaces })
 				common.addFeedback(text, "Question", {
-					onAccept = function() original(changes, table.unpack(args)) end,
+					onAccept = function() original(changes, table.unpack(args, 1, args.n)) end,
 					acceptText = _("Replace"),
 				}, 2)
 			end)

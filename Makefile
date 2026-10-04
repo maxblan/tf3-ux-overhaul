@@ -52,6 +52,8 @@ lint: ## Run luacheck on src, spec and tools/lua, and reject syntax the game's L
 		|| { echo "Lua 5.3 syntax above (\\u{} escape, //, bitwise ops): the game embeds Lua 5.2"; exit 1; }
 	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src \
 		|| { echo "wrap CallOriginalRecipe in a layout: a recipe's root must be a layout (else the game UI drops)"; exit 1; }
+	@! grep -rnE --include='*.lua' '\braw(get|set|equal|len)\(' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
+		|| { echo "rawget/rawset/rawequal/rawlen are not there in the game's GUI Lua state (observed in game)"; exit 1; }
 ifneq ($(LUACHECK),)
 	"$(LUACHECK)" $(LUA_FILES)
 else

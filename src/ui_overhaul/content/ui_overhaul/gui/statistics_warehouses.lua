@@ -24,6 +24,7 @@ local table_util = require("::/scripts/table_util.tl")
 local base_warehouses_statistic = require("::/gui/statistics/statistic_warehouses.tl")
 local statistics_common = require("/ui_overhaul/gui/statistics_common.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 local statistics_warehouses = {}
 
@@ -62,15 +63,7 @@ local statistics_warehouses = {}
 ---@field weight number
 
 -- The mod's own cells log a failure once and stay empty.
----@type table<string, boolean>
-local reported = {}
----@param key string
----@param err any the pcall error, any value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] statistics warehouses ", key, " failed: ", tostring(err))
-end
+local report = guard.reporter("statistics warehouses ", " failed: ")
 
 local styleClassRightAligned = "right-aligned"
 local SHOWN_CARGOS = 4 -- icons with quantities that fit the Stocks column
@@ -119,11 +112,7 @@ end
 local read_cache = {}
 local READ_SECONDS = 1.0
 
----@return number?
-local function clock()
-	local ok, t = pcall(os.clock)
-	return ok and t or nil
-end
+local clock = guard.clock
 
 --- statistics_warehouses.read, reused for READ_SECONDS. Engine reads only.
 ---@param entity Engine.Entity warehouse

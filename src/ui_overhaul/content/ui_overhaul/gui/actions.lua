@@ -52,18 +52,27 @@ function actions.open_line_manager(line)
 	react.fireEvent(nil, "openVehicleManager", { openWithLineEntity = line })
 end
 
----@param vehicle Engine.Entity
+---@param tv Engine.Component.TransportVehicle
 ---@return number
-local function purchase_time(vehicle)
-	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+local function purchase_time(tv)
 	local oldest ---@type number?
-	for _i, part in ipairs(tv and tv.transportVehicleConfig.vehicles or {}) do
+	for _i, part in ipairs(tv.transportVehicleConfig.vehicles) do
 		if oldest == nil or part.purchaseTime < oldest then oldest = part.purchaseTime end
 	end
 	return oldest or 0
 end
 
---- The line's newest (`newest` = true) or oldest vehicle, or nil.
+-- Whether the vehicle is on its way to a depot or in one: still listed under its line, but no longer
+-- serving it (the vehicle window treats it as without line, vehicle.tl).
+---@param tv Engine.Component.TransportVehicle
+---@return boolean
+local function leaving_line(tv)
+	local states = api.type.enum and api.type.enum.TransportVehicleState
+	return states ~= nil and (tv.state == states.GOING_TO_DEPOT or tv.state == states.IN_DEPOT)
+end
+
+--- The line's newest (`newest` = true) or oldest vehicle that still serves it, or nil. Vehicles sent
+-- to a depot are skipped, so Remove Vehicle clicked again retires the next one.
 ---@param line Engine.Entity
 ---@param newest boolean
 ---@return Engine.Entity?
@@ -71,9 +80,12 @@ local function line_vehicle(line, newest)
 	local best ---@type Engine.Entity?
 	local best_time ---@type number?
 	for _i, vehicle in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
-		local t = purchase_time(vehicle)
-		if best == nil or (newest and t > best_time) or (not newest and t < best_time) then
-			best, best_time = vehicle, t
+		local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+		if tv and not leaving_line(tv) then
+			local t = purchase_time(tv)
+			if best == nil or (newest and t > best_time) or (not newest and t < best_time) then
+				best, best_time = vehicle, t
+			end
 		end
 	end
 	return best

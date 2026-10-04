@@ -35,3 +35,11 @@ files["src/ui_overhaul/content/ui_overhaul/gui/statistics_stations.lua"] = { max
 files["src/ui_overhaul/content/ui_overhaul/gui/station_terminals.lua"] = {
 	globals = { "orderedPairs" }, read_globals = { "api", "app", "debugPrint", "_", "_react" },
 }
+-- Reads the React registry _react (base/init.lua): which recipes wrap builtin.Window.
+files["src/ui_overhaul/content/ui_overhaul/gui/minimize.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}
+-- Reads the React registry _react (base/init.lua): a builtin's recipe id.
+files["src/ui_overhaul/content/ui_overhaul/gui/builtin_wraps.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}

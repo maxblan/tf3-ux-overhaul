@@ -29,6 +29,7 @@ local base_industry_window = require("::/gui/entity_window/industry/industry.tl"
 -- loaded at render time (guard.plugin): only fully qualified paths reach this mod
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.industry_cards
 local industry_cards = {}
@@ -39,14 +40,7 @@ local MAX_LINES = 8
 local BLOCKED_AREA_EVENT = "uio.industry.blocked_area"
 
 -- A card whose content fails shows nothing and logs once; its recipe declared its hooks before.
-local reported = {} ---@type table<string, true>
----@param key string
----@param err any what pcall caught: an error can be any Lua value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] industry ", key, " card failed: ", tostring(err))
-end
+local report = guard.reporter("industry ", " card failed: ")
 
 -- Whether the red area of a blocked expansion is shown on the map (for the session).
 local show_blocked_area = true
@@ -167,6 +161,22 @@ function industry_cards.read(entity)
 	}
 	facts.blockers = development.blockers(facts)
 	return facts
+end
+
+
+--- `facts` as the industry window's own expansion check sees them: the half-yearly check's record
+-- of a failed expansion stays until the next check, but once the way is clear (the player removed
+-- or terraformed what stood there) the window no longer finds a collision and drops the red area.
+-- `colliding` is that check's result (IndustryEowState.failedExpansion); nil leaves `facts` as read.
+---@param facts? uo.industry_cards.Facts
+---@param colliding? boolean
+---@return uo.industry_cards.Facts?
+function industry_cards.live(facts, colliding)
+	if not (facts and facts.blocked and colliding == false) then return facts end
+	local copy = guard.shallow_copy(facts)
+	copy.blocked = false
+	copy.blockers = development.blockers(copy)
+	return copy
 end
 
 ---A line and the 1-based index of its stop that reaches the industry.
@@ -358,6 +368,7 @@ end
 
 ---@class uo.industry_cards.CardParams: react.Param
 ---@field entity Engine.Entity
+---@field colliding? boolean the window's own expansion check finds something in the way
 
 ---@param params uo.industry_cards.CardParams
 ---@return react.TreeNodeId
@@ -368,7 +379,8 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 	end, REFRESH)
 	local showState = react.useState(show_blocked_area)
 	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
-	local ok, node = pcall(render_development, params, state:old(), showState:old())
+	local ok, node = pcall(render_development, params, industry_cards.live(state:old(), params.colliding),
+		showState:old())
 	if ok then return node end
 	report("development", node)
 	return vertical{}
@@ -433,7 +445,7 @@ local function card(local_key, title, recipe, param, params)
 end
 
 --- Plugin recipe body of the industry window.
----@param params game.gui.entity_window.eow_extension_util.IEowWidgetsExtensionParams
+---@param params game.gui.entity_window.industry.industry_eow.IndustryWidgetPluginParams
 ---@return react.TreeNodeId
 function industry_cards.industry(params)
 	local entity = params.entityId
@@ -441,7 +453,8 @@ function industry_cards.industry(params)
 		return builtin.BoxLayout{}
 	end
 	return vertical({
-		card("uioIndustryDevelopment", _("Development"), Development, { entity = entity }, params),
+		card("uioIndustryDevelopment", _("Development"), Development,
+			{ entity = entity, colliding = params.state and params.state.failedExpansion }, params),
 		card("uioIndustryServedBy", _("Served by"), ServedBy, { entity = entity }, params),
 	}, "box-plugin-vertical-space")
 end
@@ -455,18 +468,6 @@ function industry_cards.set_show_blocked_area(show)
 	react.fireEvent(nil, BLOCKED_AREA_EVENT, show_blocked_area)
 end
 
---- A copy of `t` with the same fields and values.
----@generic T: table
----@param t T
----@return T
-local function shallow_copy(t)
-	local copy = {}
-	-- LuaLS cannot infer pairs()'s key and value types for a generic table
-	---@diagnostic disable-next-line: no-unknown
-	for k, v in pairs(t) do copy[k] = v end
-	return copy
-end
-
 -- The base window, with its map action rendered without the red area while it is switched off.
 ---@param params game.gui.entity_window.view_manager.IEntityWindowParam
 ---@return react.TreeNodeId
@@ -474,7 +475,7 @@ local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
 	local showState = react.useState(show_blocked_area)
 	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
 	local show = showState:old()
-	local copy = shallow_copy(params)
+	local copy = guard.shallow_copy(params)
 	if type(params.setActionFn) == "function" then
 		---@param fn? fun(...: any): react.TreeNodeId the map action; its arguments are passed on unchanged
 		---@param ... string key2

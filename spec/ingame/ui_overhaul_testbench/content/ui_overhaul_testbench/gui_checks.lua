@@ -454,8 +454,10 @@ local checks = {
 		shot = "vehicle_window_minimized",
 		check = function(ctx)
 			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
-			local window = visible("temp.view.entity_" .. tostring(ctx.card_vehicle))
-			return window, "window still open=" .. tostring(window) .. " (see the folded window in the screenshot)"
+			local id = "temp.view.entity_" .. tostring(ctx.card_vehicle)
+			local window, content = visible(id), visible("uio.minimize." .. id)
+			return window and not content,
+				string.format("window open=%s content visible=%s (expect true, false)", tostring(window), tostring(content))
 		end,
 	},
 	{
@@ -463,6 +465,46 @@ local checks = {
 		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
 		wait = 30,
 		check = function() return true, "restored" end,
+	},
+	{
+		-- the Finances window: the title row (title, rename, minimize before close) and, once folded, no
+		-- more than its title bar although the game gives it a fixed size
+		name = "finances_window_title_row",
+		act = function() api.gui.fireReactEvent("openFinanceWindow", nil) end,
+		wait = 60,
+		shot = "finances_window",
+		check = function()
+			local open = visible("menu.finance.window")
+			return open, "finances window visible=" .. tostring(open) .. " (see the title row in the screenshot)"
+		end,
+	},
+	{
+		name = "finances_window_minimize",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		shot = "finances_window_minimized",
+		check = function()
+			local open, content = visible("menu.finance.window"), visible("uio.minimize.menu.finance.window")
+			return open and not content,
+				string.format("window open=%s content visible=%s (expect true, false)", tostring(open), tostring(content))
+		end,
+	},
+	{
+		name = "finances_window_restore",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		shot = "finances_window_restored",
+		check = function()
+			local content = visible("uio.minimize.menu.finance.window")
+			return content, "content visible=" .. tostring(content)
+		end,
+	},
+	{
+		-- closed again: the statement checks open it on another tab, which an open window keeps
+		name = "finances_window_closed",
+		act = function() api.gui.fireReactEvent("closeFinanceWindow", nil) end,
+		wait = 30,
+		check = function() return true, "closed" end,
 	},
 	{
 		-- closing the windows the mod wrapped, then opening a new one (an engine crash once)
@@ -474,13 +516,11 @@ local checks = {
 	{
 		-- the game reaches the tool stack through a ref to the replacement (game.tl), whose api is the
 		-- shown stack's (fallback.lua); with every window closed the default tool is on top
+		-- run in the UI's Lua state: the testbench's own would load react.lua again
 		name = "tool_stack_api",
-		check = function()
-			local game_react_globals = require("::/gui/main/game_react_globals.tl")
-			local ok, tool = pcall(function() return game_react_globals.getDefaultToolStackApi().getActiveTool() end)
-			local name = ok and tool and tool.name or tostring(tool)
-			return ok and tool ~= nil, "active tool=" .. tostring(name)
-		end,
+		act = function() api.gui.fireReactEvent("uio.debug.tool_stack", nil) end,
+		wait = 10,
+		check = function() return true, "see '[ui_overhaul] tool stack api: ... ok' (check failed = broken)" end,
 	},
 	{
 		name = "catchment_overlay",
@@ -537,30 +577,11 @@ local checks = {
 		end,
 	},
 	{
-		-- the installed section functions, driven like vehicle.tl does (a key no real card uses): open in
-		-- one window, remembered by the next, closed there by Modify's "collapse all" (vehicle.tl:501)
+		-- run in the UI's Lua state (entry.lua): the testbench's own would load react.lua again
 		name = "sections_collapse_all",
-		check = function()
-			local content_card = require("::/gui/main/content_card.tl")
-			local function window()
-				local state = { value = {} }
-				function state.old() return state.value end
-				function state.set(_self, v) state.value = v end
-				local update, is_expanded = content_card.makeContentCardsCollapsibleFunctions(state, true)
-				return { update = update, is_expanded = is_expanded }
-			end
-			local key = "uio.testbench.section"
-			local first = window()
-			first.update(key, true)
-			local second = window()
-			local remembered = second.is_expanded(key)
-			second.update("", false)
-			local collapsed = not second.is_expanded(key)
-			local next_window = window().is_expanded(key)
-			window().update(key, false)
-			return remembered and collapsed and next_window, "remembered=" .. tostring(remembered)
-				.. " collapsed=" .. tostring(collapsed) .. " next window=" .. tostring(next_window)
-		end,
+		act = function() api.gui.fireReactEvent("uio.debug.sections", nil) end,
+		wait = 10,
+		check = function() return true, "see '[ui_overhaul] sections: ... ok' (check failed = broken)" end,
 	},
 	{
 		-- the industry with the most output, as players look at those first
@@ -998,7 +1019,7 @@ local checks = {
 		shot = "sliders",
 		check = function()
 			local shown = visible("probe.slider.percent")
-			return shown, "test slider visible=" .. tostring(shown) .. " (see the ticks in the screenshot)"
+			return shown, "test slider visible=" .. tostring(shown)
 		end,
 	},
 	{

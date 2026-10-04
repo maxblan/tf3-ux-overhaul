@@ -30,6 +30,7 @@ local util = require("::/scripts/util.tl")
 local base_popups = require("::/game_mechanics/notifications/gui/notification_popups.tl")
 local groups = require("/ui_overhaul/core/notification_groups.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.notifications
 local notifications = {}
@@ -64,15 +65,7 @@ notifications.tiles = nil
 
 local SFX_PATH = "::/game_mechanics/notifications/gui/sound/notification_sfx.gres"
 
----@type table<string, boolean>
-local reported = {}
----@param what string
----@param err any a pcall error: any value
-local function report(what, err)
-	if reported[what] then return end
-	reported[what] = true
-	debugPrint("[ui_overhaul] notification ridge: ", what, " failed: ", tostring(err))
-end
+local report = guard.reporter("notification ridge: ", " failed: ")
 
 --- `fn` wrapped so that an error in an engine callback is logged once instead of escaping.
 ---@generic F: function

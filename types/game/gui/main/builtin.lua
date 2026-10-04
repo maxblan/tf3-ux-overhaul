@@ -95,6 +95,15 @@
 ---@field text? string
 ---@field tooltipWhenClipped? string
 
+---@class builtin.TextInputFieldParam: react.Param
+---@field value? string
+---@field onValueChange? fun(value: string)
+---@field onCancel? fun()
+---@field onEditingModeChange? fun(editing: boolean)
+---@field acceptOnFocusLoss? boolean
+---@field focusOnStartEditing? boolean
+---@field maxLength? integer
+
 ---@class builtin.ImageViewParam: react.Param
 ---@field path? string
 ---@field scaling? builtin.type.ImageViewScaling
@@ -207,6 +216,9 @@
 ---@field tool? string
 ---@field compact? boolean
 ---@field header? react.TreeNodeId
+---@field titleEditable? boolean
+---@field onTitleChange? fun(title: string)
+---@field emptyNameAllowed? boolean defaults to true
 
 ---Reusing a window does not change its visibility; moving changes only the z order.
 ---@class builtin.WindowAPI
@@ -319,6 +331,7 @@ function WindowAPI.removeWindow(recipe, key) end
 ---@field ScrollArea react.Recipe<builtin.ScrollAreaParam>
 ---@field List react.Recipe<builtin.ListParam>
 ---@field TextView react.Recipe<builtin.TextViewParam>
+---@field TextInputField react.Recipe<builtin.TextInputFieldParam>
 ---@field ImageView react.Recipe<builtin.ImageViewParam>
 ---@field KeybindingHintDisplay react.Recipe<builtin.KeybindingHintDisplayParam>
 ---@field ProgressBar react.Recipe<builtin.ProgressBarParam>

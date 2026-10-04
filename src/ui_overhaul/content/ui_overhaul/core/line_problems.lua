@@ -50,9 +50,14 @@ local line_problems = {}
 ---@field destinationIsWaypoint boolean
 ---@field reason? uo.core.line_problems.Reason
 
----@class uo.core.line_problems.Problem
+--- A problem as the Line Manager's own list has it (base Problem): where it starts and ends.
+---@class uo.core.line_problems.PlacedProblem
 ---@field stopAndTerminalThis uo.core.line_problems.StopAndTerminal
 ---@field stopAndTerminalNext uo.core.line_problems.StopAndTerminal
+---@field kind? uo.core.line_problems.Kind
+---@field params? uo.core.line_problems.Params
+
+---@class uo.core.line_problems.Problem: uo.core.line_problems.PlacedProblem
 ---@field kind uo.core.line_problems.Kind
 ---@field params uo.core.line_problems.Params
 ---@field tooltip? string set by gui/terminals.lua, as in the Line Manager's own list
@@ -173,6 +178,26 @@ function line_problems.index2problems(stops, segments)
 	result[0] = {}
 	for _i, problem in ipairs(result[index] or {}) do table.insert(result[0], problem) end
 	return result
+end
+
+--- Terminal (1-based) that `problem` concerns at its start ("this") or its end ("next"): the
+-- alternative terminal a from/to-alternative problem names, otherwise the stop's preferred terminal.
+-- The Line Manager's own problems carry no kind; they keep the preferred terminal, as the base does.
+---@param problem uo.core.line_problems.PlacedProblem
+---@param side "this"|"next"
+---@return integer
+function line_problems.terminal_at(problem, side)
+	local kind, params = problem.kind, problem.params
+	if side == "this" then
+		if params and (kind == "from_alternative" or kind == "from_alternative_to_alternative") then
+			return params.terminalOrigin
+		end
+		return problem.stopAndTerminalThis.terminal
+	end
+	if params and (kind == "to_alternative" or kind == "from_alternative_to_alternative") then
+		return params.terminalDestination
+	end
+	return problem.stopAndTerminalNext.terminal
 end
 
 --- Problems that keep vehicles from reaching stop `stop_index` (1-based, without waypoints): a path

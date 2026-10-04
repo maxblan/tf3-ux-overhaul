@@ -47,6 +47,30 @@ describe("line_problems", function()
 		assert.is_false(wp.params.destinationIsWaypoint)
 	end)
 
+	it("marks the alternative terminal a problem names, not the preferred one", function()
+		-- stop A prefers terminal 1; only its alternative terminal 4 has no path on to B
+		local stops = { { name = "A", terminal0 = 0 }, { name = "B", terminal0 = 1 } }
+		local from = line_problems.index2problems(stops, { { { fromAlternative = { 3 } } }, { {} } })[1][1]
+		assert.are.equal(4, line_problems.terminal_at(from, "this"))
+		assert.are.equal(2, line_problems.terminal_at(from, "next")) -- B's preferred terminal
+		-- B's alternative terminal 6 cannot be reached
+		local to = line_problems.index2problems(stops, { { { toAlternative = { 5 } } }, { {} } })[1][1]
+		assert.are.equal(1, line_problems.terminal_at(to, "this"))
+		assert.are.equal(6, line_problems.terminal_at(to, "next"))
+		local both = line_problems.index2problems(stops,
+			{ { { fromAlternative = { 3 }, toAlternative = { 5 } } }, { {} } })[1][1]
+		assert.are.equal(4, line_problems.terminal_at(both, "this"))
+		assert.are.equal(6, line_problems.terminal_at(both, "next"))
+		-- a missing path between the preferred terminals, and the Line Manager's own problems (no kind)
+		local no_path = line_problems.index2problems(stops, { { { noPath = true } }, { {} } })[1][1]
+		assert.are.equal(1, line_problems.terminal_at(no_path, "this"))
+		assert.are.equal(2, line_problems.terminal_at(no_path, "next"))
+		---@type uo.core.line_problems.PlacedProblem
+		local base = { stopAndTerminalThis = { stop = 1, terminal = 1 }, stopAndTerminalNext = { stop = 2, terminal = 2 } }
+		assert.are.equal(1, line_problems.terminal_at(base, "this"))
+		assert.are.equal(2, line_problems.terminal_at(base, "next"))
+	end)
+
 	it("handles lines without stops", function()
 		assert.are.same({ [0] = {} }, line_problems.index2problems({}, {}))
 	end)

@@ -37,6 +37,10 @@ function orderedPairs(t) end
 ---@class _react
 ---Replacement recipe per recipe id (react.GetRecipeId).
 ---@field recipeReplace table<integer, function>
+---Recipe id per builtin name ("Window" ...).
+---@field builtin table<string, integer>
+---Per wrapper recipe (react.RegisterWrapperRecipe): the id of the recipe it wraps.
+---@field recipeMetas table<integer, { innerRecipeId: integer }?>
 _react = {}
 
 ---Reads a whole file (tools/lua/run.js, for the tools only).

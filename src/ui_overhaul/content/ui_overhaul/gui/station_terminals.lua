@@ -2,7 +2,7 @@
 -- the row before the waiting count. It opens the Line Manager's terminal popover for that stop
 -- (terminals.TerminalButton), so the terminals of a line can be set from the station. A line whose
 -- vehicles cannot reach this stop (no path into it, an incompatible or doubled stop) gets the
--- statistics alert icon in front of the button, with the game's problem text as its tooltip.
+-- statistics alert icon in front of the button, and the game's problem text heads the button's tooltip.
 --
 -- The list (TerminalStops, gui/entity_window/station_group/station_group.tl) is file-local and cannot
 -- be replaced; replacing the whole station window would clash with every other mod that does. Two
@@ -20,6 +20,7 @@ local react = require("::/gui/main/react.lua")
 local station_group = require("::/gui/entity_window/station_group/station_group.tl")
 local terminals = require("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.station_terminals
 local station_terminals = {}
@@ -38,15 +39,7 @@ local station_terminals = {}
 
 local LIST_RECIPE = "TerminalStops"
 
----@type table<string, true>
-local reported = {}
----@param key string
----@param err any the error value of a pcall
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] station terminal buttons: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("station terminal buttons: ")
 
 --- True while the base list renders: the current recipe is `LIST_RECIPE` and no mod replaced the
 -- station window. `current_recipe` and `replaced` are parameters for the specs.
@@ -136,14 +129,14 @@ local PRUNE_SECONDS = 60 -- lines not looked at for this long are dropped from t
 ---@param stop_index0 integer
 ---@return string?
 local function stop_problem_text(line, stop_index0)
-	local now = os.clock()
+	local now = guard.clock() -- nil without a clock: then nothing is cached
 	local entry = problems_cache[line]
-	if not entry or now - entry.time > PROBLEMS_SECONDS then
+	if not entry or not now or now - entry.time > PROBLEMS_SECONDS then
 		for key, old in pairs(problems_cache) do
-			if now - old.time > PRUNE_SECONDS then problems_cache[key] = nil end
+			if not now or now - old.time > PRUNE_SECONDS then problems_cache[key] = nil end
 		end
 		local ok, data = pcall(terminals.read_problems, line)
-		entry = { time = now, data = ok and data or nil }
+		entry = { time = now or 0, data = ok and data or nil }
 		problems_cache[line] = entry
 	end
 	if not entry.data then return nil end
@@ -172,8 +165,9 @@ function station_terminals.wrap_spacer(previous, in_list, button)
 			local children = { spacer }
 			local problem_ok, problem = pcall(stop_problem_text, walk.line, stop_index0)
 			if problem_ok and problem then
+				-- mouse-transparent, so it never takes the button's clicks; the button's tooltip says why
 				children[#children + 1] = builtin.ImageView{
-					meta = { class = "uio-station-stop-alert", tooltip = problem },
+					meta = { class = "uio-station-stop-alert", mouseTransparent = true },
 					path = "::/gui/statistics/icons/alert.tga",
 					scaling = builtin.type.ImageViewScaling.AutoFit,
 				}
@@ -182,6 +176,7 @@ function station_terminals.wrap_spacer(previous, in_list, button)
 				line = walk.line,
 				stopIndex0 = stop_index0,
 				id = station_terminals.button_id(walk.line, stop_index0),
+				problem = problem_ok and problem or nil,
 			}
 			return builtin.Component{
 				meta = { class = "horizontal-spacer, uio-station-terminal" },

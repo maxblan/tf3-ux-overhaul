@@ -5,7 +5,7 @@
         "ui_overhaul/core/industry_development.lua",
         "ui_overhaul/core/line_problems.lua",
         "ui_overhaul/core/notification_groups.lua",
-        "ui_overhaul/core/slider_snap.lua",
+        "ui_overhaul/core/slider_values.lua",
         "ui_overhaul/core/statements.lua",
         "ui_overhaul/core/vehicle_slopes.lua",
         "ui_overhaul/gui/actions.lua",

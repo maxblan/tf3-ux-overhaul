@@ -54,8 +54,6 @@ local styleClassRightAligned = "right-aligned"
 -- Quick filter of the tab; kept for the session so reopening the window shows the same rows.
 local quick_filter = "all"
 
-local line_balance = statistics_common.balance
-
 ---@param text string
 ---@param tag? string
 ---@return react.TreeNodeId
@@ -237,7 +235,8 @@ end
 
 local hasProblems = statistics_common.hasProblems
 
--- Balances for the "Losing money" filter, refreshed at most once a second instead of every frame.
+-- Balances for the "Losing money" filter, the totals and the Balance sort, refreshed at most once a
+-- second instead of every frame (each one is a journal query).
 local cached_balance = statistics_common.makeBalanceCache()
 
 ---@param filter string
@@ -374,7 +373,7 @@ local function render(params)
 			if api.engine.entityExists(line) then
 				totals.lines = totals.lines + 1
 				totals.vehicles = totals.vehicles + #api.engine.system.transportVehicleSystem.getLineVehicles(line)
-				totals.balance = totals.balance + line_balance(line)
+				totals.balance = totals.balance + cached_balance(line)
 			end
 		end
 		return totals
@@ -411,7 +410,7 @@ local function render(params)
 			headerStyleClass = styleClassRightAligned },
 		{ name = _("Rate"), recipe = LineRateCell, getCompareValue = getRateSortValue, weight = 1.5,
 			headerStyleClass = styleClassRightAligned },
-		{ name = _("Balance"), recipe = LineBalanceCell, getCompareValue = line_balance, weight = 1.6,
+		{ name = _("Balance"), recipe = LineBalanceCell, getCompareValue = cached_balance, weight = 1.6,
 			headerStyleClass = styleClassRightAligned },
 	}
 	---@type react.TreeNodeId[]

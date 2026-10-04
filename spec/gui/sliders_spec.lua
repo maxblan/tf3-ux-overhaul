@@ -117,7 +117,7 @@ describe("sliders hooks", function()
 		local p = { min = 0, max = 10, step = 1, value = 3, onValueChange = function() end }
 		slider.render({ p = p })
 		local hooks = slider.hooks
-		assert.are.same({ "useState", "useState", "useRef", "useRef", "useState", "useRef", "onMouseEvent" }, hooks)
+		assert.are.same({ "useState", "useState", "useRef", "useRef", "onMouseEvent" }, hooks)
 		p.step = "one" -- fails after the hooks and the mouse listener
 		local node = slider.render({ p = p })
 		assert.are.same(hooks, slider.hooks)
@@ -133,8 +133,7 @@ describe("sliders hooks", function()
 			onValueChange = function(v) sent = v end }
 		local node = row.render(param)
 		local hooks = row.hooks
-		assert.are.same({ "useState", "useState", "useRef", "useState", "useRef", "useRef", "useState", "useRef",
-			"onMouseEvent" }, hooks)
+		assert.are.same({ "useState", "useState", "useRef", "useState", "useRef", "useRef", "onMouseEvent" }, hooks)
 		assert.are.same({ value = 1, min = 1, max = 2, step = 1 },
 			{ value = base.value, min = base.min, max = base.max, step = base.step })
 		assert.are.equal(base, node.layout.children[1].slider)

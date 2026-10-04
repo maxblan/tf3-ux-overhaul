@@ -55,7 +55,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
-- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the close button's design: it folds the window to its title bar, keeps its place and its content.
+- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the close button's design, with the title bar's own buttons on the right: it folds the window to its title bar, keeps its place and its content. Finances, Company and Statistics fold too, though the game gives them a fixed size.
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
 
@@ -81,14 +81,14 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 ### Sliders
 
-- The mouse wheel moves the slider under the cursor: to the next snap point, or one step while the precision key is held.
-- Sliders with many steps have snap points every few percent of the range (every 5 on 0 to 100, for example), shown as ticks. A dragged slider sticks to one when it comes close; the precision key turns that off.
+- The mouse wheel moves the slider under the cursor one step.
 - A value can be typed: double-click a slider, or click the value next to a construction slider (height, incline, bend). A typed value picks the nearest one the game offers.
 - The settings menu keeps its sliders as they are.
 
 ### Notifications
 
 - Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
+- Notification icons keep the game's colours in darker shades with at least 7:1 contrast to the white symbol (WCAG AAA), also on hover: amber warnings, red problems, blue information, green achievements. The game's yellow had 1.6:1.
 
 ### Map
 

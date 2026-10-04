@@ -23,14 +23,18 @@ local OLD, NEW = 1, 2
 
 -- What the specs' stand-in for `api` provides: only what actions.lua reads.
 ---@class spec.actions.Api
----@field type { ComponentType: { TRANSPORT_VEHICLE: string } }
+---@field type { ComponentType: { TRANSPORT_VEHICLE: string }, enum: { TransportVehicleState: table<string, integer> } }
 ---@field engine spec.actions.Engine
 ---@field cmd spec.actions.Cmd
 
 ---@class spec.actions.Engine
 ---@field entityExists fun(e: integer): boolean
----@field getComponent fun(e: integer): { transportVehicleConfig: { vehicles: { purchaseTime: integer }[] } }
+---@field getComponent fun(e: integer): spec.actions.Vehicle
 ---@field system { transportVehicleSystem: { getLineVehicles: fun(): integer[] } }
+
+---@class spec.actions.Vehicle
+---@field state integer
+---@field transportVehicleConfig { vehicles: { purchaseTime: integer }[] }
 
 ---@class spec.actions.Cmd
 ---@field makeVehicleSendToDepotCmd fun(v: integer, sell: boolean): { vehicle: integer, sell: boolean }
@@ -41,18 +45,27 @@ describe("actions", function()
 	local saved = {}
 	---@type table[], string[], boolean
 	local commands, log, send_ok
+	local states ---@type table<integer, integer> vehicle -> TransportVehicleState
+	local EN_ROUTE, GOING_TO_DEPOT, IN_DEPOT = 1, 2, 3
 
 	before_each(function()
 		saved.api, saved.tr, saved.debug_print = _G.api, _G._, _G.debugPrint
 		fired, commands, log, send_ok = {}, {}, {}, true
+		states = { [OLD] = EN_ROUTE, [NEW] = EN_ROUTE }
 		local purchased = { [OLD] = 10, [NEW] = 20 }
 		---@type spec.actions.Api
 		local mock = {
-			type = { ComponentType = { TRANSPORT_VEHICLE = "tv" } },
+			type = {
+				ComponentType = { TRANSPORT_VEHICLE = "tv" },
+				enum = { TransportVehicleState = { EN_ROUTE = EN_ROUTE, GOING_TO_DEPOT = GOING_TO_DEPOT,
+					IN_DEPOT = IN_DEPOT } },
+			},
 			engine = {
 				entityExists = function(e) return purchased[e] ~= nil end,
 				getComponent = function(e)
-					return { transportVehicleConfig = { vehicles = { { purchaseTime = purchased[e] } } } }
+					---@type spec.actions.Vehicle
+					local tv = { state = states[e], transportVehicleConfig = { vehicles = { { purchaseTime = purchased[e] } } } }
+					return tv
 				end,
 				system = { transportVehicleSystem = { getLineVehicles = function() return { NEW, OLD } end } },
 			},
@@ -105,6 +118,16 @@ describe("actions", function()
 		assert.is_true(actions.remove_vehicle(LINE, add_feedback))
 		assert.are.same({}, messages)
 		assert.are.same({ { vehicle = OLD, sell = true } }, commands)
+	end)
+
+	it("skips vehicles already going to or in a depot, so a second click removes the next one", function()
+		states[OLD] = GOING_TO_DEPOT
+		assert.is_true(actions.remove_vehicle(LINE))
+		assert.are.same({ { vehicle = NEW, sell = true } }, commands)
+		states[NEW] = IN_DEPOT
+		assert.is_false(actions.remove_vehicle(LINE))
+		assert.is_false(actions.add_vehicle(LINE))
+		assert.are.equal(1, #commands)
 	end)
 
 	it("reports a failed send to depot through the caller's feedback", function()

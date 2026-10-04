@@ -9,19 +9,13 @@ local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local game_tooltips = require("::/gui/main/game_tooltips.tl")
 local react = require("::/gui/main/react.lua")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 local vehicle_tooltip = {}
 
 local REFRESH = 0.25 -- seconds: speed and load change while the player looks
 
-local reported = {} ---@type table<string, boolean>
----@param key string
----@param err any the pcall error, any value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] vehicle tooltip: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("vehicle tooltip: ")
 
 ---@param param game.gui.main.game_tooltips.DefaultEntityTooltipParam
 ---@return uo.gui.vehicle_info.Info?

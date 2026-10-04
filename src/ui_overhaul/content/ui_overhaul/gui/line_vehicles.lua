@@ -24,6 +24,7 @@ local lang_util = require("::/scripts/lang_util.tl")
 local actions = require("/ui_overhaul/gui/actions.lua")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 local line_vehicles = {}
 
@@ -37,14 +38,7 @@ line_vehicles.switch = fallback.switch("line vehicles card")
 ---@field line Engine.Entity
 ---@field gameCtx game.gui.main.game_context.GameContext
 
-local reported = {} ---@type table<string, boolean>
----@param key string
----@param err any the pcall error, any value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] line vehicles card: ", key, " failed: ", tostring(err))
-end
+local report = guard.reporter("line vehicles card: ", " failed: ")
 
 ---@param children react.TreeNodeId[]
 ---@return react.TreeNodeId

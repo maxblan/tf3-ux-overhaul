@@ -283,13 +283,39 @@ describe("lvm_models", function()
 	end)
 
 	it("counts the vehicles of each listed model on other lines and caches the view by list members", function()
-		local view = lvm_models.view({ 11, 12, 13, 14 })
-		assert.are.equal(2, view.by_key["1"].more) -- 21, 22
-		assert.are.equal(1, view.by_key["2"].more) -- 23
 		local reads = calls.components
+		local view = lvm_models.view({ 11, 12, 13, 14 })
+		assert.are.equal(4, calls.components - reads) -- while rendering: the listed vehicles only
+		assert.is_true(view.pending)
+		assert.are.equal(0, view.by_key["1"].more)
+		reads = calls.components
 		assert.are.equal(view, lvm_models.view({ 14, 13, 12, 11 })) -- same members, other order: no engine reads
 		assert.are.equal(reads, calls.components)
+		lvm_models.refresh() -- the row's timer reads the other lines
+		view = lvm_models.view({ 11, 12, 13, 14 })
+		assert.is_false(view.pending)
+		assert.are.equal(2, view.by_key["1"].more) -- 21, 22
+		assert.are.equal(1, view.by_key["2"].more) -- 23
 		assert.truthy(view ~= lvm_models.view({ 11, 12, 13 }))
+	end)
+
+	it("reads the other lines every few refreshes, at once when a listed model changed", function()
+		lvm_models.view({ 14 })
+		lvm_models.refresh()
+		world.vehicles[24] = { ids = { 2 }, line = 200, rev = 1, carrier = 0, state = EN_ROUTE }
+		world.lines[200] = { 21, 22, 23, 24 }
+		for _i = 1, lvm_models.OTHERS_EVERY - 1 do
+			local reads = calls.components
+			lvm_models.refresh()
+			assert.are.equal(1, calls.components - reads) -- the listed vehicle only
+		end
+		assert.are.equal(1, lvm_models.view({ 14 }).by_key["2"].more)
+		lvm_models.refresh()
+		assert.are.equal(2, lvm_models.view({ 14 }).by_key["2"].more) -- 23, 24
+		replace(23, { 1 })
+		replace(14, { 1 })
+		lvm_models.refresh()
+		assert.are.equal(6, lvm_models.view({ 14 }).by_key["1"].more) -- 11, 12, 13, 21, 22, 23
 	end)
 
 	it("reads the fleet again after a failed read of the same list", function()
@@ -298,12 +324,15 @@ describe("lvm_models", function()
 		engine.getComponent = function() error("engine read failed") end
 		assert.is_false((pcall(lvm_models.view, { 11, 12, 13, 14 })))
 		engine.getComponent = get
-		local view = lvm_models.view({ 11, 12, 13, 14 })
-		assert.are.equal(2, view.by_key["1"].more)
+		lvm_models.view({ 11, 12, 13, 14 })
+		lvm_models.refresh()
+		assert.are.equal(2, lvm_models.view({ 11, 12, 13, 14 }).by_key["1"].more)
 	end)
 
 	it("shows the row for two models, or for one model other lines use too", function()
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 14 }).groups))
+		assert.is_false(lvm_models.row_visible(lvm_models.view({ 11, 12 }).groups)) -- other lines not read yet
+		lvm_models.refresh()
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 12 }).groups))
 		assert.is_false(lvm_models.row_visible(lvm_models.view({ 31, 32 }).groups))
 		local row = lvm_models.update(list({ 31, 32 }, {}))
@@ -320,6 +349,7 @@ describe("lvm_models", function()
 		local reads = calls.components
 		render(row)
 		assert.are.equal(reads, calls.components) -- mounting the timer reads nothing
+		tick() -- its first refresh reads the other lines
 		assert.are.equal(3, lvm_models.view({ 11, 12, 13, 14 }).by_key["1"].count)
 		local view, stamp = lvm_models.view({ 11, 12, 13, 14 }), tick()
 		assert.are.equal(view, lvm_models.view({ 11, 12, 13, 14 })) -- nothing changed: same view
@@ -360,26 +390,31 @@ describe("lvm_models", function()
 
 	it("follows the other lines' fleets", function()
 		local row = lvm_models.update(list({ 14 }, {}))
+		local _node, chips = render(row)
+		assert.is_nil(chips) -- one model: hidden until the timer has read the other lines
+		tick()
 		local pull = select(3, render(row))
 		assert.are.equal("Select all 2 Volvo from all lines", pull.meta.tooltip) -- 14 and 23
 
 		world.vehicles[24] = { ids = { 2 }, line = 200, rev = 1, carrier = 0, state = EN_ROUTE }
 		world.lines[200] = { 21, 22, 23, 24 }
-		tick()
+		for _i = 1, lvm_models.OTHERS_EVERY do tick() end
 		pull = select(3, render(row))
 		assert.are.equal("Select all 3 Volvo from all lines", pull.meta.tooltip)
 
 		replace(23, { 1 })
 		replace(24, { 1 })
-		tick()
+		for _i = 1, lvm_models.OTHERS_EVERY do tick() end
 		assert.are.equal(0, lvm_models.view({ 14 }).by_key["2"].more)
-		local node, chips = render(row)
+		local node
+		node, chips = render(row)
 		assert.are.equal("BoxLayout", node.kind) -- one model no other line uses: hidden
 		assert.is_nil(chips)
 	end)
 
 	it("logs whether the row shows what the engine has", function()
 		render(lvm_models.update(list({ 11, 12, 13, 14 }, {})))
+		tick()
 		lvm_models.debug({ action = "verify" })
 		assert.truthy(world.log[#world.log]:find("models=3+2 1+1 ok", 1, true))
 		replace(12, { 2 })
@@ -462,7 +497,15 @@ describe("lvm_models", function()
 	end)
 
 	it("renders one button per model and the 'In all lines' button for the selected model", function()
-		local _node, chips, pull = render(lvm_models.update(list({ 11, 12 }, { 14 })))
+		local row = lvm_models.update(list({ 11, 12 }, { 14 }))
+		local node, chips, pull = render(row)
+		assert.are.equal("BoxLayout", node.kind)
+		assert.are.equal(2, #chips)
+		assert.is_false(pull.meta.enabled) -- until the timer has read the other lines
+		assert.is_nil(pull.meta.tooltip)
+		tick()
+		node, chips, pull = render(row)
+		assert.are.equal("BoxLayout", node.kind)
 		assert.are.equal(2, #chips)
 		assert.are.equal("vehicle-button, selected", chips[1].params.meta.class)
 		assert.is_true(pull.meta.enabled)

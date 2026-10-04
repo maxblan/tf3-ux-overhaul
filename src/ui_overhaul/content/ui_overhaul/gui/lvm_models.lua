@@ -46,6 +46,7 @@ local lvm_models = {}
 
 ---@class uo.gui.lvm_models.View
 ---@field groups uo.gui.lvm_models.Group[]
+---@field pending boolean the other lines are not read yet: every `more` is 0 until the row's timer reads them
 ---@field by_entity table<Engine.Entity, string> vehicle -> model key
 ---@field by_key table<string, uo.gui.lvm_models.Group>
 
@@ -58,7 +59,10 @@ local lvm_models = {}
 ---@field action? "select"|"pull"|"verify"
 ---@field index? integer
 
-local REFRESH = 2.0 -- seconds; a refresh reads every vehicle on the player's lines
+local REFRESH = 2.0 -- seconds; a refresh reads the listed vehicles' models
+-- Every this many refreshes the other lines are read too (every vehicle on the player's lines), and
+-- whenever a listed vehicle's model changed.
+lvm_models.OTHERS_EVERY = 5
 
 --- Latest VehicleList parameters; one Line Manager exists at a time.
 ---@type { params: uo.gui.lvm_models.ListParams? }
@@ -74,7 +78,9 @@ lvm_models.live = live
 ---@field fleet? uo.gui.lvm_models.Fleet
 ---@field view? uo.gui.lvm_models.View
 ---@field stamp integer
-local cache = { signature = nil, vehicles = nil, fleet = nil, view = nil, stamp = 0 }
+---@field pending boolean `fleet.others` is not read yet
+---@field ticks integer refreshes since the other lines were last read
+local cache = { signature = nil, vehicles = nil, fleet = nil, view = nil, stamp = 0, pending = false, ticks = 0 }
 local names = {} ---@type table<integer, string> model id -> name
 
 ---@param what string
@@ -255,13 +261,11 @@ local function line_vehicles(skip)
 	return result
 end
 
---- What the engine says about a vehicle list (engine reads only, so it can run in a timer
--- callback): `keys` maps each listed vehicle to its model key, `ids` each key to its model ids and
--- `others` each key to the vehicles of that model on the player's lines that are not listed
--- ("In all lines" adds those).
+--- The listed vehicles' models (engine reads of the list only): a fleet whose `others` lists are
+-- still empty (read_others fills them).
 ---@param vehicles Engine.Entity[]
 ---@return uo.gui.lvm_models.Fleet
-function lvm_models.read_fleet(vehicles)
+local function read_keys(vehicles)
 	---@type table<Engine.Entity, string>, table<string, integer[]>, table<string, Engine.Entity[]>
 	local keys, ids_of, others = {}, {}, {}
 	for _i, v in ipairs(vehicles) do
@@ -273,30 +277,48 @@ function lvm_models.read_fleet(vehicles)
 			others[key] = {}
 		end
 	end
-	if next(others) then
-		for _i, v in ipairs(line_vehicles(keys)) do
-			local ids = lvm_models.read_ids(v)
-			local found = ids and #ids > 0 and others[lvm_models.model_key(ids)]
-			if found then found[#found + 1] = v end
-		end
-	end
 	return { keys = keys, ids = ids_of, others = others }
+end
+
+--- Fills `fleet.others`: reads every vehicle on the player's lines.
+---@param fleet uo.gui.lvm_models.Fleet
+local function read_others(fleet)
+	if not next(fleet.others) then return end
+	for _i, v in ipairs(line_vehicles(fleet.keys)) do
+		local ids = lvm_models.read_ids(v)
+		local found = ids and #ids > 0 and fleet.others[lvm_models.model_key(ids)]
+		if found then found[#found + 1] = v end
+	end
+end
+
+--- What the engine says about a vehicle list (engine reads only, so it can run in a timer
+-- callback): `keys` maps each listed vehicle to its model key, `ids` each key to its model ids and
+-- `others` each key to the vehicles of that model on the player's lines that are not listed
+-- ("In all lines" adds those).
+---@param vehicles Engine.Entity[]
+---@return uo.gui.lvm_models.Fleet
+function lvm_models.read_fleet(vehicles)
+	local fleet = read_keys(vehicles)
+	read_others(fleet)
+	return fleet
 end
 
 ---@param vehicles Engine.Entity[]
 ---@param fleet uo.gui.lvm_models.Fleet
+---@param pending boolean
 ---@return uo.gui.lvm_models.View
-local function build_view(vehicles, fleet)
+local function build_view(vehicles, fleet, pending)
 	local groups, by_entity, by_key = lvm_models.group(vehicles, function(v)
 		local key = fleet.keys[v]
 		return key and fleet.ids[key]
 	end, lvm_models.name_of)
 	for key, group in pairs(by_key) do group.more = #(fleet.others[key] or {}) end
-	return { groups = groups, by_entity = by_entity, by_key = by_key }
+	return { groups = groups, by_entity = by_entity, by_key = by_key, pending = pending }
 end
 
---- Model view of a vehicle list. The engine is read when the list's members change; refresh()
--- re-reads it for the same members.
+--- Model view of a vehicle list. When the list's members change, only the listed vehicles are read
+-- (this runs while the Line Manager renders); the other lines follow with refresh(), from the row's
+-- timer or before an action.
 ---@param vehicles Engine.Entity[]
 ---@return uo.gui.lvm_models.View
 function lvm_models.view(vehicles)
@@ -305,37 +327,49 @@ function lvm_models.view(vehicles)
 		local copy = {} ---@type Engine.Entity[]
 		for i, v in ipairs(vehicles) do copy[i] = v end
 		-- the signature only once the fleet is read: a failed read leaves the old list unmatched
-		local fleet = lvm_models.read_fleet(copy)
+		local fleet = read_keys(copy)
 		cache.signature, cache.vehicles, cache.fleet, cache.view = signature, copy, fleet, nil
+		cache.pending, cache.ticks = true, 0
 	end
 	-- set together with the signature, which matches here
 	local listed, fleet = cache.vehicles --[[@as Engine.Entity[] ]], cache.fleet --[[@as uo.gui.lvm_models.Fleet]]
-	if not cache.view then cache.view = build_view(listed, fleet) end
+	if not cache.view then cache.view = build_view(listed, fleet, cache.pending) end
 	return cache.view
 end
 
 --- Re-reads the fleet of the cached list (engine reads only, so it can run in a timer callback)
 -- and drops the view if the fleet changed: a vehicle was replaced in place, or other lines gained
--- or lost vehicles of a listed model. Returns the stamp, which changes with every such drop.
+-- or lost vehicles of a listed model. The other lines are read when `full`, when they were not read
+-- yet, when a listed vehicle's model changed and every OTHERS_EVERY calls. Returns the stamp, which
+-- changes with every drop.
+---@param full? boolean
 ---@return integer
-function lvm_models.refresh()
-	if cache.vehicles then
-		local fleet = lvm_models.read_fleet(cache.vehicles)
-		if not table_util.deepEquals(fleet, cache.fleet) then
-			cache.fleet, cache.view = fleet, nil
-			cache.stamp = cache.stamp + 1
-		end
+function lvm_models.refresh(full)
+	if not cache.vehicles then return cache.stamp end
+	local old = cache.fleet --[[@as uo.gui.lvm_models.Fleet]] -- set together with vehicles
+	local fleet = read_keys(cache.vehicles)
+	cache.ticks = cache.ticks + 1
+	local models_changed = not (table_util.deepEquals(fleet.keys, old.keys) and table_util.deepEquals(fleet.ids, old.ids))
+	if not (full or cache.pending or models_changed or cache.ticks >= lvm_models.OTHERS_EVERY) then
+		return cache.stamp
+	end
+	read_others(fleet)
+	cache.ticks = 0
+	if cache.pending or not table_util.deepEquals(fleet, old) then
+		cache.fleet, cache.view, cache.pending = fleet, nil, false
+		cache.stamp = cache.stamp + 1
 	end
 	return cache.stamp
 end
 
 --- The open list's view as the engine has it now, for an action that is about to select vehicles.
--- Reads the fleet once: view() reads it for a new list, refresh() for the cached one.
+-- Reads the listed vehicles and the other lines now: an action must not act on an old reading.
 ---@return uo.gui.lvm_models.View?
 local function current_view()
 	if not live.params then return nil end
 	local vehicles = live.params.vehicles or {}
-	if cache.signature == lvm_models.signature(vehicles) then lvm_models.refresh() end
+	lvm_models.view(vehicles) -- a new list: its models
+	lvm_models.refresh(true) -- and the other lines, as they are now
 	return lvm_models.view(vehicles)
 end
 
@@ -504,10 +538,13 @@ local function on_pull(key)
 end
 
 ---@param target? uo.gui.lvm_models.Group
+---@param pending boolean the other lines are not read yet
 ---@return react.TreeNodeId
-local function pull_button(target)
-	local tooltip, enabled ---@type string, boolean
-	if not target then
+local function pull_button(target, pending)
+	local tooltip, enabled ---@type string?, boolean
+	if pending then
+		tooltip, enabled = nil, false -- for a moment, until the row's timer has read the other lines
+	elseif not target then
 		tooltip, enabled = _("Select vehicles of one model first"), false
 	elseif target.more == 0 then
 		tooltip, enabled = _("No other line uses this model"), false
@@ -567,7 +604,7 @@ local function render_row(p)
 						content = builtin.Component{ layout = builtin.BoxLayout{
 							orientation = builtin.type.Orientation.Horizontal, children = chips } },
 					},
-					pull_button(lvm_models.target(view.groups, view.by_entity, view.by_key, p.selected)),
+					pull_button(lvm_models.target(view.groups, view.by_entity, view.by_key, p.selected), view.pending),
 				},
 			},
 		},
@@ -608,7 +645,7 @@ function lvm_models.debug(param)
 	if action == "verify" then
 		local fleet = cache.vehicles and lvm_models.read_fleet(cache.vehicles)
 		local counts = {} ---@type string[]
-		for i, group in ipairs(fleet and build_view(cache.vehicles, fleet).groups or {}) do
+		for i, group in ipairs(fleet and build_view(cache.vehicles, fleet, false).groups or {}) do
 			counts[i] = string.format("%d+%d", group.count, group.more)
 		end
 		local same = fleet ~= nil and table_util.deepEquals(fleet, cache.fleet)

@@ -13,6 +13,7 @@
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
 local selector_react_util = require("::/gui/main/selector_react_util.tl")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 local catchment = {}
 
@@ -30,15 +31,7 @@ local EVENT = "uio.catchment"
 ---@type uo.gui.catchment.Shown?
 local shown
 
----@type table<string, true>
-local reported = {}
----@param key string
----@param err any the pcall error value
-local function report(key, err)
-	if reported[key] then return end
-	reported[key] = true
-	debugPrint("[ui_overhaul] catchment: ", key, ": ", tostring(err))
-end
+local report = guard.reporter("catchment: ")
 
 --- The current choice (GUI thread).
 ---@return uo.gui.catchment.Shown
@@ -102,10 +95,7 @@ local function with_overlay(inner, s)
 			local ok, config = pcall(catchment.layer_config, s)
 			if ok then
 				---@cast p builtin.ActionDescriptorParam -- a table and the only argument: the params
-				-- a shallow copy of every field the caller set, whatever their types (hence any)
-				---@type table<string, any>
-				local copy = {}
-				for k, v in pairs(p --[[@as table<string, any>]]) do copy[k] = v end
+				local copy = guard.shallow_copy(p)
 				---@type react.TreeNodeId[]
 				local children = {}
 				for i, child in ipairs(p.children or {}) do children[i] = child end

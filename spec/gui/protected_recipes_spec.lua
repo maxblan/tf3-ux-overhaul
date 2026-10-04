@@ -75,6 +75,17 @@ describe("protected recipes", function()
 		assert.are.equal(2, #logged)
 	end)
 
+	it("industry cards: a recorded failed expansion is no blocker once the window's check finds the way clear", function()
+		local _fake, industry_cards = load("/ui_overhaul/gui/industry_cards.lua")
+		local facts = { level = 1, maxLevel = 4, output = 100, chance = 0.2, blocked = true, blockers = { "blocked" } }
+		assert.are.equal(facts, industry_cards.live(facts, true))
+		assert.are.equal(facts, industry_cards.live(facts, nil))
+		local clear = industry_cards.live(facts, false) ---@type uo.industry_cards.Facts
+		assert.is_false(clear.blocked)
+		assert.are.same({}, clear.blockers)
+		assert.is_true(facts.blocked) -- the read facts stay as they were
+	end)
+
 	it("vehicle performance card shows nothing for odd ratings", function()
 		local fake = load("/ui_overhaul/gui/performance.lua")
 		local card = fake.mount(fake.recipe("UioVehiclePerformance"))

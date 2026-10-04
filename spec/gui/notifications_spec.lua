@@ -211,3 +211,52 @@ describe("notifications", function()
 		end)
 	end)
 end)
+
+-- notifications.css.lua: every icon colour keeps 7:1 contrast to the white symbol (WCAG AAA)
+describe("notification icon colours", function()
+	---@param c number sRGB channel, 0..1
+	---@return number
+	local function linear(c) return c <= 0.03928 and c / 12.92 or ((c + 0.055) / 1.055) ^ 2.4 end
+	---@param rgb number[]
+	---@return number
+	local function contrast_to_white(rgb)
+		local l = 0.2126 * linear(rgb[1]) + 0.7152 * linear(rgb[2]) + 0.0722 * linear(rgb[3])
+		return 1.05 / (l + 0.05)
+	end
+
+	it("colours every icon background, base and subsidy, at 7:1 or more, on hover and pressed too", function()
+		local rules = {} ---@type [string, table<string, any>][]
+		local saved_data, saved_api = _G.data, _G.api
+		fake_react.load("/ui_overhaul/gui/notifications.css.lua", {
+			["::/gui/main/stylesheetutil.lua"] = {
+				---@param _result table
+				---@return fun(selector: string, properties: table<string, any>)
+				makeAdder = function(_result)
+					---@param selector string
+					---@param properties table<string, any>
+					return function(selector, properties) rules[#rules + 1] = { selector, properties } end
+				end,
+			},
+		})
+		-- the colour table the stylesheet reads: only the white of the timer ring
+		local mock = { gui = { genericRep = { find = function() return 1 end,
+			get = function() return { data = { NeutralLightest = { 1, 1, 1, 1 } } } end } } }
+		_G.api = mock --[[@as api]]
+		local css_data = _G.data ---@type fun(): table[]
+		css_data()
+		_G.data, _G.api = saved_data, saved_api
+		local seen = {} ---@type table<string, true>
+		for _i, rule in ipairs(rules) do
+			local background = rule[2].backgroundColor1 ---@type number[]?
+			if background then
+				local ratio = contrast_to_white(background)
+				assert.is_true(ratio >= 7, rule[1] .. string.format(": %.2f", ratio))
+				for class in rule[1]:gmatch("!([%w-]+)") do seen[class] = true end
+			end
+		end
+		for _i, class in ipairs({ "caution", "problem", "info", "achievement", "unknown", "uio-subsidy-offer",
+			"uio-subsidy-active", "uio-subsidy-complete", "uio-subsidy-failed", "uio-subsidy-missed" }) do
+			assert.is_true(seen[class] == true, class)
+		end
+	end)
+end)

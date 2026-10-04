@@ -267,4 +267,7 @@ function M.setStyleClasses(...) end
 ---@return string
 function M.getCurrentRecipeName() end
 
+---@return integer
+function M.getCurrentRecipeId() end
+
 return M

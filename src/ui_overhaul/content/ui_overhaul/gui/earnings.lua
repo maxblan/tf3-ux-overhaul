@@ -10,11 +10,13 @@ local builtin = require("::/gui/main/builtin.lua")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local earnings_plugin = require("::/gui/game_bar/game_bar_display_earnings_plugin/game_bar_display_earnings.script.tl")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
+local guard = require("/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.earnings
 local earnings = {}
 
 local logged = false
+local report = guard.reporter("earnings: ")
 
 ---@class uo.gui.earnings.Read
 ---@field year integer earnings of the current year
@@ -41,6 +43,16 @@ local function read()
 	return result
 end
 
+-- The timer's callback: read() runs outside the render's protection on later ticks, so an error is
+-- logged once and the state becomes nil, which makes the next render fail over to the base display.
+---@return uo.gui.earnings.Read?
+local function read_safe()
+	local ok, result = pcall(read)
+	if ok then return result end
+	report("read", result)
+	return nil
+end
+
 ---@param d uo.gui.earnings.Read
 ---@return string
 local function tooltip(d)
@@ -53,9 +65,10 @@ end
 
 ---@return react.TreeNodeId?
 local function render()
-	local state = engine_react_util.useStepStateTimer(read)
+	local state = engine_react_util.useStepStateTimer(read_safe)
 	local d = state:old()
 	if api.gui.game.isMapEditor() then return nil end
+	if d == nil then error("no earnings to show") end
 	local class = d.year >= 0 and "positive" or "negative"
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,

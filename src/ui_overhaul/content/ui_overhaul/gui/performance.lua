@@ -19,6 +19,7 @@ local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local romberg = require("::/scripts/util/romberg.tl")
 local vehicle_slopes = require("/ui_overhaul/core/vehicle_slopes.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.performance
 local performance = {}
@@ -251,17 +252,6 @@ local function wrap_rating(original)
 	end
 end
 
---- A copy of `t` with the same fields and values.
----@generic T: table
----@param t T
----@return T
-local function shallow_copy(t)
-	local copy = {}
-	-- LuaLS cannot infer pairs()'s key and value types for a generic table
-	---@diagnostic disable-next-line: no-unknown
-	for k, v in pairs(t) do copy[k] = v end
-	return copy
-end
 
 ---@param original function builtin.TextView, or another mod's wrap of it
 ---@return function
@@ -278,9 +268,9 @@ local function wrap_text_view(original)
 			if type(p) == "table" and p.text == pending[1] then
 				local tooltip = pending[2]
 				pending = nil
-				local meta = shallow_copy(p.meta or {})
+				local meta = guard.shallow_copy(p.meta or {})
 				if meta.tooltip == nil then meta.tooltip = tooltip end
-				local copy = shallow_copy(p)
+				local copy = guard.shallow_copy(p)
 				copy.meta = meta
 				return original(copy)
 			end

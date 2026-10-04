@@ -24,6 +24,7 @@ local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local town_util = require("::/game_mechanics/towns/town_util.tl")
 local town_cargo_util = require("::/game_mechanics/towns/town_cargo_util.tl")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 ---@class uo.gui.window_tweaks
 local window_tweaks = {}
@@ -139,17 +140,6 @@ local ConfirmSellButton = react.RegisterRecipe("UioConfirmSellButton", function(
 	} } }
 end)
 
---- A copy of `t` with the same fields and values.
----@generic T: table
----@param t T
----@return T
-local function shallow_copy(t)
-	local copy = {}
-	-- LuaLS cannot infer pairs()'s key and value types for a generic table
-	---@diagnostic disable-next-line: no-unknown
-	for k, v in pairs(t) do copy[k] = v end
-	return copy
-end
 
 ---@param buttons? game.gui.entity_window.entity_window_util.ActionBarButton[]
 ---@return game.gui.entity_window.entity_window_util.ActionBarButton[]?
@@ -159,7 +149,7 @@ local function with_confirmation(buttons)
 	for i, entry in ipairs(buttons) do
 		if entry.tag == SELL_TAG and not entry.customItem and not entry.toggleButton and entry.sound then
 			-- `sound` is only set when selling is allowed; otherwise the base click shows the reason
-			local copy = shallow_copy(entry)
+			local copy = guard.shallow_copy(entry)
 			copy.customItem = ConfirmSellButton{ entry = entry }
 			result[i] = copy
 		else
@@ -173,7 +163,7 @@ end
 ---@return react.TreeNodeId
 local ActionButtonBar = react.RegisterRecipe("ActionButtonBar", function(params)
 	local ok, changed = pcall(function()
-		local copy = shallow_copy(params)
+		local copy = guard.shallow_copy(params)
 		copy.primaryButtons = with_confirmation(params.primaryButtons)
 		copy.secondaryButtons = with_confirmation(params.secondaryButtons)
 		return copy
