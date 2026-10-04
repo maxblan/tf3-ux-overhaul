@@ -1,17 +1,24 @@
---- Entity windows (vehicle, line, station, town, industry ...) can be minimized: a small button in
--- the top right corner of the window's content folds the window to its title bar and a slim row
--- with the restore button; a second click unfolds it. The window keeps its place. Useful with the
--- mod's side-by-side windows (tool_stack.lua). Sections that were open stay open, as the mod
--- remembers them (window_tweaks.lua); a closed window opens unfolded next time.
--- The module function make_entity_window.makeEntityWindowContent, which the window manager calls
--- through the module table for every entity window, is wrapped: the content recipe it returns is
--- rendered inside the recipe UioMinimizable, which shows either the content with the button over its
--- corner or the restore row. The window itself (builtin.Window) is not touched: a wrapped Window
--- builtin breaks window recipes that other code registers later (they no longer find the builtin,
--- and the game crashes when such a window opens; observed in-game). Installed by minimize.script.lua.
+--- Every window with a title bar and a close button (entity windows, Statistics, Finances, Company,
+-- the vehicle store, layers, the notification log, mods' windows ...) can be minimized: a round
+-- button in the title bar, in the design of the close button (the game's
+-- fake-builtin-window-close-button style), folds the window to its title bar; a second click
+-- unfolds it. The content stays mounted while folded (tabs, open sections and scroll positions are
+-- kept) and the window keeps its place. A window that is closed opens unfolded next time.
+--
+-- The module field builtin.Window, which base recipes look up when they render, is wrapped:
+--   * header: the window's header slot, which the engine draws in the title bar, holds the button,
+--     right-aligned, so it sits next to the title bar's own buttons (rename, locate, pin, close; the
+--     engine places the header before them, so it cannot go between pin and close);
+--   * content: wrapped in UioMinimizable, whose root carries the class uio-folded while minimized
+--     (minimize.css.lua hides it with visibility "none").
+-- Window recipes are registered as wrappers of builtin.Window (react.RegisterWrapperRecipe); one
+-- registered after the field is wrapped would get the wrapper, which the framework does not know as a
+-- builtin, and the game crashes when that window opens (observed in game). react.RegisterWrapperRecipe
+-- is wrapped as well, so it always registers against the base builtin. Windows without a title bar
+-- (compact: the Line Manager), without a close button, dialogs and popovers stay as they are.
+-- Installed by minimize.script.lua.
 -- @module ui_overhaul.gui.minimize
 local builtin = require("::/gui/main/builtin.lua")
-local make_entity_window = require("::/gui/entity_window/make_entity_window.tl")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
 
@@ -20,6 +27,8 @@ local minimize = {}
 local EVENT = "uio.minimize"
 local ICON_MINIMIZE = "gui/builtin/window/icons/symbol_minimize_18.tga" -- the game's own (statistics.tl)
 local ICON_RESTORE = "gui/builtin/window/icons/symbol_maximize_18.tga"
+local SKIPPED_CLASSES = { "popover", "dialog", "no-close-button", "construct-" }
+local SKIPPED_TOOLS = { pause = true }
 
 local minimized = {} -- window key -> true while minimized
 
@@ -30,79 +39,106 @@ local function report(key, err)
 	debugPrint("[ui_overhaul] minimize: ", key, ": ", tostring(err))
 end
 
+--- Whether a window's parameters get the minimize button.
+function minimize.eligible(p)
+	if type(p) ~= "table" or p.content == nil or p.header ~= nil or p.compact then return false end
+	if p.closable ~= true or SKIPPED_TOOLS[p.tool or ""] then return false end
+	if type(p.title) ~= "string" or p.title == "" then return false end
+	local class = p.meta and p.meta.class
+	if type(class) == "string" then
+		for _i, skipped in ipairs(SKIPPED_CLASSES) do
+			if class:find(skipped, 1, true) then return false end
+		end
+	end
+	return true
+end
+
+--- A key that tells the window apart from the others open at the same time.
+function minimize.key(p)
+	if type(p.id) == "string" and p.id ~= "" then return "id:" .. p.id end
+	if type(p.tool) == "string" and p.tool ~= "" and p.tool ~= "entityWindow" then return "tool:" .. p.tool end
+	return "title:" .. tostring(p.title)
+end
+
 --- Minimizes or restores the window `key`.
 function minimize.toggle(key)
 	minimized[key] = not minimized[key] or nil
 	react.fireEvent(nil, EVENT, key)
 end
 
-local function button(key, folded)
-	return builtin.Button{
-		-- no component id: a window can render its content twice (the industry window's tabs), and ids
-		-- must be unique (a duplicate is a React error, observed in-game)
-		meta = { class = "uio-minimize", tooltip = folded and _("Restore") or _("Minimize") },
-		content = builtin.ImageView{ path = folded and ICON_RESTORE or ICON_MINIMIZE,
-			scaling = builtin.type.ImageViewScaling.AutoFit },
-		onClick = function() minimize.toggle(key) end,
-	}
-end
-
-local function render(params)
-	local key = params.key
+-- Re-renders the caller when window `key` folds or unfolds; returns whether it is folded.
+local function use_folded(key)
 	local state = react.useState(minimized[key] == true)
 	react.onEvent(EVENT, function(_e, changed)
 		if changed == key then state:set(minimized[changed] == true) end
 	end)
-	-- testbench: "uio.debug.minimize_all" folds or unfolds every entity window
-	react.onEvent("uio.debug.minimize_all", function() minimize.toggle(key) end)
-	-- a closed window opens unfolded next time
-	react.onUnmount(function() minimized[key] = nil end)
-	if state:old() then
-		return builtin.BoxLayout{
-			meta = { class = "uio-minimized" },
-			orientation = builtin.type.Orientation.Horizontal,
-			children = { gui_react_util.makeHorizontalSpacer(), button(key, true) },
-		}
-	end
-	return builtin.FloatingLayout{
-		children = {
-			builtin.FloatingLayoutChild{ h = -1, v = -1, item = params.content },
-			builtin.FloatingLayoutChild{ h = 1, v = 0, item = builtin.BoxLayout{ children = { button(key, false) } } },
-		},
-	}
+	return state:old()
 end
 
 local Minimizable = react.RegisterRecipe("UioMinimizable", function(params)
-	local content = params.inner(params.innerParam)
-	local ok, node = pcall(render, { key = params.key, content = content })
-	if ok then return node end
-	report("render", node)
-	return builtin.BoxLayout{ children = { content } }
+	local key = params.key
+	local folded = use_folded(key)
+	-- testbench: "uio.debug.minimize_all" folds or unfolds every window
+	react.onEvent("uio.debug.minimize_all", function() minimize.toggle(key) end)
+	react.onUnmount(function() minimized[key] = nil end) -- a closed window opens unfolded next time
+	return builtin.BoxLayout{
+		meta = { class = folded and "uio-folded" or "uio-unfolded" },
+		orientation = builtin.type.Orientation.Vertical,
+		children = { params.content },
+	}
 end)
 
---- The window manager's result for an entity window, with its content recipe inside UioMinimizable.
--- Other results (no recipe, or a builtin content) are returned unchanged.
-function minimize.wrap_result(result, entity)
-	if type(result) ~= "table" or type(result.recipe) ~= "function" or entity == nil then return result end
-	local copy = {}
-	for k, v in pairs(result) do copy[k] = v end
-	copy.recipe = Minimizable
-	copy.param = { key = "entity_" .. tostring(entity), inner = result.recipe, innerParam = result.param,
-		keyEntity = result.param and result.param.keyEntity or entity }
-	return copy
+local MinimizeButton = react.RegisterRecipe("UioMinimizeButton", function(params)
+	local folded = use_folded(params.key)
+	return builtin.BoxLayout{
+		meta = { class = "uio-minimize-header" },
+		orientation = builtin.type.Orientation.Horizontal,
+		children = {
+			gui_react_util.makeHorizontalSpacer(),
+			builtin.Button{
+				-- no component id: a window can be rendered twice, and ids must be unique
+				meta = { class = "fake-builtin-window-close-button, uio-minimize",
+					tooltip = folded and _("Restore") or _("Minimize") },
+				content = builtin.ImageView{ path = folded and ICON_RESTORE or ICON_MINIMIZE,
+					scaling = builtin.type.ImageViewScaling.AutoFit },
+				onClick = function() minimize.toggle(params.key) end,
+			},
+		},
+	}
+end)
+
+local function wrap_window(base)
+	return function(p, ...)
+		if select("#", ...) == 0 then
+			local ok, eligible = pcall(minimize.eligible, p)
+			if ok and eligible then
+				local key = minimize.key(p)
+				local copy = {}
+				for k, v in pairs(p) do copy[k] = v end
+				copy.content = Minimizable{ key = key, content = p.content }
+				copy.header = MinimizeButton{ key = key }
+				return base(copy)
+			elseif not ok then
+				report("eligible", eligible)
+			end
+		end
+		return base(p, ...)
+	end
 end
 
 --- Called from the react-replacement-config before the UI starts.
 function minimize.install(_replacement_api)
-	local original = make_entity_window.makeEntityWindowContent
-	if type(original) ~= "function" then error("makeEntityWindowContent not found") end
-	make_entity_window.makeEntityWindowContent = function(entity, ...)
-		local result = original(entity, ...)
-		local ok, wrapped = pcall(minimize.wrap_result, result, entity)
-		if ok then return wrapped end
-		report("wrap", wrapped)
-		return result
+	local base_window = builtin.Window
+	if type(base_window) ~= "function" then error("builtin.Window not found") end
+	local register_wrapper = react.RegisterWrapperRecipe
+	if type(register_wrapper) ~= "function" then error("react.RegisterWrapperRecipe not found") end
+	local wrapped_window = wrap_window(base_window)
+	-- window recipes registered from now on wrap the base builtin, not this module's function
+	react.RegisterWrapperRecipe = function(name, wrapped, ...)
+		if wrapped == wrapped_window then wrapped = base_window end
+		return register_wrapper(name, wrapped, ...)
 	end
+	builtin.Window = wrapped_window
 	debugPrint("[ui_overhaul] window minimize installed")
 end
 
