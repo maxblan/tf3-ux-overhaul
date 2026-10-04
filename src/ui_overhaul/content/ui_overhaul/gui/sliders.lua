@@ -1,0 +1,330 @@
+--- Sliders on the gameplay screens:
+--   * the mouse wheel moves a slider under the cursor: to the next snap point, or one step while
+--     the game's precision key is held
+--   * snap points every few percent of the range (core/slider_snap.lua), drawn as ticks; a dragged
+--     slider sticks to one when it comes close, and the precision key turns that off
+--   * a value can be typed: double-click a slider, or click the value next to a construction
+--     slider (a number spin box, as the Line Manager's wait times have)
+-- Construction sliders (and all other script parameters) move through a list of values, which their
+-- label shows (height "2.5 m", incline "3 %"); a typed value picks the entry whose label is nearest,
+-- so it is always one the game offers.
+--
+-- Two hooks, both installed before the UI starts (sliders.script.lua):
+--   * the module field builtin.Slider is wrapped: base recipes look it up when they render, so every
+--     slider is reached. The wrapper renders the base slider inside the recipe UioSlider, which adds
+--     the wheel and typing; the base slider keeps its parameters and classes.
+--   * script_param_util.buildScriptParamCompSimple is wrapped for sliders: the slider row is this
+--     module's Lua copy of the base recipe ScriptParamSliderAndText (registered under its name, so
+--     the base stylesheet applies), with the value label as a button to type a value.
+-- The settings menu keeps vanilla sliders (design rule: gameplay screens only). Any error falls back
+-- to the plain base slider.
+-- @module ui_overhaul.gui.sliders
+local builtin = require("::/gui/main/builtin.lua")
+local react = require("::/gui/main/react.lua")
+local script_param_util = require("::/gui/main/script_param_util.tl")
+local lang_util = require("::/scripts/lang_util.tl")
+local slider_snap = require("/ui_overhaul/core/slider_snap.lua")
+
+local sliders = {}
+
+-- Recipes whose sliders stay vanilla: the in-game settings menu.
+local VANILLA_IN = { SettingsPage = true }
+
+local reported = {}
+local function report(key, err)
+	if reported[key] then return end
+	reported[key] = true
+	debugPrint("[ui_overhaul] sliders: ", key, ": ", tostring(err))
+end
+
+local function precise()
+	local ok, active = pcall(api.gui.inputAction.modifierOnlyActionIsActive, "IA_PRECISION_MODE")
+	return ok and active or false
+end
+
+local function wheel_dir(evt)
+	return evt.yrel > 0 and 1 or -1
+end
+
+local function copy(t)
+	local result = {}
+	for k, v in pairs(t) do result[k] = v end
+	return result
+end
+
+-- The base Slider (set by install), and the wrapper that replaces it.
+local base_slider
+
+-- Any slider ------------------------------------------------------------------------------------
+
+local function render_slider(params)
+	local p = params.p
+	local min, max = p.min or 0, p.max or 100
+	local step = (p.step and p.step > 0) and p.step or 1
+	local detent = slider_snap.detent(min, max, step)
+	-- Sliders that only set initialValue keep their own value; here it is held so the wheel can
+	-- move them too.
+	local own = react.useState(p.initialValue or p.value or min)
+	local editing = react.useState(false)
+	local value = p.value ~= nil and p.value or own:old()
+
+	local function commit(v)
+		v = math.max(min, math.min(max, math.floor(v / step + 0.5) * step))
+		if v == value then return end
+		if p.value == nil then own:set(v) end
+		if p.onValueChange then p.onValueChange(v) end
+	end
+
+	react.onMouseEvent(function(evt)
+		local ok, consumed = pcall(function()
+			if evt.handled then return false end
+			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
+				commit(slider_snap.wheel(value, min, max, step, detent, wheel_dir(evt), precise()))
+				return true
+			end
+			-- typing makes sense where the slider's number is what it shows (not for short lists)
+			if evt.type == api.gui.mouse.Event.Type.DoubleClicked and evt.button == 0 and (max - min) / step > 4 then
+				editing:set(true)
+				return true
+			end
+			return false
+		end)
+		if ok then return consumed end
+		report("mouse", consumed)
+		return false
+	end)
+
+	if editing:old() then
+		return builtin.BoxLayout{ children = {
+			builtin.DoubleSpinBox{
+				meta = { class = "uio-slider-input" },
+				min = min, max = max, step = step, value = value,
+				startInEditMode = true,
+				onValueChange = commit,
+				onStopEditMode = function() editing:set(false) end,
+			},
+		} }
+	end
+
+	local q = copy(p)
+	q.value = value
+	q.initialValue = nil
+	q.onValueChange = function(v)
+		if not precise() then v = slider_snap.snap(v, min, max, detent) end
+		commit(v)
+	end
+	if detent then
+		if q.withTicks == nil then q.withTicks = true end
+		if q.pageStep == nil then q.pageStep = detent end
+	end
+	return builtin.BoxLayout{ children = { base_slider(q) } }
+end
+
+local UioSlider = react.RegisterRecipe("UioSlider", function(params)
+	local ok, node = pcall(render_slider, params)
+	if ok then return node end
+	report("render", node)
+	return builtin.BoxLayout{ children = { base_slider(params.p) } }
+end)
+
+--- Whether a builtin.Slider call can get the additions: a plain parameter table with a callback,
+-- outside the settings menu. `recipe` is the name of the recipe that is rendering.
+function sliders.enhance(args, recipe)
+	if #args ~= 1 or type(args[1]) ~= "table" then return false end
+	local p = args[1]
+	if type(p.onValueChange) ~= "function" or p.uioPlain then return false end
+	return not VANILLA_IN[recipe or ""]
+end
+
+local function wrapped_slider(...)
+	local args = { ... }
+	local ok, enhance = pcall(sliders.enhance, args, react.getCurrentRecipeName())
+	if ok and enhance then return UioSlider{ p = args[1] } end
+	return base_slider(...)
+end
+
+-- Script parameters (construction tools and built stations) ----------------------------------------
+
+local function choices(scriptParam)
+	return scriptParam.numbers ~= nil and #scriptParam.numbers or #scriptParam.values
+end
+
+local function value_of(scriptParam, index)
+	return scriptParam.numbers ~= nil and scriptParam.numbers[index] or index
+end
+
+local function index_of(scriptParam, value)
+	if scriptParam.numbers ~= nil then
+		local best, best_distance = 1, math.abs(scriptParam.numbers[1] - value)
+		for i = 2, #scriptParam.numbers do
+			local distance = math.abs(scriptParam.numbers[i] - value)
+			if distance < best_distance then best, best_distance = i, distance end
+		end
+		return best
+	end
+	return value >= 1 and math.floor(value) or 1
+end
+
+-- The label of a value, as the base slider shows it.
+local function label(scriptParam, value)
+	if scriptParam.formatValueFn ~= nil then return scriptParam.formatValueFn(value) end
+	if scriptParam.values ~= nil then return scriptParam.values[index_of(scriptParam, value)] end
+	return lang_util.formatNumber(value, 3)
+end
+
+local function render_param_slider(param)
+	local scriptParam = param.scriptParam
+	local pending = react.useState(nil) -- value while dragging (coalesced: sent on release)
+	local shown = react.useState(nil) -- value the label shows while dragging
+	local mouse_pressed = react.useRef(false)
+	local editing = react.useState(false)
+	local current = pending:old() or param.currentValue
+
+	local function send(value)
+		param.onValueChange(value)
+		pending:set(nil)
+		shown:set(nil)
+	end
+
+	react.onMouseEvent(function(evt)
+		local ok, consumed = pcall(function()
+			if evt.button == 0 then
+				if evt.type == api.gui.mouse.Event.Type.Released then
+					mouse_pressed:set(false)
+					if pending:old() ~= nil then
+						send(pending:old())
+						return true
+					end
+				elseif evt.type == api.gui.mouse.Event.Type.Pressed then
+					mouse_pressed:set(true)
+					pending:set(nil)
+				end
+			end
+			if evt.handled then return false end
+			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
+				local dir = wheel_dir(evt)
+				local value
+				if scriptParam.stepValueFn ~= nil then
+					value = scriptParam.stepValueFn(param.currentValue, dir, precise())
+				else
+					local index = math.max(1, math.min(choices(scriptParam), index_of(scriptParam, param.currentValue) + dir))
+					value = value_of(scriptParam, index)
+				end
+				if value ~= nil and value ~= param.currentValue then send(value) end
+				return true
+			end
+			if evt.type == api.gui.mouse.Event.Type.DoubleClicked and evt.button == 0 then
+				editing:set(true)
+				return true
+			end
+			return false
+		end)
+		if ok then return consumed end
+		report("param mouse", consumed)
+		return false
+	end)
+
+	local value_text = label(scriptParam, shown:old() or current)
+	local value_node
+	if editing:old() then
+		-- the number the label shows (in its unit); the typed number picks the nearest label
+		value_node = builtin.DoubleSpinBox{
+			meta = { class = "uio-slider-input" },
+			value = slider_snap.parse_number(value_text) or 0,
+			step = 0.5,
+			startInEditMode = true,
+			onValueChange = function(typed)
+				local labels = {}
+				for i = 1, choices(scriptParam) do labels[i] = label(scriptParam, value_of(scriptParam, i)) end
+				local index = slider_snap.nearest_label(labels, tostring(typed))
+				if index then send(value_of(scriptParam, index)) end
+			end,
+			onStopEditMode = function() editing:set(false) end,
+		}
+	else
+		value_node = builtin.Button{
+			meta = { class = "uio-slider-value", tooltip = _("Click to type a value") },
+			content = builtin.TextView{ meta = { class = "slider-label-right, font-scale-body" }, text = value_text },
+			onClick = function() editing:set(true) end,
+		}
+	end
+
+	return builtin.BoxLayout{
+		orientation = builtin.type.Orientation.Horizontal,
+		children = {
+			base_slider{
+				value = index_of(scriptParam, current),
+				onValueChange = function(index)
+					local value = value_of(scriptParam, index)
+					if not param.allowCoalesce or not mouse_pressed:get() then
+						send(value)
+					else
+						pending:set(value)
+						shown:set(value)
+					end
+				end,
+				min = 1,
+				max = choices(scriptParam),
+				step = 1,
+				pageStep = 10,
+				disableGamepadNavigation = param.disableGamepadNavigation,
+			},
+			value_node,
+		},
+	}
+end
+
+-- Registered under the base name: the base stylesheet sizes it (R::ScriptParamSliderAndText).
+local ScriptParamSliderAndText = react.RegisterRecipe("ScriptParamSliderAndText", function(param)
+	local ok, node = pcall(render_param_slider, param)
+	if ok then return node end
+	report("param render", node)
+	return builtin.BoxLayout{ children = {
+		base_slider{
+			value = index_of(param.scriptParam, param.currentValue),
+			min = 1, max = choices(param.scriptParam), step = 1,
+			onValueChange = function(index) param.onValueChange(value_of(param.scriptParam, index)) end,
+		},
+	} }
+end)
+
+-- The slider branch of the base buildScriptParamCompSimple (script_param_util.tl), with this
+-- module's slider row; everything else goes to the base function.
+local function wrap_build(original)
+	return function(param, ...)
+		local scriptParam = param and param.scriptParam
+		if not scriptParam or param.compact or scriptParam.uiType ~= api.type.enum.ScriptParamType.Slider then
+			return original(param, ...)
+		end
+		if scriptParam.numbers ~= nil and #scriptParam.numbers == 0 then scriptParam.numbers = nil end
+		if choices(scriptParam) < 1 then return original(param, ...) end
+		local right = ScriptParamSliderAndText{
+			meta = {
+				class = "right-parameters, ui-type-" .. tostring(scriptParam.uiType),
+				onAttention = param.onHover,
+				tag = "scriptParams.rightParameters." .. scriptParam.name,
+			},
+			scriptParam = scriptParam,
+			currentValue = param.currentValue,
+			onValueChange = param.onValueChange,
+			disableGamepadNavigation = param.disableGamepadNavigation,
+			allowCoalesce = scriptParam.allowCoalesce,
+		}
+		if param.vertical == nil then return right end
+		return script_param_util.wrap(scriptParam.name, param.vertical, right, param.addSpacer, param.onHover, nil)
+	end
+end
+
+--- Called from the react-replacement-config before the UI starts.
+function sliders.install(_replacement_api)
+	base_slider = builtin.Slider
+	if type(base_slider) ~= "function" then error("builtin.Slider not found") end
+	local build = script_param_util.buildScriptParamCompSimple
+	if type(build) == "function" and type(script_param_util.wrap) == "function" then
+		script_param_util.buildScriptParamCompSimple = wrap_build(build)
+	end
+	builtin.Slider = wrapped_slider
+	debugPrint("[ui_overhaul] slider wheel, snap points and typing installed")
+end
+
+return sliders

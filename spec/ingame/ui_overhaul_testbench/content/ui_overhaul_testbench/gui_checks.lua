@@ -351,7 +351,31 @@ local checks = {
 		end,
 		wait = 90,
 		shot = "vehicle_window",
-		check = function() return true, "reference screenshot" end,
+		check = function(ctx)
+			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
+			-- the Performance card exists for powered rail and road vehicles (not for every line)
+			local card = visible("uio.vehicle.performance." .. tostring(ctx.card_vehicle))
+			return true, "performance card visible=" .. tostring(card)
+		end,
+	},
+	{
+		name = "vehicle_tooltip_block",
+		act = function(ctx)
+			if ctx.card_vehicle then api.gui.fireReactEvent("uio.debug.vehicle_tooltip", ctx.card_vehicle) end
+		end,
+		wait = 60,
+		shot = "vehicle_tooltip",
+		check = function(ctx)
+			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
+			local shown = visible("probe.vehicle_tooltip")
+			return shown, "tooltip probe visible=" .. tostring(shown) .. " (see the vehicle lines log)"
+		end,
+	},
+	{
+		name = "vehicle_tooltip_closed",
+		act = function() api.gui.fireReactEvent("uio.debug.vehicle_tooltip", nil) end,
+		wait = 10,
+		check = function() return true, "closed" end,
 	},
 	{
 		name = "town_window_bottleneck",
@@ -667,6 +691,25 @@ local checks = {
 		wait = 90,
 		shot = "construction_tracks",
 		check = function() return true, "screenshot" end,
+	},
+	{
+		name = "sliders_window",
+		act = function()
+			api.gui.fireReactEvent("clearToolStack", nil)
+			api.gui.fireReactEvent("uio.debug.sliders", true)
+		end,
+		wait = 60,
+		shot = "sliders",
+		check = function()
+			local shown = visible("probe.slider.percent")
+			return shown, "test slider visible=" .. tostring(shown) .. " (see the ticks in the screenshot)"
+		end,
+	},
+	{
+		name = "sliders_window_closed",
+		act = function() api.gui.fireReactEvent("uio.debug.sliders", false) end,
+		wait = 10,
+		check = function() return true, "closed" end,
 	},
 	{
 		name = "build_measurements",

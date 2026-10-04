@@ -66,6 +66,63 @@ ProbeWindow = react.RegisterWrapperRecipe("UioProbeWindow", builtin.Window, func
 	}
 end)
 
+-- Sliders as the mod changes them (sliders.lua): plain ones of 0..100 and of 0..600 in steps of 10,
+-- and a construction-style parameter slider with labelled values. Logs every change.
+local script_param_util = require("::/gui/main/script_param_util.tl")
+local styleutil = require("::/gui/main/styleutil.tl")
+
+local SliderWindow
+SliderWindow = react.RegisterWrapperRecipe("UioProbeSliderWindow", builtin.Window, function()
+	local a = react.useState(37)
+	local b = react.useState(120)
+	local c = react.useState(0)
+	local function logged(name, state)
+		return function(v)
+			debugPrint("[testbench] slider ", name, " -> ", tostring(v))
+			state:set(v)
+		end
+	end
+	local numbers = {}
+	for i = -8, 8 do numbers[#numbers + 1] = i * 1.25 end
+	return builtin.Window{
+		id = "probe.sliders",
+		title = "sliders",
+		closable = true,
+		onClose = function() game_react_globals.getDefaultWindowApi().removeAllWindows(SliderWindow) end,
+		content = builtin.Component{
+			meta = { styleSheet = styleutil.makeStyle{ size = { 460, -1 }, padding = { 8, 8, 8, 8 } } },
+			layout = col{
+			row{ text("0..100"), builtin.Slider{ meta = { id = "probe.slider.percent" }, horizontal = true, min = 0,
+				max = 100, step = 1, value = a:old(), onValueChange = logged("percent", a) } },
+			row{ text("0..600 s"), builtin.Slider{ horizontal = true, min = 0, max = 600, step = 10, value = b:old(),
+				onValueChange = logged("seconds", b) } },
+			script_param_util.buildScriptParamCompSimple{
+				scriptParam = {
+					uiType = api.type.enum.ScriptParamType.Slider, name = "Height", numbers = numbers,
+					formatValueFn = function(v) return api.util.formatLength(v) end,
+				},
+				currentValue = c:old(),
+				onValueChange = logged("height", c),
+				vertical = false,
+			},
+		} },
+	}
+end)
+
+-- The block the map tooltip adds for a vehicle (vehicle_tooltip.lua), in a window, and its lines
+-- logged: a hover cannot be automated.
+local VehicleTooltipWindow
+VehicleTooltipWindow = react.RegisterWrapperRecipe("UioProbeVehicleTooltipWindow", builtin.Window, function(params)
+	local vehicle_tooltip = require("ui_overhaul_1::/ui_overhaul/gui/vehicle_tooltip.lua")
+	return builtin.Window{
+		id = "probe.vehicle_tooltip",
+		title = "vehicle tooltip",
+		closable = true,
+		onClose = function() game_react_globals.getDefaultWindowApi().removeAllWindows(VehicleTooltipWindow) end,
+		content = col{ vehicle_tooltip.VehicleBlock{ entityRef = { get = function() return params.vehicle end } } },
+	}
+end)
+
 -- Opens the "Select Terminals" popover the way a stop row does (a check cannot click that button). The
 -- stand-in recipe has the base recipe's name, so the mod's wrapper swaps it for the terminal usage buttons;
 -- if the hook is missing, the stand-in renders and the check fails.
@@ -108,6 +165,28 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		if VARIANTS[variant] then
 			windows.addSingletonWindow(ProbeWindow, { variant = variant })
 			api.gui.byId.setVisible("probe.window", true)
+		end
+	end)
+
+	react.onEvent("uio.debug.vehicle_tooltip", function(_e, vehicle)
+		local windows = game_react_globals.getDefaultWindowApi()
+		windows.removeAllWindows(VehicleTooltipWindow)
+		if not vehicle then return end
+		local vehicle_info = require("ui_overhaul_1::/ui_overhaul/gui/vehicle_info.lua")
+		local ok, info = pcall(vehicle_info.read, vehicle)
+		local ok2, lines = pcall(vehicle_info.tooltip, ok and info or nil, true)
+		debugPrint("[testbench] vehicle lines ok=", tostring(ok), "/", tostring(ok2), " ",
+			ok2 and lines:gsub("\n", " | ") or tostring(lines))
+		windows.addSingletonWindow(VehicleTooltipWindow, { vehicle = vehicle })
+		api.gui.byId.setVisible("probe.vehicle_tooltip", true)
+	end)
+
+	react.onEvent("uio.debug.sliders", function(_e, open)
+		local windows = game_react_globals.getDefaultWindowApi()
+		windows.removeAllWindows(SliderWindow)
+		if open then
+			windows.addSingletonWindow(SliderWindow, {})
+			api.gui.byId.setVisible("probe.sliders", true)
 		end
 	end)
 

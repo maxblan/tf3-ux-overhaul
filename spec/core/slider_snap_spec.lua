@@ -1,0 +1,60 @@
+local slider_snap = require("/ui_overhaul/core/slider_snap.lua")
+
+describe("slider_snap", function()
+	it("picks round detents of about 5 % of the range", function()
+		assert.are.equal(5, slider_snap.detent(0, 100, 1))
+		assert.are.equal(50, slider_snap.detent(0, 600, 10))
+		assert.are.equal(5, slider_snap.detent(0, 60, 1))
+		assert.are.equal(25, slider_snap.detent(0, 500, 1))
+		-- few steps: every step is a detent already
+		assert.is_nil(slider_snap.detent(1, 16, 1))
+		assert.is_nil(slider_snap.detent(0, 200, 10))
+		assert.is_nil(slider_snap.detent(5, 5, 1))
+	end)
+
+	it("only uses detents the slider can reach", function()
+		-- step 3: 2.5 and 5 are no multiples; 30 is
+		local d = slider_snap.detent(0, 600, 3)
+		assert.are.equal(0, d % 3)
+	end)
+
+	it("snaps magnetically", function()
+		assert.are.equal(25, slider_snap.snap(24, 0, 100, 5))
+		assert.are.equal(25, slider_snap.snap(26, 0, 100, 5))
+		assert.are.equal(23, slider_snap.snap(23, 0, 100, 5)) -- two away: stays
+		assert.are.equal(100, slider_snap.snap(99, 0, 100, 5))
+		assert.are.equal(7, slider_snap.snap(7, 0, 100, nil))
+		-- detents count from the minimum
+		assert.are.equal(11, slider_snap.snap(11, 1, 101, 5))
+	end)
+
+	it("steps the wheel to the next detent, or one step when precise", function()
+		assert.are.equal(25, slider_snap.wheel(23, 0, 100, 1, 5, 1, false))
+		assert.are.equal(20, slider_snap.wheel(23, 0, 100, 1, 5, -1, false))
+		assert.are.equal(30, slider_snap.wheel(25, 0, 100, 1, 5, 1, false))
+		assert.are.equal(20, slider_snap.wheel(25, 0, 100, 1, 5, -1, false))
+		assert.are.equal(24, slider_snap.wheel(23, 0, 100, 1, 5, 1, true))
+		assert.are.equal(100, slider_snap.wheel(100, 0, 100, 1, 5, 1, false))
+		assert.are.equal(0, slider_snap.wheel(2, 0, 100, 1, 5, -1, false))
+		assert.are.equal(4, slider_snap.wheel(3, 1, 16, 1, nil, 1, false))
+	end)
+
+	it("reads numbers as the game writes them", function()
+		assert.are.equal(2.5, slider_snap.parse_number("2,5 m"))
+		assert.are.equal(-3, slider_snap.parse_number("-3 %"))
+		assert.are.equal(-3, slider_snap.parse_number("\xE2\x88\x923 %"))
+		assert.are.equal(1.5, slider_snap.parse_number("1.5x"))
+		assert.is_nil(slider_snap.parse_number("none"))
+		assert.is_nil(slider_snap.parse_number(nil))
+	end)
+
+	it("finds the position whose label matches a typed value", function()
+		local labels = { "-10 m", "-2,5 m", "0 m", "2,5 m", "10 m" }
+		assert.are.equal(4, slider_snap.nearest_label(labels, "3"))
+		assert.are.equal(2, slider_snap.nearest_label(labels, "-2"))
+		assert.are.equal(5, slider_snap.nearest_label(labels, "100"))
+		assert.are.equal(2, slider_snap.nearest_label({ "Low", "Medium", "High" }, "me"))
+		assert.is_nil(slider_snap.nearest_label({ "Low", "High" }, "x"))
+		assert.is_nil(slider_snap.nearest_label(labels, ""))
+	end)
+end)

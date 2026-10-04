@@ -59,6 +59,13 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - The construction settings (bottom left, and the Settings window) no longer slip under the game bar or off the screen at large UI or text scales: they scroll instead.
 - While you draw track or road, the build tooltip measures it: the steepest gradient and the tightest curve radius, each with the limit of the chosen type, the height range, and how far bridges run above and tunnels below the ground.
 
+### Sliders
+
+- The mouse wheel moves the slider under the cursor: to the next snap point, or one step while the precision key is held.
+- Sliders with many steps have snap points every few percent of the range (every 5 on 0 to 100, for example), shown as ticks. A dragged slider sticks to one when it comes close; the precision key turns that off.
+- A value can be typed: double-click a slider, or click the value next to a construction slider (height, incline, bend). A typed value picks the nearest one the game offers.
+- The settings menu keeps its sliders as they are.
+
 ### Notifications
 
 - Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
