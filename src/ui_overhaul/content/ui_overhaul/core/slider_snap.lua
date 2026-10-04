@@ -12,24 +12,55 @@ local MAX_DETENTS = 20 -- at most this many intervals across the range (about ev
 local NICE = { 1, 2, 2.5, 5 }
 local MAGNET = 0.3 -- share of a detent interval within which a dragged value jumps to the detent
 
---- Detent interval for a slider of min..max moving in `step`s: the smallest round multiple of
--- `step` that splits the range into at most 20 intervals; nil when the range has 20 steps or fewer.
+local function is_whole(x)
+	return math.abs(x - math.floor(x + 0.5)) < 1e-9
+end
+
+--- Detent interval for a slider of min..max moving in `step`s: the smallest multiple of `step`
+-- that splits the range into at most 20 intervals, preferring round numbers (1, 2, 2.5, 5 x 10^k)
+-- and otherwise round multiples of the step (2, 5, 10, 20, 50 ... steps: a slider moving in 15s
+-- snaps every 75); nil when the range has 20 steps or fewer. The search is bounded by the range.
 function slider_snap.detent(min, max, step)
 	step = (step and step > 0) and step or 1
 	local range = max - min
 	if range <= 0 or range / step <= MAX_DETENTS then return nil end
+	local candidates = {}
 	local magnitude = 1
-	while true do
+	while magnitude <= range * 10 do
 		for _i, nice in ipairs(NICE) do
 			local interval = nice * magnitude
-			-- a multiple of the step, so a detent is a value the slider can take
-			if interval >= step and math.abs(interval / step - math.floor(interval / step + 0.5)) < 1e-9
-				and range / interval <= MAX_DETENTS then
-				return interval
-			end
+			if interval >= step and is_whole(interval / step) then candidates[#candidates + 1] = interval end
 		end
 		magnitude = magnitude * 10
 	end
+	local factor = 1
+	while step * factor <= range * 10 do
+		for _i, nice in ipairs({ 1, 2, 5 }) do candidates[#candidates + 1] = step * nice * factor end
+		factor = factor * 10
+	end
+	table.sort(candidates)
+	for _i, interval in ipairs(candidates) do
+		if range / interval <= MAX_DETENTS then return interval end
+	end
+	return nil
+end
+
+--- Where detents are counted from: 0 when the slider's grid (min + k x step) contains the round
+-- values, else `min`. A slider of 1..60 in steps of 1 snaps at 5, 10, 15 (not 1, 6, 11); one of
+-- 1..59 in steps of 2 can only take odd values, so its detents count from 1.
+function slider_snap.anchor(min, step)
+	step = (step and step > 0) and step or 1
+	if is_whole(min / step) then return 0 end
+	return min
+end
+
+--- `value` moved onto the slider's grid (min + k x step) and into min..max.
+function slider_snap.on_grid(value, min, max, step)
+	step = (step and step > 0) and step or 1
+	local v = min + math.floor((value - min) / step + 0.5) * step
+	if v < min then v = min end
+	if v > max then v = max end
+	return v
 end
 
 local function clamp(value, min, max)
@@ -39,7 +70,8 @@ local function clamp(value, min, max)
 end
 
 --- The value a dragged slider takes: the nearest detent if `value` is within 30 % of an interval
--- of it, else `value`. Detents count from `anchor` (default `min`). No detent interval: `value`.
+-- of it, else `value`. Detents count from `anchor` (default `min`; see slider_snap.anchor). No
+-- detent interval: `value`.
 function slider_snap.snap(value, min, max, detent, anchor)
 	if not detent then return value end
 	anchor = anchor or min

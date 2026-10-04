@@ -28,6 +28,7 @@ local react = require("::/gui/main/react.lua")
 local base_industry_window = require("::/gui/entity_window/industry/industry.tl")
 -- loaded at render time (guard.plugin): only fully qualified paths reach this mod
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
+local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
 local industry_cards = {}
 
@@ -365,16 +366,16 @@ end)
 
 --- Called from the react-replacement-config before the UI starts.
 function industry_cards.install(replacement_api)
-	local base_layer_config = builtin.LayerConfig
-	if type(base_layer_config) ~= "function" then error("builtin.LayerConfig not found") end
-	builtin.LayerConfig = function(p, ...)
-		if strip_plots and select("#", ...) == 0 and type(p) == "table" and p.config ~= nil then
-			pcall(function()
-				p.config.plotsRenderableConfig = api.type.LayerConfig.PlotsRenderableConfig.new()
-			end)
+	builtin_wraps.wrap("LayerConfig", function(base)
+		return function(p, ...)
+			if strip_plots and select("#", ...) == 0 and type(p) == "table" and p.config ~= nil then
+				pcall(function()
+					p.config.plotsRenderableConfig = api.type.LayerConfig.PlotsRenderableConfig.new()
+				end)
+			end
+			return base(p, ...)
 		end
-		return base_layer_config(p, ...)
-	end
+	end)
 	replacement_api.ReplaceRecipe(base_industry_window, IndustryWindow)
 	debugPrint("[ui_overhaul] industry blocked-area switch installed")
 end

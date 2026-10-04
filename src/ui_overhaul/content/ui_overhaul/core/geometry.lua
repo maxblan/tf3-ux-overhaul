@@ -69,26 +69,33 @@ function geometry.on_edge(point, e, eps)
 	return best <= eps * eps
 end
 
---- Summary of the edges a player draws: `edges` (the new edges) and `removed` (edges the proposal
--- removes; new edges lying on one of them are parts of a split existing edge and are skipped).
--- Returns nil without drawn edges, else { length, max_grade, min_radius, z_min, z_max, count }.
-function geometry.summary(edges, removed)
-	local result
+--- The edges a player draws: `edges` (the proposal's new edges) without those lying on one of
+-- `removed` (the edges the proposal removes), which are parts of a split existing edge.
+function geometry.drawn(edges, removed)
+	local result = {}
 	for _i, e in ipairs(edges) do
 		local split = false
 		for _j, old in ipairs(removed or {}) do
 			if geometry.on_edge(e.p0, old) and geometry.on_edge(e.p1, old) then split = true break end
 		end
-		if not split then
-			local m = geometry.edge_metrics(e)
-			result = result or { length = 0, max_grade = 0, min_radius = math.huge, z_min = math.huge,
-				z_max = -math.huge, count = 0 }
-			result.length = result.length + m.length
-			result.max_grade = math.max(result.max_grade, m.max_grade)
-			result.min_radius = math.min(result.min_radius, m.min_radius)
-			result.z_min, result.z_max = math.min(result.z_min, m.z_min), math.max(result.z_max, m.z_max)
-			result.count = result.count + 1
-		end
+		if not split then result[#result + 1] = e end
+	end
+	return result
+end
+
+--- Summary of the edges a player draws (see geometry.drawn): nil without any, else
+-- { length, max_grade, min_radius, z_min, z_max, count }.
+function geometry.summary(edges, removed)
+	local result
+	for _i, e in ipairs(geometry.drawn(edges, removed)) do
+		local m = geometry.edge_metrics(e)
+		result = result or { length = 0, max_grade = 0, min_radius = math.huge, z_min = math.huge,
+			z_max = -math.huge, count = 0 }
+		result.length = result.length + m.length
+		result.max_grade = math.max(result.max_grade, m.max_grade)
+		result.min_radius = math.min(result.min_radius, m.min_radius)
+		result.z_min, result.z_max = math.min(result.z_min, m.z_min), math.max(result.z_max, m.z_max)
+		result.count = result.count + 1
 	end
 	return result
 end

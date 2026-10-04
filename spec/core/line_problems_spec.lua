@@ -89,10 +89,18 @@ describe("line_problems", function()
 		assert.are.same({}, line_problems.stop_problems(stops, segments, 4))
 		local c = line_problems.stop_problems(stops, segments, 3)
 		assert.are.equal("incompatible", c[1].kind)
-		-- A is reached from C, whose state is "incompatible" (not a path problem into A)
-		assert.are.same({}, line_problems.stop_problems(stops, segments, 1))
+		-- C is incompatible and has no path on to A: A cannot be reached either
+		local a = line_problems.stop_problems(stops, segments, 1)
+		assert.are.equal(1, #a)
+		assert.are.equal("no_path", a[1].kind)
 		local segments2 = { { {}, {} }, { {} }, { { noPath = true } } }
 		assert.are.equal("no_path", line_problems.stop_problems(stops, segments2, 1)[1].kind)
+		-- no path from A to the waypoint: B, after the waypoint, cannot be reached
+		local segments3 = { { { noPath = true }, {} }, { {} }, { {} } }
+		local b3 = line_problems.stop_problems(stops, segments3, 2)
+		assert.are.equal(1, #b3)
+		assert.are.equal("no_path", b3[1].kind)
+		assert.are.same({}, line_problems.stop_problems(stops, segments3, 3))
 	end)
 
 	it("finds the stops around an insert position, skipping waypoints", function()

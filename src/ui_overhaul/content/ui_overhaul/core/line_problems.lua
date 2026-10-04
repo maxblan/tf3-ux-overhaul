@@ -9,19 +9,26 @@ local line_problems = {}
 --- Terminal number of a waypoint in `stops` (base: waypointMagicNumber).
 line_problems.WAYPOINT = -1
 
---- Kind of a stop state's problem, or nil: "duplicate", "incompatible", "no_path", "from_alternative",
--- "from_alternative_to_alternative" or "to_alternative" (base order of the checks).
-function line_problems.kind(state)
-	if not (state.noPath or state.fromAlternative or state.toAlternative or state.duplicate or state.incompatible) then
-		return nil
-	end
-	if state.duplicate then return "duplicate" end
-	if state.incompatible then return "incompatible" end
+-- Kind of a stop state's path problem, or nil.
+local function path_kind(state)
 	if state.noPath then return "no_path" end
 	if state.fromAlternative then
 		return state.toAlternative and "from_alternative_to_alternative" or "from_alternative"
 	end
-	return "to_alternative"
+	if state.toAlternative then return "to_alternative" end
+	return nil
+end
+
+--- Kind of a stop state's problem, or nil: "duplicate", "incompatible", "no_path", "from_alternative",
+-- "from_alternative_to_alternative" or "to_alternative" (base order of the checks).
+function line_problems.kind(state)
+	if state.duplicate then return "duplicate" end
+	if state.incompatible then return "incompatible" end
+	return path_kind(state)
+end
+
+local function is_path_kind(kind)
+	return kind ~= nil and kind ~= "duplicate" and kind ~= "incompatible"
 end
 
 --- The Line Manager's index2problems from plain data:
@@ -47,36 +54,42 @@ function line_problems.index2problems(stops, segments)
 		for _j, state in ipairs(segment) do
 			index = index + 1
 			result[index] = {}
-			local kind = line_problems.kind(state)
-			if kind and count > 0 then
+			-- a stop that is incompatible and has no path gets both problems (the base shows the first)
+			local kinds = {}
+			local primary = line_problems.kind(state)
+			if primary then kinds[1] = primary end
+			if primary and not is_path_kind(primary) and path_kind(state) then kinds[2] = path_kind(state) end
+			if count > 0 then
 				local next_index = (index + 1) % count
 				local this_stop, next_stop = stop(index), stop(next_index)
 				local terminal_this = this_stop.terminal0 or 0
 				local terminal_next = next_stop.terminal0 or 0
-				local params = {
-					origin = this_stop.name,
-					destination = next_stop.name,
-					terminalOrigin = terminal_this + 1,
-					terminalDestination = terminal_next + 1,
-					originIsWaypoint = terminal_this == line_problems.WAYPOINT,
-					destinationIsWaypoint = terminal_next == line_problems.WAYPOINT,
-				}
-				if state.noPath then
-					params.reason = state.reason
-				elseif state.fromAlternative then
-					params.terminalOrigin = state.fromAlternative[1] + 1
-					params.reason = state.fromAlternative[2]
-					if state.toAlternative then params.terminalDestination = state.toAlternative[1] + 1 end
-				elseif state.toAlternative then
-					params.terminalDestination = state.toAlternative[1] + 1
-					params.reason = state.toAlternative[2]
+				for _k, kind in ipairs(kinds) do
+					local params = {
+						origin = this_stop.name,
+						destination = next_stop.name,
+						terminalOrigin = terminal_this + 1,
+						terminalDestination = terminal_next + 1,
+						originIsWaypoint = terminal_this == line_problems.WAYPOINT,
+						destinationIsWaypoint = terminal_next == line_problems.WAYPOINT,
+					}
+					if state.noPath then
+						params.reason = state.reason
+					elseif state.fromAlternative then
+						params.terminalOrigin = state.fromAlternative[1] + 1
+						params.reason = state.fromAlternative[2]
+						if state.toAlternative then params.terminalDestination = state.toAlternative[1] + 1 end
+					elseif state.toAlternative then
+						params.terminalDestination = state.toAlternative[1] + 1
+						params.reason = state.toAlternative[2]
+					end
+					table.insert(result[index], {
+						stopAndTerminalThis = { stop = index, terminal = terminal_this + 1 },
+						stopAndTerminalNext = { stop = next_index, terminal = terminal_next + 1 },
+						kind = kind,
+						params = params,
+					})
 				end
-				table.insert(result[index], {
-					stopAndTerminalThis = { stop = index, terminal = terminal_this + 1 },
-					stopAndTerminalNext = { stop = next_index, terminal = terminal_next + 1 },
-					kind = kind,
-					params = params,
-				})
 			end
 		end
 	end
@@ -85,11 +98,12 @@ function line_problems.index2problems(stops, segments)
 	return result
 end
 
---- Problems that keep vehicles from reaching stop `stop_index` (1-based, without waypoints): the path
--- problem of the segment that ends at the stop (from the stop or waypoint before it, wrapping from
--- the last), and a duplicate or incompatible stop at the stop itself. `stops` as for index2problems,
--- each stop with its `stopIndex`. Returns a list of problems (possibly empty).
+--- Problems that keep vehicles from reaching stop `stop_index` (1-based, without waypoints): a path
+-- problem on any segment between the stop before it and this stop (waypoints in between included,
+-- wrapping from the last stop), and a duplicate or incompatible stop at the stop itself. `stops` as
+-- for index2problems, each stop with its `stopIndex`. Returns a list of problems (possibly empty).
 function line_problems.stop_problems(stops, segments, stop_index)
+	local count = #stops
 	local flat
 	for index, entry in ipairs(stops) do
 		if entry.stopIndex == stop_index then flat = index end
@@ -97,13 +111,18 @@ function line_problems.stop_problems(stops, segments, stop_index)
 	if not flat then return {} end
 	local all = line_problems.index2problems(stops, segments)
 	local result = {}
-	local before = flat - 1
-	if before < 1 then before = #stops end
-	for _i, problem in ipairs(all[before] or {}) do
-		if problem.kind ~= "duplicate" and problem.kind ~= "incompatible" then result[#result + 1] = problem end
+	-- walk back from the entry before this stop to the stop before it (inclusive)
+	local index = flat
+	for _i = 1, count - 1 do
+		index = index - 1
+		if index < 1 then index = count end
+		for _j, problem in ipairs(all[index] or {}) do
+			if is_path_kind(problem.kind) then result[#result + 1] = problem end
+		end
+		if stops[index].stopIndex then break end
 	end
 	for _i, problem in ipairs(all[flat] or {}) do
-		if problem.kind == "duplicate" or problem.kind == "incompatible" then result[#result + 1] = problem end
+		if not is_path_kind(problem.kind) then result[#result + 1] = problem end
 	end
 	return result
 end

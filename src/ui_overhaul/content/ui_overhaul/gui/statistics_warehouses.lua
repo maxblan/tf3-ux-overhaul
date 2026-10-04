@@ -61,6 +61,34 @@ function statistics_warehouses.read(entity)
 	return result
 end
 
+-- Stock reads shared by the table, its cells and its sort for a moment: each read walks the
+-- warehouse's stocks, and a table repeats it for every cell and comparison.
+local read_cache = {}
+local READ_SECONDS = 1.0
+
+local function clock()
+	local ok, t = pcall(os.clock)
+	return ok and t or nil
+end
+
+--- statistics_warehouses.read, reused for READ_SECONDS. Engine reads only.
+function statistics_warehouses.read_cached(entity)
+	local now = clock()
+	local entry = read_cache[entity]
+	if entry and now and now - entry.time <= READ_SECONDS then return entry.data end
+	local data = statistics_warehouses.read(entity)
+	if now then
+		if entry == nil then
+			-- drop stale entries now and then, so removed warehouses do not stay
+			for key, old in pairs(read_cache) do
+				if now - old.time > 10 * READ_SECONDS then read_cache[key] = nil end
+			end
+		end
+		read_cache[entity] = { time = now, data = data }
+	end
+	return data
+end
+
 --- Sorts { {id, count} } largest first, then by cargo id (stable across refreshes).
 function statistics_warehouses.sort_cargos(cargos)
 	table.sort(cargos, function(a, b)
@@ -105,7 +133,7 @@ end
 local WarehouseCargoTypesCell = react.RegisterRecipe("WarehouseCargoTypesCell", function(params)
 	local entity = params.rowKey
 	local state = engine_react_util.useStepStateTimer(function()
-		local ok, data = pcall(statistics_warehouses.read, entity)
+		local ok, data = pcall(statistics_warehouses.read_cached, entity)
 		return ok and data or nil
 	end, 1.0)
 	local data = state:old()
@@ -180,10 +208,10 @@ local function number_cell(name, value_fn, format)
 	end)
 end
 
-local function stored_of(entity) return statistics_warehouses.read(entity).stored end
-local function capacity_of(entity) return statistics_warehouses.read(entity).capacity end
+local function stored_of(entity) return statistics_warehouses.read_cached(entity).stored end
+local function capacity_of(entity) return statistics_warehouses.read_cached(entity).capacity end
 local function utilization_of(entity)
-	local data = statistics_warehouses.read(entity)
+	local data = statistics_warehouses.read_cached(entity)
 	return data.capacity > 0 and data.stored / data.capacity or 0
 end
 local function upkeep_of(entity) return api.engine.util.maintenance.calcMaintenanceForSubconstruction(entity) end
@@ -261,18 +289,25 @@ local function render(params)
 		end
 		stepsRef:set(0)
 		local filteredKeysMap, cargoSet, totals = {}, {}, { count = 0, stored = 0, capacity = 0, upkeep = 0 }
+		local rows = {}
 		for _i, key in ipairs(keys) do
 			if api.engine.entityExists(key)
 				and not (params.filterShowOnlyVisible and not api.gui.byEntity.isVisible(key)) then
-				local data = statistics_warehouses.read(key)
+				local data = statistics_warehouses.read_cached(key)
 				for _j, c in ipairs(data.cargos) do cargoSet[c[1]] = true end
-				if statistics_warehouses.passes(data, filter, cargo) and searchMatches(key, data) then
-					filteredKeysMap[key] = true
-					totals.count = totals.count + 1
-					totals.stored = totals.stored + data.stored
-					totals.capacity = totals.capacity + data.capacity
-					totals.upkeep = totals.upkeep + upkeep_of(key)
-				end
+				rows[#rows + 1] = { key, data }
+			end
+		end
+		-- a picked cargo that no warehouse holds any more filters nothing (the drop-down shows "Any cargo")
+		local effective = (cargo >= 0 and cargoSet[cargo]) and cargo or -1
+		for _i, row in ipairs(rows) do
+			local key, data = row[1], row[2]
+			if statistics_warehouses.passes(data, filter, effective) and searchMatches(key, data) then
+				filteredKeysMap[key] = true
+				totals.count = totals.count + 1
+				totals.stored = totals.stored + data.stored
+				totals.capacity = totals.capacity + data.capacity
+				totals.upkeep = totals.upkeep + upkeep_of(key)
 			end
 		end
 		local cargoIds = {}
@@ -284,6 +319,7 @@ local function render(params)
 			signature = signature,
 			filteredKeysMap = filteredKeysMap,
 			cargoIds = cargoIds,
+			cargo = effective,
 			totals = totals,
 		}
 	end, nil, function(a, b) return a == b end)
@@ -293,8 +329,9 @@ local function render(params)
 	end
 	-- the picked cargo's quantity, or the total stored
 	local function getStockCompareValue(entity)
-		local data = statistics_warehouses.read(entity)
-		if cargo >= 0 then return statistics_warehouses.count_of(data, cargo) end
+		local data = statistics_warehouses.read_cached(entity)
+		local picked = tableState:old().cargo or -1
+		if picked >= 0 then return statistics_warehouses.count_of(data, picked) end
 		return data.stored
 	end
 
@@ -345,7 +382,7 @@ local function render(params)
 						{ stored = lang_util.formatInt(totals.stored), capacity = lang_util.formatInt(totals.capacity) }),
 				amountLabel = _("Upkeep"),
 				amount = totals.upkeep,
-				extra = cargo_picker(tableState:old().cargoIds, cargo, setCargo),
+				extra = cargo_picker(tableState:old().cargoIds, tableState:old().cargo or -1, setCargo),
 			},
 			builtin.DataTable(react.ref(tableRef), {
 				meta = { id = "menu.statistics.warehouses" },

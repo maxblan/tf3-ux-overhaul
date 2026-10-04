@@ -11,16 +11,16 @@
 --     engine places the header before them, so it cannot go between pin and close);
 --   * content: wrapped in UioMinimizable, whose root carries the class uio-folded while minimized
 --     (minimize.css.lua hides it with visibility "none").
--- Window recipes are registered as wrappers of builtin.Window (react.RegisterWrapperRecipe); one
--- registered after the field is wrapped would get the wrapper, which the framework does not know as a
--- builtin, and the game crashes when that window opens (observed in game). react.RegisterWrapperRecipe
--- is wrapped as well, so it always registers against the base builtin. Windows without a title bar
+-- The field is replaced through builtin_wraps.lua, which keeps window recipes registered later
+-- (react.RegisterWrapperRecipe) on the base builtin; without that the game crashes when such a
+-- window opens (observed in game). Windows without a title bar
 -- (compact: the Line Manager), without a close button, dialogs and popovers stay as they are.
 -- Installed by minimize.script.lua.
 -- @module ui_overhaul.gui.minimize
 local builtin = require("::/gui/main/builtin.lua")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
+local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
 local minimize = {}
 
@@ -128,17 +128,8 @@ end
 
 --- Called from the react-replacement-config before the UI starts.
 function minimize.install(_replacement_api)
-	local base_window = builtin.Window
-	if type(base_window) ~= "function" then error("builtin.Window not found") end
-	local register_wrapper = react.RegisterWrapperRecipe
-	if type(register_wrapper) ~= "function" then error("react.RegisterWrapperRecipe not found") end
-	local wrapped_window = wrap_window(base_window)
-	-- window recipes registered from now on wrap the base builtin, not this module's function
-	react.RegisterWrapperRecipe = function(name, wrapped, ...)
-		if wrapped == wrapped_window then wrapped = base_window end
-		return register_wrapper(name, wrapped, ...)
-	end
-	builtin.Window = wrapped_window
+	-- builtin_wraps also keeps window recipes registered later on the base builtin
+	builtin_wraps.wrap("Window", wrap_window)
 	debugPrint("[ui_overhaul] window minimize installed")
 end
 

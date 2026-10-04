@@ -138,6 +138,8 @@ end)
 
 local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 	local line = params.line
+	-- the line's problems are kept only while its window shows them
+	react.onUnmount(function() problems_by_line[line] = nil end)
 	local state = engine_react_util.useStepStateTimer(function()
 		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 		local keys = {}

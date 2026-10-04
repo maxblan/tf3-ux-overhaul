@@ -26,6 +26,7 @@ local react = require("::/gui/main/react.lua")
 local script_param_util = require("::/gui/main/script_param_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local slider_snap = require("/ui_overhaul/core/slider_snap.lua")
+local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
 local sliders = {}
 
@@ -54,6 +55,50 @@ local function copy(t)
 	return result
 end
 
+local function clock()
+	local ok, t = pcall(os.clock)
+	return ok and t or nil
+end
+
+-- The wheel moves a slider only when the player is pointing at it: the mouse moved over it in the
+-- last moments, or the wheel already turned it just before. A panel that scrolls a slider under a
+-- resting cursor keeps scrolling instead of changing the slider.
+local HOVER_SECONDS, WHEEL_SECONDS = 1.5, 0.5
+
+local function use_wheel_intent()
+	local last_move = react.useRef(nil)
+	local last_wheel = react.useRef(nil)
+	local intent = {}
+	function intent.moved() last_move:set(clock()) end
+	function intent.allows_wheel()
+		local now = clock()
+		if not now then return true end
+		local ok = (last_move:get() and now - last_move:get() <= HOVER_SECONDS)
+			or (last_wheel:get() and now - last_wheel:get() <= WHEEL_SECONDS)
+		if ok then last_wheel:set(now) end
+		return ok and true or false
+	end
+	return intent
+end
+
+-- After a drag that ended next to a snap point, the base slider's thumb rests where the mouse let go
+-- while the value is the snap point (its value did not change, so nothing re-rendered it). The
+-- slider is then mounted anew on release, which puts the thumb on the value.
+local function use_thumb_sync()
+	local key = react.useState(0)
+	local pending = react.useRef(false)
+	local sync = {}
+	function sync.after(raw, snapped) pending:set(raw ~= snapped) end
+	function sync.released()
+		if pending:get() then
+			pending:set(false)
+			key:set(key:old() + 1)
+		end
+	end
+	function sync.key() return "uio-slider-" .. tostring(key:old()) end
+	return sync
+end
+
 -- The base Slider (set by install), and the wrapper that replaces it.
 local base_slider
 
@@ -64,14 +109,17 @@ local function render_slider(params)
 	local min, max = p.min or 0, p.max or 100
 	local step = (p.step and p.step > 0) and p.step or 1
 	local detent = slider_snap.detent(min, max, step)
+	local anchor = slider_snap.anchor(min, step)
 	-- Sliders that only set initialValue keep their own value; here it is held so the wheel can
 	-- move them too.
 	local own = react.useState(p.initialValue or p.value or min)
 	local editing = react.useState(false)
+	local intent = use_wheel_intent()
+	local sync = use_thumb_sync()
 	local value = p.value ~= nil and p.value or own:old()
 
 	local function commit(v)
-		v = math.max(min, math.min(max, math.floor(v / step + 0.5) * step))
+		v = slider_snap.on_grid(v, min, max, step)
 		if v == value then return end
 		if p.value == nil then own:set(v) end
 		if p.onValueChange then p.onValueChange(v) end
@@ -79,9 +127,13 @@ local function render_slider(params)
 
 	react.onMouseEvent(function(evt)
 		local ok, consumed = pcall(function()
+			local types = api.gui.mouse.Event.Type
+			if evt.type == types.Moved then intent.moved() end
+			if evt.type == types.Released and evt.button == 0 then sync.released() end
 			if evt.handled then return false end
-			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
-				commit(slider_snap.wheel(value, min, max, step, detent, wheel_dir(evt), precise()))
+			if evt.type == types.Wheel and evt.yrel ~= 0 then
+				if not intent.allows_wheel() then return false end
+				commit(slider_snap.wheel(value, min, max, step, detent, wheel_dir(evt), precise(), anchor))
 				return true
 			end
 			-- typing makes sense where the slider's number is what it shows (not for short lists)
@@ -111,11 +163,16 @@ local function render_slider(params)
 	local q = copy(p)
 	q.value = value
 	q.initialValue = nil
-	q.onValueChange = function(v)
-		if not precise() then v = slider_snap.snap(v, min, max, detent) end
+	q.meta = copy(p.meta or {})
+	q.meta.localKey = sync.key()
+	q.onValueChange = function(raw)
+		local v = raw
+		if not precise() then v = slider_snap.on_grid(slider_snap.snap(raw, min, max, detent, anchor), min, max, step) end
+		sync.after(raw, v)
 		commit(v)
 	end
-	if detent then
+	-- the base slider draws ticks from its minimum: only when they fall on the snap points
+	if detent and ((min - anchor) % detent) == 0 then
 		if q.withTicks == nil then q.withTicks = true end
 		if q.pageStep == nil then q.pageStep = detent end
 	end
@@ -191,6 +248,8 @@ local function render_param_slider(param)
 	local shown = react.useState(nil) -- value the label shows while dragging
 	local mouse_pressed = react.useRef(false)
 	local editing = react.useState(false)
+	local intent = use_wheel_intent()
+	local sync = use_thumb_sync()
 	local current = pending:old() or param.currentValue
 
 	local function send(value)
@@ -201,9 +260,11 @@ local function render_param_slider(param)
 
 	react.onMouseEvent(function(evt)
 		local ok, consumed = pcall(function()
+			if evt.type == api.gui.mouse.Event.Type.Moved then intent.moved() end
 			if evt.button == 0 then
 				if evt.type == api.gui.mouse.Event.Type.Released then
 					mouse_pressed:set(false)
+					sync.released()
 					if pending:old() ~= nil then
 						send(pending:old())
 						return true
@@ -215,6 +276,7 @@ local function render_param_slider(param)
 			end
 			if evt.handled then return false end
 			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
+				if not intent.allows_wheel() then return false end
 				local dir = wheel_dir(evt)
 				local value
 				if detent and not precise() then
@@ -270,9 +332,12 @@ local function render_param_slider(param)
 		orientation = builtin.type.Orientation.Horizontal,
 		children = {
 			base_slider{
+				meta = { localKey = sync.key() },
 				value = index_of(scriptParam, current),
-				onValueChange = function(index)
-					if detent and not precise() then index = slider_snap.snap(index, 1, choices(scriptParam), detent, anchor) end
+				onValueChange = function(raw)
+					local index = raw
+					if detent and not precise() then index = slider_snap.snap(raw, 1, choices(scriptParam), detent, anchor) end
+					sync.after(raw, index)
 					local value = value_of(scriptParam, index)
 					if not param.allowCoalesce or not mouse_pressed:get() then
 						send(value)
@@ -336,13 +401,14 @@ end
 
 --- Called from the react-replacement-config before the UI starts.
 function sliders.install(_replacement_api)
-	base_slider = builtin.Slider
-	if type(base_slider) ~= "function" then error("builtin.Slider not found") end
 	local build = script_param_util.buildScriptParamCompSimple
+	builtin_wraps.wrap("Slider", function(base)
+		base_slider = base
+		return wrapped_slider
+	end)
 	if type(build) == "function" and type(script_param_util.wrap) == "function" then
 		script_param_util.buildScriptParamCompSimple = wrap_build(build)
 	end
-	builtin.Slider = wrapped_slider
 	debugPrint("[ui_overhaul] slider wheel, snap points and typing installed")
 end
 

@@ -228,11 +228,12 @@ local function measure(proposal, kind)
 		if segment.type == kind then edges[#edges + 1] = edge(segment.comp) end
 	end
 	for _i, segment in ipairs(items(street.removedSegments)) do removed[#removed + 1] = edge(segment.comp) end
-	local summary = geometry.summary(edges, removed)
+	local drawn = geometry.drawn(edges, removed)
+	local summary = geometry.summary(drawn, {})
 	if not summary then return nil end
-	-- bridges and tunnels: largest distance to the ground along them
+	-- bridges and tunnels the player draws: largest distance to the ground along them
 	local base_type = api.type.enum.BaseEdgeType
-	for _i, e in ipairs(edges) do
+	for _i, e in ipairs(drawn) do
 		if e.type == base_type.BRIDGE or e.type == base_type.TUNNEL then
 			for _j, p in ipairs(geometry.edge_metrics(e).points) do
 				local g = ground(p)

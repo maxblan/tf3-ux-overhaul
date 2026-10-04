@@ -13,6 +13,7 @@
         "ui_overhaul/engine/snapshot.lua",
         "ui_overhaul/engine/store.lua",
         "ui_overhaul/gui/actions.lua",
+        "ui_overhaul/gui/builtin_wraps.lua",
         "ui_overhaul/gui/card_line.res.lua",
         "ui_overhaul/gui/cards.css.lua",
         "ui_overhaul/gui/cards.lua",

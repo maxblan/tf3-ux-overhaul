@@ -317,12 +317,37 @@ local function stop_nodes(stop)
 	return terminal and { terminal.vehicleNodeId } or nil
 end
 
--- Path search results per line version, stop and terminal: the search is the expensive part.
+-- Path search results per line and stop, for one line version and at most REACH_SECONDS: the
+-- search is the expensive part, and building or removing track changes the answer without changing
+-- the line. Entries not used for PRUNE_SECONDS are dropped.
 local reach_cache = {}
+local REACH_SECONDS, PRUNE_SECONDS = 10, 120
 
 local function revision_key(line)
 	local r = api.engine.getRevision(line)
 	return table.concat({ r.num[1], r.num[2], r.num[3] }, ".")
+end
+
+local function clock()
+	local ok, t = pcall(os.clock)
+	return ok and t or 0
+end
+
+-- The cached results of `line`'s stop `stop_index0` (number -> result or false), fresh if needed.
+local function reach_entry(line, stop_index0)
+	local now = clock()
+	local slot = tostring(line) .. "/" .. tostring(stop_index0)
+	local revision = revision_key(line)
+	local entry = reach_cache[slot]
+	if not entry or entry.revision ~= revision or now - entry.time > REACH_SECONDS then
+		for key, old in pairs(reach_cache) do
+			if now - old.used > PRUNE_SECONDS then reach_cache[key] = nil end
+		end
+		entry = { revision = revision, time = now, results = {} }
+		reach_cache[slot] = entry
+	end
+	entry.used = now
+	return entry.results
 end
 
 --- Whether the line's vehicles can get to a terminal from the stop before and on to the stop after
@@ -331,8 +356,8 @@ end
 local function terminal_reach(line, component, stop_index0, node, number, modes)
 	local count = #component.stops
 	if count < 2 or #modes == 0 then return nil end
-	local key = table.concat({ line, revision_key(line), stop_index0, number }, "/")
-	local cached = reach_cache[key]
+	local results = reach_entry(line, stop_index0)
+	local cached = results[number]
 	if cached ~= nil then return cached or nil end
 	local before = component.stops[((stop_index0 - 1) % count) + 1]
 	local after = component.stops[((stop_index0 + 1) % count) + 1]
@@ -344,7 +369,7 @@ local function terminal_reach(line, component, stop_index0, node, number, modes)
 	elseif after_nodes and #find({ node }, after_nodes, modes) == 0 then
 		result = { kind = "to", station = api.engine.util.getEntityName(after.stationGroup) }
 	end
-	reach_cache[key] = result
+	results[number] = result
 	return result or nil
 end
 

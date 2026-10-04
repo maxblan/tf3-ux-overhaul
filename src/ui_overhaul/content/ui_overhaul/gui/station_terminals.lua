@@ -93,10 +93,15 @@ end
 local problems_cache = {}
 local PROBLEMS_SECONDS = 2
 
+local PRUNE_SECONDS = 60 -- lines not looked at for this long are dropped from the cache
+
 local function stop_problem_text(line, stop_index0)
 	local now = os.clock()
 	local entry = problems_cache[line]
 	if not entry or now - entry.time > PROBLEMS_SECONDS then
+		for key, old in pairs(problems_cache) do
+			if now - old.time > PRUNE_SECONDS then problems_cache[key] = nil end
+		end
 		local ok, data = pcall(terminals.read_problems, line)
 		entry = { time = now, data = ok and data or nil }
 		problems_cache[line] = entry

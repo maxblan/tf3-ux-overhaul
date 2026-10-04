@@ -12,10 +12,34 @@ describe("slider_snap", function()
 		assert.is_nil(slider_snap.detent(5, 5, 1))
 	end)
 
-	it("only uses detents the slider can reach", function()
-		-- step 3: 2.5 and 5 are no multiples; 30 is
+	it("only uses detents the slider can reach, also for odd steps", function()
+		-- step 3: 2.5 and 5 are no multiples; the result is a multiple of 3 and finite
 		local d = slider_snap.detent(0, 600, 3)
 		assert.are.equal(0, d % 3)
+		assert.is_true(d <= 30)
+		-- the game bar's sun position slider: 0..1440 in steps of 15
+		local sun = slider_snap.detent(0, 1440, 15)
+		assert.are.equal(0, sun % 15)
+		assert.is_true(1440 / sun <= 20 and sun < 1440)
+		-- a step of 7 over 0..700
+		local seven = slider_snap.detent(0, 700, 7)
+		assert.are.equal(0, seven % 7)
+		assert.is_true(seven <= 70)
+	end)
+
+	it("counts detents from round values on the slider's grid", function()
+		assert.are.equal(0, slider_snap.anchor(1, 1)) -- 1..60: snaps at 5, 10, 15
+		assert.are.equal(10, slider_snap.snap(9, 1, 60, 5, slider_snap.anchor(1, 1)))
+		assert.are.equal(1, slider_snap.anchor(1, 2)) -- odd values only: count from 1
+		assert.are.equal(0, slider_snap.anchor(1000000, 1000000))
+		assert.are.equal(5000000, slider_snap.snap(5200000, 1000000, 20000000, 5000000, 0))
+	end)
+
+	it("keeps values on the slider's grid", function()
+		assert.are.equal(5, slider_snap.on_grid(4, 1, 59, 2))
+		assert.are.equal(3, slider_snap.on_grid(3.2, 1, 59, 2))
+		assert.are.equal(59, slider_snap.on_grid(80, 1, 59, 2))
+		assert.are.equal(30, slider_snap.on_grid(31, 0, 600, 10))
 	end)
 
 	it("snaps magnetically", function()

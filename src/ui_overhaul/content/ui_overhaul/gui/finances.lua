@@ -236,25 +236,36 @@ local function render(params)
 			if v == key then select(key) end
 		end
 	end)
-	local tableState = engine_react_util.useStepStateTimer(function(old)
-		local ok, data = pcall(finances.read_table)
+	-- each view reads only its own figures (the module-level `view` is the one shown); the game's
+	-- own table (Details) reads for itself
+	local function read(kind, reader)
+		local ok, data = pcall(reader)
 		if ok then return data end
-		report("table", data)
-		return old
+		report(kind, data)
+		return nil
+	end
+	local tableState = engine_react_util.useStepStateTimer(function(old)
+		if view ~= "income" and view ~= "cashflow" then return old end
+		return read("table", finances.read_table) or old
 	end, 1.0)
 	local balanceState = engine_react_util.useStepStateTimer(function(old)
-		local ok, data = pcall(finances.read_balance)
-		if ok then return data end
-		report("balance", data)
-		return old
+		if view ~= "balance" then return old end
+		return read("balance", finances.read_balance) or old
 	end, 2.0)
 
 	local selected = viewState:old()
+	-- a view opened for the first time reads at once instead of waiting for its timer
+	local table_data = tableState:old()
+	if not table_data and (selected == "income" or selected == "cashflow") then
+		table_data = read("table", finances.read_table)
+	end
+	local balance_data = balanceState:old()
+	if not balance_data and selected == "balance" then balance_data = read("balance", finances.read_balance) end
 	local content
 	if selected == "details" then
 		content = react.CallOriginalRecipe(base_finances_table, params)
 	elseif selected == "balance" then
-		local data = balanceState:old()
+		local data = balance_data
 		content = data and builtin.BoxLayout{
 			orientation = builtin.type.Orientation.Vertical,
 			children = {
@@ -263,7 +274,7 @@ local function render(params)
 			},
 		} or builtin.BoxLayout{}
 	else
-		local data = tableState:old()
+		local data = table_data
 		if data then
 			local income, cash = statements.build(data, journal_enum())
 			local header = { { text = "" } }

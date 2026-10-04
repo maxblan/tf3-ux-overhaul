@@ -18,6 +18,7 @@ local vehicle_store_util = require("::/gui/line_vehicle_mgmt/vehicle_store_util.
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local romberg = require("::/scripts/util/romberg.tl")
 local vehicle_slopes = require("/ui_overhaul/core/vehicle_slopes.lua")
+local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
 local performance = {}
 
@@ -29,26 +30,60 @@ local function integrate(a, h, tolerance, fn)
 	return romberg.rombergIntegration(a, h, tolerance, 9, fn)
 end
 
---- The rating text and the slope rows fully loaded and without load: { rating, loaded, empty }, or
--- nil for vehicles the game does not rate (no power or tractive effort: ships, aircraft, wagons).
-function performance.ratings(model_ids, modifiers)
+local RATING_NAMES = { "Poor", "Mediocre", "Good", "Excellent" } -- vehicle_util.tl's words
+
+-- Slope figures per consist: they depend only on the models and their maintenance modifiers.
+local cache, cached = {}, 0
+local CACHE_LIMIT = 64
+local MODIFIER_FIELDS = { "topSpeedScale", "noiseScale", "pollutionScale", "comfortScale" }
+
+local function cache_key(model_ids, modifiers)
+	local parts = {}
+	for i, id in ipairs(model_ids or {}) do parts[i] = tostring(id) end
+	-- an engine object (TransportVehicle.Modifiers, userdata): read its fields by name
+	local mods = {}
+	for i, field in ipairs(MODIFIER_FIELDS) do
+		local ok, value = pcall(function() return modifiers[field] end)
+		mods[i] = tostring(ok and value or "")
+	end
+	return table.concat(parts, ",") .. "|" .. (modifiers and table.concat(mods, ",") or "")
+end
+
+local function compute(model_ids, modifiers)
 	local vehicles = {}
 	for i, model_id in ipairs(model_ids or {}) do
 		vehicles[i] = vehicle_store_util.makeSingleVehicle(api.res.modelRep.get(model_id))
 	end
-	if #vehicles == 0 then return nil end
+	if #vehicles == 0 then return false end
 	local data = vehicle_store_util.collectVehicleData(vehicles, modifiers)
-	if not data or not (data.power > 0 and data.tractiveEffort > 0) then return nil end
+	if not data or not (data.power > 0 and data.tractiveEffort > 0) then return false end
 	local function rows(weight)
 		return vehicle_slopes.compute({ weight = weight, power = data.power, tractiveEffort = data.tractiveEffort,
 			speed = data.speed, rollingFriction = data.rollingFriction }, integrate)
 	end
-	local loaded = rows(data.weight + data.weightMaxPayload)
-	if not loaded then return nil end
-	-- the game's own rating word, as the store shows it
-	local base = vehicle_util.getPowerRatingTextAndToolTip(data.weight + data.weightMaxPayload, data.power,
-		data.tractiveEffort, data.speed, data.rollingFriction)
-	return { rating = base and base[1] or "", loaded = loaded, empty = rows(data.weight) }
+	-- the rating is the game's: the same formula, fully loaded (vehicle_util.getPowerRatingTextAndToolTip)
+	local loaded, rating = rows(data.weight + data.weightMaxPayload)
+	if not loaded then return false end
+	return { rating = rating, loaded = loaded, empty = rows(data.weight) }
+end
+
+--- The rating word and the slope rows fully loaded and without load: { rating, loaded, empty }, or
+-- nil for vehicles the game does not rate (no power or tractive effort: ships, aircraft, wagons).
+-- Computed once per consist and kept; the rating word is translated here (GUI thread).
+function performance.ratings(model_ids, modifiers)
+	local key = cache_key(model_ids, modifiers)
+	local entry = cache[key]
+	if entry == nil then
+		if cached >= CACHE_LIMIT then cache, cached = {}, 0 end
+		entry = compute(model_ids, modifiers)
+		cache[key], cached = entry, cached + 1
+	end
+	if not entry then return nil end
+	return {
+		rating = pGetText("vehicle-performance-rating", RATING_NAMES[entry.rating] or RATING_NAMES[1]),
+		loaded = entry.loaded,
+		empty = entry.empty,
+	}
 end
 
 local SLOPE_NAMES = { "Flat", "Medium", "High" }
@@ -142,14 +177,19 @@ local pending
 local function wrap_rating(original)
 	return function(...)
 		local result = original(...)
-		if result and react.getCurrentRecipeName() == "VehicleCart" then pending = result end
+		-- outside a render (a timer, another mod) there is no current recipe: nothing to do
+		local ok, recipe = pcall(react.getCurrentRecipeName)
+		if result and ok and recipe == "VehicleCart" then pending = result end
 		return result
 	end
 end
 
 local function wrap_text_view(original)
 	return function(...)
-		if pending and react.getCurrentRecipeName() ~= "VehicleCart" then pending = nil end
+		if pending then
+			local ok, recipe = pcall(react.getCurrentRecipeName)
+			if not ok or recipe ~= "VehicleCart" then pending = nil end
+		end
 		if pending then
 			local p = select("#", ...) == 1 and select(1, ...) or nil
 			if type(p) == "table" and p.text == pending[1] then
@@ -172,7 +212,7 @@ end
 function performance.install(_replacement_api)
 	if type(vehicle_util.getPowerRatingTextAndToolTip) ~= "function" then error("rating function not found") end
 	vehicle_util.getPowerRatingTextAndToolTip = wrap_rating(vehicle_util.getPowerRatingTextAndToolTip)
-	builtin.TextView = wrap_text_view(builtin.TextView)
+	builtin_wraps.wrap("TextView", wrap_text_view)
 	debugPrint("[ui_overhaul] performance tooltip installed")
 end
 
