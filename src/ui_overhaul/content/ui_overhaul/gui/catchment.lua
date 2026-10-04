@@ -10,7 +10,6 @@
 -- ::MainModButtonAreaExtension (catchment_buttons.res.lua). Installed by catchment.script.lua.
 -- @module ui_overhaul.gui.catchment
 local builtin = require("::/gui/main/builtin.lua")
-local cargo_util = require("::/gui/main/cargo_util.tl")
 local react = require("::/gui/main/react.lua")
 local selector_react_util = require("::/gui/main/selector_react_util.tl")
 
@@ -58,9 +57,10 @@ function catchment.layer_config(s)
 	local config = api.type.LayerConfig.new()
 	local area = api.type.LayerConfig.CatchmentAreaRenderableConfig.new()
 	local display = api.type.LayerConfig.CatchmentAreaDisplaySettings.new()
-	display.innerAlpha = 0.4 -- as the Infrastructure layer (layer_infrastructure.tl)
-	display.borderAlpha = 1.0
-	display.godrayAlpha = 1.0
+	-- a light fill, so what lies under the areas stays readable (Infrastructure layer: 0.4)
+	display.innerAlpha = 0.12
+	display.borderAlpha = 0.9
+	display.godrayAlpha = 0.0
 	area.isVisible = true
 	area.displaySettings = display
 	area.entity = -1
@@ -115,7 +115,8 @@ end
 local function toggle(kind, icon, tooltip, value)
 	return builtin.ToggleButton{
 		meta = { tooltip = tooltip, class = "uio-catchment-toggle", id = "uio.catchment." .. kind },
-		content = builtin.ImageView{ path = icon, scaling = builtin.type.ImageViewScaling.AutoFit },
+		content = builtin.ImageView{ meta = { class = "uio-catchment-icon" }, path = icon,
+			scaling = builtin.type.ImageViewScaling.AutoFit },
 		value = value and 1 or 0,
 		onValueChange = function(v) catchment.set(kind, v == 1) end,
 	}
@@ -130,9 +131,11 @@ function catchment.buttons()
 		meta = { class = "uio-catchment-buttons" },
 		orientation = builtin.type.Orientation.Horizontal,
 		children = {
-			toggle("person", cargo_util.getCargoIconById(cargo_util.getPassengerCargoTypeId()),
+			-- the white symbols of the layer buttons next to them (layer_infrastructure.tl's areas)
+			toggle("person", "::/gui/layers/icons/symbol_person.tga",
 				_("Show the passenger catchment areas of all stations"), s.person),
-			toggle("cargo", cargo_util.getMixedCargoIcon(), _("Show the cargo catchment areas of all stations"), s.cargo),
+			toggle("cargo", "::/gui/layers/icons/symbol_cargo.tga",
+				_("Show the cargo catchment areas of all stations"), s.cargo),
 		},
 	}
 end
