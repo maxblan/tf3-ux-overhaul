@@ -75,7 +75,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - Terminal mods:
   - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
   - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.
-- English and German.
+- English, German, French, Italian, Spanish, Dutch, Japanese, Korean, Polish, Brazilian Portuguese, Russian and Chinese (simplified and traditional): all the game's languages.
 
 ## Development
 

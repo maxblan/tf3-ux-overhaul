@@ -84,7 +84,7 @@ The README lists every recipe the mod replaces, so players can see which other m
 - Offline: specs for `core/` and `engine/` against the mock engine (`make test`).
 - In game: `make test-ingame` starts the game with the testbench in `spec/ingame/ui_overhaul_testbench/`. Its GUI checks fire `uio.*` events and test `api.gui.byId.isVisibleRecursive("uio.…")` for PASS or FAIL. `spec/ingame/run.sh` also fails on `ReactFramework::Load() failed` and on React errors in `stdout.txt`.
 - `api.gui.camera.takeScreenshot` renders without the UI, and `byId.getSize` returns 0×0 for anything that is not a window, so GUI checks use `byId.isVisible` and CSS-driven probes.
-- Every text exists in English and German (`tools/strings_check.py`).
+- Every text exists in all the game's languages (`en`, `de`, `fr`, `it`, `es`, `nl`, `ja`, `ko`, `pl`, `pt_BR`, `ru`, `zh_CN`, `zh_TW`, the game's own language folders; `tools/strings_check.py`).
 
 The gates and how to check what players see are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 

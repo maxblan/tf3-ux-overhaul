@@ -15,7 +15,7 @@ make lint test                     # luacheck, Lua 5.2 syntax rules, offline spe
 make test-ingame                   # starts the game, runs the GUI checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make validate                      # the game's mod validator (close the game first)
-python3 tools/strings_check.py     # every text the mod uses exists in English and German
+python3 tools/strings_check.py     # every text the mod uses exists in every language
 ```
 
 CI runs `make lint test` and the strings check without the game. It cannot run the in-game checks, so a green CI run says nothing about what the game shows. Run `make test-ingame` before you open a pull request, and say in the pull request what you checked in the game and what you did not.
@@ -65,7 +65,7 @@ The mod improves the screens the game already has. A change should feel as if th
 
 ## Texts
 
-Every text the player sees goes in `src/ui_overhaul/strings.json`, in English and German. `tools/strings_check.py` reports missing translations and keys the code no longer uses. Write the way the game does: short, plain words, sentence case.
+Every text the player sees goes in `src/ui_overhaul/strings.json`, in all the game's languages (`en`, `de`, `fr`, `it`, `es`, `nl`, `ja`, `ko`, `pl`, `pt_BR`, `ru`, `zh_CN`, `zh_TW`, the game's own language folders). Reuse the game's own terms for the same thing (its catalogs are in `base/strings/<lang>/LC_MESSAGES/base.mo`). `tools/strings_check.py` reports missing translations and keys the code no longer uses. Write the way the game does: short, plain words, sentence case.
 
 ## Pull requests and commits
 
