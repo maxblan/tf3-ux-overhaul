@@ -14,9 +14,9 @@ function data()
 	add("R::UioStopsTable R::UioStopCell R::NameTextView", { size = { 220, -1 }, maxSize = { 220, -1 } })
 	-- a stop the line cannot reach: greyed, as the game greys what is unavailable; the alert icon
 	-- (statistics problem icon) carries the reason, so colour is not the only signal
-	add("R::UioStopCell Component!uio-stop-unreachable TextView", { color = colorDefault.NeutralMedium })
+	add("R::UioStopCell R::Component!uio-stop-unreachable TextView", { color = colorDefault.NeutralMedium })
 	-- the name gives up the icon's room, so the terminal pin stays in the 300 wide cell
-	add("R::UioStopsTable R::UioStopCell Component!uio-stop-unreachable R::NameTextView",
+	add("R::UioStopsTable R::UioStopCell R::Component!uio-stop-unreachable R::NameTextView",
 		{ size = { 200, -1 }, maxSize = { 200, -1 } })
 	add("R::UioStopCell ImageView!uio-stop-alert", { size = { 16, 16 }, margin = { 0, 0, 0, 4 }, gravity = { 0, 0.5 } })
 	return result
