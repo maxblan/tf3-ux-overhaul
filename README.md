@@ -27,6 +27,10 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 - A Stops card lists every stop with its waiting passengers and a *Select Terminals* button. The tooltip adds waiting cargo.
 - A stop the line's vehicles cannot reach (no path into it, or an incompatible or doubled stop) is greyed with an alert icon. Its tooltip gives the game's own problem text, such as "Missing catenaries".
 
+### Vehicle window
+
+- Trains and trams get a Performance card: the game's rating (Poor to Excellent) and the top speed on flat track and on medium and steep slopes, with the time and distance to reach it, fully loaded and without load. In the vehicle store's composition, the Performance row's tooltip shows the same.
+
 ### Statistics
 
 The Lines, Vehicles and Stations tabs get quick filters above the table and the totals of the rows shown.

@@ -31,6 +31,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
 | Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |
+| Vehicle window | Performance card (rating, slope speeds loaded and empty); slope speeds in the store cart's Performance tooltip | `performance.lua` | `react-plugin ::VehicleEowExtensionPoint`, `order = 55`; wraps `vehicle_util.getPowerRatingTextAndToolTip` and `builtin.TextView` while `VehicleCart` renders |
 | Town window | growth bottleneck and progress to the next level as text | `window_tweaks.lua` | patches `content_card.makeRecipeAndParam` while `TownLevelPlugin` renders |
 | Construction | locked perk says *Promotion pending* | `window_tweaks.lua` | patches `company_util.getConstructionDisableReason` (GUI state only) |
 | Construction | merged Rail/Tracks and Road/Roads menus, fastest track first, module tab order, bulldozer warning | `construction.lua` | patches `construction_react_util.getMenuCategories` and `getActionParams` |
