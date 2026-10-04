@@ -1,8 +1,13 @@
 --- Line Manager, "Select Terminals" popover of a stop: each terminal has three toggle buttons
 -- [Don't Use | Alternative | Preferred] instead of the drop-down list, so one click sets its usage
--- (base: open the list, then pick). The buttons of the preferred terminal stay disabled, as the base
--- list is. Everything else in the popover is the base popover; the problem arrow of a terminal is
--- also shown on the right terminal only (base compares terminal numbers modulo the stop count).
+-- (base: open the list, then pick). The preferred terminal's row is highlighted; its Don't Use and
+-- Alternative buttons are disabled, as the base list is, and say why. Terminals the line's vehicles
+-- cannot use (other carrier, passenger terminal for a freight line and the reverse) and terminals a
+-- path problem starts or ends at are greyed, with the reason in the tooltip; they stay clickable, as
+-- the player may be about to build the missing track. Everything else in the popover is the base
+-- popover; the problem arrow of a terminal is also shown on the right terminal only (base compares
+-- terminal numbers modulo the stop count), and outside the Line Manager the mod computes the problems
+-- itself (core/line_problems.lua), where the base popover would show none.
 --
 -- A Lua conversion of the base recipe TerminalSelection (gui/line_vehicle_mgmt/line_manager_panel.tl),
 -- registered under the base name so the base stylesheet applies. The base recipe is file-local, so it
@@ -27,6 +32,7 @@ local popover_react_util = require("::/gui/main/popover_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local styleutil = require("::/gui/main/styleutil.tl")
 local table_util = require("::/scripts/table_util.tl")
+local line_problems = require("/ui_overhaul/core/line_problems.lua")
 
 local terminals = {}
 
@@ -130,15 +136,21 @@ function terminals.apply(commonParams, stopNumber, terminalData, current, usage)
 	return true
 end
 
--- [Don't Use | Alternative | Preferred], the current usage checked.
+-- [Don't Use | Alternative | Preferred], the current usage checked. The preferred terminal keeps its
+-- Preferred button lit (it stands out instead of looking switched off); the other two are disabled
+-- there, as the base list is, since a stop always needs a preferred terminal.
 local function usage_buttons(params, terminalData)
 	local current = terminals.usage(terminalData)
-	local enabled = current ~= "Main"
+	local preferred = current == "Main"
 	local labels = { _("Don't Use"), _("Alternative"), _("Preferred") }
 	local buttons, selected = {}, 1
 	for i, usage in ipairs(USAGES) do
+		local enabled = not preferred or usage == "Main"
 		buttons[i] = {
-			meta = { enabled = enabled },
+			meta = {
+				enabled = enabled,
+				tooltip = not enabled and _("Make another terminal preferred first.") or nil,
+			},
 			content = builtin.TextView{ meta = { class = "font-scale-annotation" }, text = labels[i] },
 		}
 		if usage == current then selected = i end
@@ -147,7 +159,6 @@ local function usage_buttons(params, terminalData)
 		meta = {
 			id = "uio.terminals.usage." .. tostring(terminalData.number),
 			tooltip = _("Set Terminal Usage"),
-			enabled = enabled,
 		},
 		buttons = buttons,
 		selected = selected,
@@ -155,6 +166,169 @@ local function usage_buttons(params, terminalData)
 			terminals.apply(params.commonParams, params.stopNumber, terminalData, current, USAGES[index])
 		end,
 	}
+end
+
+-- Problems outside the Line Manager -------------------------------------------------------------
+
+-- Flat 0-based terminal index of a stop in its station group (base: flattenTerminalIndex).
+local function flat_terminal(stop)
+	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	local index = stop.terminal
+	for station_index1, station_entity in ipairs(group and group.stations or {}) do
+		if stop.station + 1 == station_index1 then return index end
+		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		index = index + #station.terminals
+	end
+	return 0
+end
+
+local function relaxation(location)
+	if not location then return nil end
+	return line_util.getRelaxationType(location.okModes, location.relaxedModes, location.allowedModes)
+end
+
+--- Plain copy of the line's stops and detailed problems for line_problems.index2problems. Engine
+-- reads only (timer callback): names untranslated, reasons as relaxation types.
+local function read_problems(line)
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	if not component then return nil end
+	local stops = {}
+	for _i, stop in ipairs(component.stops) do
+		stops[#stops + 1] = { name = api.engine.util.getEntityName(stop.stationGroup), terminal0 = flat_terminal(stop) }
+		for _j in ipairs(stop.waypoints) do stops[#stops + 1] = { terminal0 = line_problems.WAYPOINT } end
+	end
+	local segments = {}
+	for _i, segment in ipairs(api.engine.util.line.getDetailedLineProblems(line)) do
+		local states = {}
+		for _j, state in ipairs(segment) do
+			local from, to = state.noPathFromAlternative, state.noPathToAlternative
+			states[#states + 1] = {
+				noPath = state.noPath or nil,
+				duplicate = state.duplicateStop or nil,
+				incompatible = state.incompatibleStop or nil,
+				reason = state.noPath and relaxation(state.noPathLocation) or nil,
+				fromAlternative = from and { from[1], relaxation(from[2]) } or nil,
+				toAlternative = to and { to[1], relaxation(to[2]) } or nil,
+			}
+		end
+		segments[#segments + 1] = states
+	end
+	return { stops = stops, segments = segments }
+end
+
+-- Base text of a problem (line_manager_panel.tl, the same strings, kept on one line each so the strings
+-- check finds them). GUI thread only.
+-- luacheck: push ignore 631
+local function problem_text(problem)
+	local q = problem.params
+	if problem.kind == "duplicate" then return _("The same station appears twice consecutively.") end
+	if problem.kind == "incompatible" then return _("The stop is incompatible.") end
+	local f = {
+		origin = q.originIsWaypoint and _("Waypoint") or q.origin or _("Station"),
+		destination = q.destinationIsWaypoint and _("Waypoint") or q.destination or _("Station"),
+		terminalOrigin = lang_util.formatInt(q.terminalOrigin),
+		terminalDestination = lang_util.formatInt(q.terminalDestination),
+		reason = q.reason and line_util.getRelaxationText(q.reason) or nil,
+	}
+	local r = f.reason ~= nil
+	local text
+	if problem.kind == "no_path" then
+		if q.originIsWaypoint and q.destinationIsWaypoint then
+			text = r and _("No path from {origin} to {destination}: {reason}.")
+				or _("No path from {origin} to {destination} exists.")
+		elseif q.originIsWaypoint then
+			text = r and _("No path from {origin} to {destination} [Terminal {terminalDestination}]: {reason}.")
+				or _("No path from {origin} to {destination} [Terminal {terminalDestination}] exists.")
+		elseif q.destinationIsWaypoint then
+			text = r and _("No path from {origin} [Terminal {terminalOrigin}] to {destination}: {reason}.")
+				or _("No path from {origin} [Terminal {terminalOrigin}] to {destination} exists.")
+		else
+			text = r and _("No path from {origin} [Terminal {terminalOrigin}] to {destination} [Terminal {terminalDestination}]: {reason}.")
+				or _("No path from {origin} [Terminal {terminalOrigin}] to {destination} [Terminal {terminalDestination}] exists.")
+		end
+	elseif problem.kind == "from_alternative_to_alternative" then
+		text = r and _("No path from alternative stop {origin} [Terminal {terminalOrigin}] to alternative {destination} [Terminal {terminalDestination}] exists: {reason}.")
+			or _("No path from alternative stop {origin} [Terminal {terminalOrigin}] to alternative {destination} [Terminal {terminalDestination}] exists.")
+	elseif problem.kind == "from_alternative" then
+		text = r and _("No path from alternative stop {origin} [Terminal {terminalOrigin}] to {destination} [Terminal {terminalDestination}] exists: {reason}.")
+			or _("No path from alternative stop {origin} [Terminal {terminalOrigin}] to {destination} [Terminal {terminalDestination}] exists.")
+	else
+		text = r and _("No path from {origin} [Terminal {terminalOrigin}] to alternative stop {destination} [Terminal {terminalDestination}] exists: {reason}.")
+			or _("No path from {origin} [Terminal {terminalOrigin}] to alternative stop {destination} [Terminal {terminalDestination}] exists.")
+	end
+	return lang_util.format(text, f)
+end
+-- luacheck: pop
+
+--- index2problems in the Line Manager's shape (with tooltips) from read_problems' data.
+local function own_index2problems(data)
+	local result = line_problems.index2problems(data.stops, data.segments)
+	for _index, problems in pairs(result) do
+		for _i, problem in ipairs(problems) do problem.tooltip = problem_text(problem) end
+	end
+	return result
+end
+
+local function carrier_set(list)
+	local set = {}
+	for _i, carrier in ipairs(list or {}) do set[carrier] = true end
+	return set
+end
+
+--- What the line's vehicles carry, for line_problems.incompatibility. Without vehicles, the carriers
+-- of the other stops' preferred terminals. Engine reads only.
+local function read_line_needs(line, stop_index0)
+	local needs = { carriers = {}, passengers = false, cargo = false }
+	for _i, vehicle in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
+		local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+		if tv then needs.carriers[tv.carrier] = true end
+	end
+	if next(needs.carriers) == nil then
+		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+		for i, stop in ipairs(component and component.stops or {}) do
+			if i - 1 ~= stop_index0 then
+				local carriers = api.engine.system.stationGroupSystem.getCarriers(stop.stationGroup, stop.station, stop.terminal)
+				for carrier in pairs(carrier_set(carriers and carriers[1])) do needs.carriers[carrier] = true end
+			end
+		end
+	end
+	local passenger_id = api.res.cargoTypeRep.getPassengerCargoTypeId()
+	for index, usage in pairs(api.engine.util.line.getLineCapacityUsages(line, false) or {}) do
+		if usage.capacity > 0 then
+			if index - 1 == passenger_id then needs.passengers = true else needs.cargo = true end
+		end
+	end
+	return needs
+end
+
+--- terminal number -> incompatibility kind, for the stop of the popover. Engine reads only.
+local function read_incompatible(params)
+	local via = params.viaState:old()[params.stopNumber]
+	local group_entity = via.stop.stationGroup
+	local group = api.engine.getComponent(group_entity, api.type.ComponentType.STATION_GROUP)
+	local needs = read_line_needs(params.lineEntity, params.stopIndex)
+	local result, number = {}, 0
+	for station_index1, station_entity in ipairs(group.stations) do
+		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		for terminal_index1, terminal in ipairs(station.terminals) do
+			number = number + 1
+			local carriers = api.engine.system.stationGroupSystem.getCarriers(group_entity, station_index1 - 1,
+				terminal_index1 - 1)
+			result[number] = line_problems.incompatibility({
+				carriers = carrier_set(carriers and carriers[1]),
+				passengers = terminal.passengersLoad or terminal.passengersUnload,
+				cargo = terminal.cargoLoad or terminal.cargoUnload,
+			}, needs)
+		end
+	end
+	return result
+end
+
+local function incompatibility_text(kind)
+	if kind == "carrier" then return _("The vehicles of this line cannot stop at this terminal.") end
+	if kind == "passengers_only" then return _("Passenger terminal: this line carries only cargo.") end
+	if kind == "cargo_only" then return _("Cargo terminal: this line carries only passengers.") end
+	return nil
 end
 
 local function render(params)
@@ -168,6 +342,28 @@ local function render(params)
 		report("read", result)
 		return old or {}
 	end)
+
+	-- The Line Manager hands over its problems; the station and line window popovers have none.
+	local own_problems = next(params.index2problems or {}) == nil
+	local problemsState = engine_react_util.useStepStateTimer(function(old)
+		if not own_problems then return nil end
+		local ok, result = pcall(read_problems, params.lineEntity)
+		if ok then return result end
+		report("problems", result)
+		return old
+	end, 1.0)
+	local incompatibleState = engine_react_util.useStepStateTimer(function(old)
+		local ok, result = pcall(read_incompatible, params)
+		if ok then return result end
+		report("compatibility", result)
+		return old or {}
+	end, 1.0)
+	local index2problems = params.index2problems or {}
+	if own_problems and problemsState:old() then
+		local ok, result = pcall(own_index2problems, problemsState:old())
+		if ok then index2problems = result else report("problem texts", result) end
+	end
+	local incompatible = incompatibleState:old() or {}
 
 	local selectTerminalsHeader = builtin.Component{
 		meta = {
@@ -210,11 +406,11 @@ local function render(params)
 			end
 		end
 
-		local problemsPrev = params.index2problems[(params.stopNumber - 1) % params.stopCount]
+		local problemsPrev = index2problems[(params.stopNumber - 1) % params.stopCount]
 		if not problemsPrev then
 			problemsPrev = {}
 		end
-		local problemsThis = params.index2problems[params.stopNumber]
+		local problemsThis = index2problems[params.stopNumber]
 		if not problemsThis then
 			problemsThis = {}
 		end
@@ -240,6 +436,17 @@ local function render(params)
 			end
 		end
 
+		-- Why the line cannot use this terminal, if it cannot: greyed row, reasons in the tooltip.
+		local reasons = {}
+		local incompatible_text = incompatibility_text(incompatible[terminalData.number])
+		if incompatible_text then reasons[#reasons + 1] = incompatible_text end
+		if problemTooltipPrev then reasons[#reasons + 1] = problemTooltipPrev end
+		if problemTooltipThis and problemTooltipThis ~= problemTooltipPrev then
+			reasons[#reasons + 1] = problemTooltipThis
+		end
+		local reasonText = #reasons > 0 and table.concat(reasons, "\n") or nil
+		local preferred = terminalData.current
+
 		local floatingChildren = {}
 
 		table.insert(floatingChildren, builtin.FloatingLayoutChild{
@@ -247,7 +454,11 @@ local function render(params)
 			v = -1,
 			item = builtin.Component{
 				meta = {
-					class = "main, uio-terminal-row",
+					id = "uio.terminals.row." .. tostring(terminalData.number),
+					class = "main, uio-terminal-row"
+						.. (preferred and ", uio-terminal-preferred" or "")
+						.. (reasonText and ", uio-terminal-unreachable" or ""),
+					tooltip = reasonText,
 				},
 				layout = builtin.BoxLayout{
 					orientation = builtin.type.Orientation.Horizontal,
@@ -260,7 +471,8 @@ local function render(params)
 						line_react_util.makeTerminalIndicator(terminalData.number, true),
 						builtin.TextView {
 							meta = {
-								tooltip = terminalText, -- this text gets clipped when too long, so show the tooltip always
+								-- this text gets clipped when too long, so show the tooltip always
+								tooltip = reasonText and (terminalText .. "\n" .. reasonText) or terminalText,
 								class = (bubbleColor and "bubble, " or "") .. "font-scale-body, terminal-label-compact",
 								styleSheet = bubbleColor and styleutil.makeStyle{
 									color = gui_react_util.textColorForColor(api.type.Vec4f.new(bubbleColor, 1.0)),

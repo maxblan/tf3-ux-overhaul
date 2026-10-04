@@ -11,6 +11,7 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 - Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
 - A row above the vehicle list shows each vehicle model in it with its count. Clicking a model selects exactly those vehicles; *In all lines* adds that model's vehicles from every line, so one Replace, Sell or Send to Depot reaches all of them. Shift+click on a vehicle selects all listed vehicles of its model.
 - In *Select Terminals*, each terminal has three buttons (Don't Use, Alternative, Preferred) instead of a drop-down list, so a change takes one click.
+- In *Select Terminals*, the preferred terminal is highlighted. Terminals the line cannot use (another kind of vehicle, a passenger terminal on a freight line and the reverse) or cannot reach (no path, with the missing piece such as catenaries) are greyed, and their tooltip says why. This also works when the popover is opened from the station or line window.
 
 ### Station window
 
