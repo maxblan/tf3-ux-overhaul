@@ -9,14 +9,23 @@
 --     clickable name.
 -- A plugin of ::IndustryEowExtensionPoint (industry_card.res.lua), rendered through the guarded
 -- stub industry_cards.script.lua. State functions only read the engine; rendering translates.
+--
+-- Blocked area: when something stands where the next level would go, the game paints that area red on
+-- the map, in a colour the engine fixes (the plot overlay has no colour or transparency setting). The
+-- blocker row has an eye button that shows or hides it, so the ground underneath can be seen. For
+-- that the exported recipe IndustryWindow (industry.tl) is replaced and calls the original; while the
+-- map action it hands to setActionFn renders, builtin.LayerConfig drops the overlay's triangles if
+-- the area is switched off (industry_window.res.lua, industry_cards.script.lua).
 -- @module ui_overhaul.gui.industry_cards
 local builtin = require("::/gui/main/builtin.lua")
 local content_card = require("::/gui/main/content_card.tl")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
+local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
 local react = require("::/gui/main/react.lua")
+local base_industry_window = require("::/gui/entity_window/industry/industry.tl")
 -- loaded at render time (guard.plugin): only fully qualified paths reach this mod
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
 
@@ -25,6 +34,12 @@ local industry_cards = {}
 local REFRESH = 2.0 -- seconds
 local SERVED_REFRESH = 5.0 -- the line search walks all the player's stops
 local MAX_LINES = 8
+local BLOCKED_AREA_EVENT = "uio.industry.blocked_area"
+
+-- Whether the red area of a blocked expansion is shown on the map (for the session).
+local show_blocked_area = true
+-- True while the industry window's map action renders with the area switched off.
+local strip_plots = false
 
 local function vertical(children, class)
 	return builtin.BoxLayout{ meta = { class = class }, orientation = builtin.type.Orientation.Vertical,
@@ -62,12 +77,9 @@ local function read_recipes(stock_list_entity)
 				if amount > 0 and stock then inputs[#inputs + 1] = { stock.cargoType, amount } end
 			end
 			local outputs = {}
-			for key, amount in pairs(rule.output) do
+			-- outputs are keyed by cargo type id (inputs by stock index), as industry_util.tl reads them
+			for cargo, amount in pairs(rule.output) do
 				if amount > 0 then
-					local cargo = key
-					-- keyed by stock index, as the inputs are (a key without a stock is a cargo type id)
-					local stock = stock_list.stocks[key]
-					if stock then cargo = stock.cargoType end
 					outputs[#outputs + 1] = { cargo, amount,
 						api.engine.util.stock.getCargoMaxProductionPerYear(stock_list_entity, cargo) }
 				end
@@ -177,26 +189,30 @@ local function bar(fraction, label, tooltip)
 	}
 end
 
--- "[icon] 11 + [icon] 7 -> [icon] 48 / year" with the game's cargo icons.
+-- "[icon] 11 + [icon] 7 -> [icon] 4" with the game's cargo icons; each output icon's tooltip says how
+-- much of it the industry can make per year, and a single output says it in the row as well.
 local function recipe_node(recipe)
 	local children = {}
-	local function amounts(list)
+	local function per_year_text(amount)
+		return lang_util.format(_("up to {amount} per year"), { amount = lang_util.formatInt(amount) })
+	end
+	local function amounts(list, outputs)
 		for i, entry in ipairs(list) do
 			if i > 1 then children[#children + 1] = text("+", "font-scale-body, uio-industry-op") end
-			children[#children + 1] = cargo_react_util.makeCargoIcon(entry[1], "uio-industry-cargo")
+			local modifier = outputs and (entry[3] or 0) > 0
+				and function(tooltip) return tooltip .. ": " .. per_year_text(entry[3]) end or nil
+			children[#children + 1] = cargo_react_util.makeCargoIcon(entry[1], "uio-industry-cargo", nil, false, false,
+				modifier)
 			children[#children + 1] = text(lang_util.formatInt(entry[2]), "font-scale-body")
 		end
 	end
 	if #recipe.inputs > 0 then
-		amounts(recipe.inputs)
+		amounts(recipe.inputs, false)
 		children[#children + 1] = text("\xE2\x86\x92", "font-scale-body, uio-industry-op")
 	end
-	amounts(recipe.outputs)
-	local per_year = 0
-	for _i, output in ipairs(recipe.outputs) do per_year = per_year + (output[3] or 0) end
-	if per_year > 0 then
-		children[#children + 1] = text(lang_util.format(_("up to {amount} per year"),
-			{ amount = lang_util.formatInt(per_year) }), "font-scale-annotation, uio-industry-per-year")
+	amounts(recipe.outputs, true)
+	if #recipe.outputs == 1 and (recipe.outputs[1][3] or 0) > 0 then
+		children[#children + 1] = text(per_year_text(recipe.outputs[1][3]), "font-scale-annotation, uio-industry-per-year")
 	end
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
 end
@@ -206,6 +222,8 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 		local ok, facts = pcall(industry_cards.read, params.entity)
 		return ok and facts or nil
 	end, REFRESH)
+	local showState = react.useState(show_blocked_area)
+	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
 	local f = state:old()
 	if not f then return vertical{} end
 	local growing = f.level < f.maxLevel
@@ -238,6 +256,16 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 					scaling = builtin.type.ImageViewScaling.AutoFit }
 			end
 			parts[#parts + 1] = text(line, warn and "font-scale-body, uio-industry-blocker" or "font-scale-body")
+			if key == "blocked" then
+				parts[#parts + 1] = gui_react_util.makeHorizontalSpacer()
+				parts[#parts + 1] = builtin.ToggleButton{
+					meta = { class = "uio-industry-area-toggle", tooltip = _("Show the blocked area on the map") },
+					content = builtin.ImageView{ path = "::/gui/statistics/icons/symbol_eye_18.tga",
+						scaling = builtin.type.ImageViewScaling.AutoFit },
+					value = showState:old() and 1 or 0,
+					onValueChange = function(value) industry_cards.set_show_blocked_area(value == 1) end,
+				}
+			end
 			children[#children + 1] = builtin.BoxLayout{
 				meta = { class = "uio-industry-row" },
 				orientation = builtin.type.Orientation.Horizontal,
@@ -303,6 +331,52 @@ function industry_cards.industry(params)
 		card("uioIndustryDevelopment", _("Development"), Development, { entity = entity }, params),
 		card("uioIndustryServedBy", _("Served by"), ServedBy, { entity = entity }, params),
 	}, "box-plugin-vertical-space")
+end
+
+-- Blocked area on the map --------------------------------------------------------------------------
+
+--- Shows or hides the red area of a blocked expansion (all industry windows, for the session).
+function industry_cards.set_show_blocked_area(show)
+	show_blocked_area = show and true or false
+	react.fireEvent(nil, BLOCKED_AREA_EVENT, show_blocked_area)
+end
+
+-- The base window, with its map action rendered without the red area while it is switched off.
+local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
+	local showState = react.useState(show_blocked_area)
+	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
+	local show = showState:old()
+	local copy = {}
+	for k, v in pairs(params) do copy[k] = v end
+	if type(params.setActionFn) == "function" then
+		copy.setActionFn = function(fn, ...)
+			if type(fn) ~= "function" or show then return params.setActionFn(fn, ...) end
+			return params.setActionFn(function(...)
+				strip_plots = true
+				local ok, node = pcall(fn, ...)
+				strip_plots = false
+				if not ok then error(node, 0) end
+				return node
+			end, ...)
+		end
+	end
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_industry_window, copy) } }
+end)
+
+--- Called from the react-replacement-config before the UI starts.
+function industry_cards.install(replacement_api)
+	local base_layer_config = builtin.LayerConfig
+	if type(base_layer_config) ~= "function" then error("builtin.LayerConfig not found") end
+	builtin.LayerConfig = function(p, ...)
+		if strip_plots and select("#", ...) == 0 and type(p) == "table" and p.config ~= nil then
+			pcall(function()
+				p.config.plotsRenderableConfig = api.type.LayerConfig.PlotsRenderableConfig.new()
+			end)
+		end
+		return base_layer_config(p, ...)
+	end
+	replacement_api.ReplaceRecipe(base_industry_window, IndustryWindow)
+	debugPrint("[ui_overhaul] industry blocked-area switch installed")
 end
 
 return industry_cards

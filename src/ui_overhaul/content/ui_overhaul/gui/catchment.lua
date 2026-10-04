@@ -57,10 +57,9 @@ function catchment.layer_config(s)
 	local config = api.type.LayerConfig.new()
 	local area = api.type.LayerConfig.CatchmentAreaRenderableConfig.new()
 	local display = api.type.LayerConfig.CatchmentAreaDisplaySettings.new()
-	-- a light fill, so what lies under the areas stays readable (Infrastructure layer: 0.4)
-	display.innerAlpha = 0.12
-	display.borderAlpha = 0.9
-	display.godrayAlpha = 0.0
+	display.innerAlpha = 0.4 -- as the Infrastructure layer (layer_infrastructure.tl)
+	display.borderAlpha = 1.0
+	display.godrayAlpha = 1.0
 	area.isVisible = true
 	area.displaySettings = display
 	area.entity = -1

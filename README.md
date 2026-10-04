@@ -62,6 +62,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Industry window
 
 - A Development card: the recipes in words ("4 Clay -> 4 Bricks, up to 460 per year"), the level while the industry can still grow, the chance that it expands at its next half-yearly check with the production rating and how much of its output is transported, and what keeps it from expanding (maximum reached, something in the way, nothing produced or transported, closure countdown).
+- When something blocks the next expansion, an eye button in the Development card shows or hides the game's red area on the map, so you can see what stands there. (Its colour is fixed by the engine and cannot be made see-through.)
 - A Served by card lists your lines with a stop that reaches the industry; each name opens the line.
 
 ### Towns and company
@@ -107,7 +108,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
 - It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces:
+- Two mods cannot replace the same vanilla part. This mod replaces the industry window (calling the original) and:
   - the Line Manager's vehicle list, row icons and add-stop hover;
   - the Statistics Lines, Vehicles, Stations and Warehouses tabs;
   - the line window's Vehicles card and the Finances tab's table;

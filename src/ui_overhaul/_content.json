@@ -42,6 +42,7 @@
         "ui_overhaul/gui/industry_card.res.lua",
         "ui_overhaul/gui/industry_cards.lua",
         "ui_overhaul/gui/industry_cards.script.lua",
+        "ui_overhaul/gui/industry_window.res.lua",
         "ui_overhaul/gui/line_vehicles.lua",
         "ui_overhaul/gui/line_vehicles.res.lua",
         "ui_overhaul/gui/line_vehicles.script.lua",

@@ -454,12 +454,20 @@ local checks = {
 		-- the industry with the most output, as players look at those first
 		name = "industry_window_cards",
 		act = function(ctx)
+			-- an industry whose expansion is blocked (the red area), else the one with the most output
+			local blocked = {}
+			local script = api.engine.system.gameScriptSystem.getEntityForGameScript(
+				"::/game_mechanics/industries/industries.gs")
+			local game_script = script and api.engine.getComponent(script, api.type.ComponentType.GAME_SCRIPT)
+			local failed = game_script and game_script.state_native:find("industryFailedExtensions")
 			local best, best_output = nil, -1
 			for _i, entity in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.INDUSTRY)) do
 				local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
 				local output = api.engine.util.stock.getCargoOutputPerYear(industry.stockList)
+				if failed and failed:find(entity) ~= nil then output = output + 1e9 blocked[entity] = true end
 				if output > best_output then best, best_output = entity, output end
 			end
+			ctx.industry_blocked = best ~= nil and blocked[best] == true
 			ctx.industry = best
 			if best then
 				api.gui.fireReactEvent("closeAllWindows", nil)
@@ -474,6 +482,21 @@ local checks = {
 			local shown = visible("uio.industry.development." .. tostring(ctx.industry))
 			return shown, "development card visible=" .. tostring(shown) .. " (see the industry log lines)"
 		end,
+	},
+	{
+		name = "industry_blocked_area_hidden",
+		act = function() api.gui.fireReactEvent("uio.industry.blocked_area", false) end,
+		wait = 60,
+		shot = "industry_blocked_area_hidden",
+		check = function(ctx)
+			return true, "blocked industry=" .. tostring(ctx.industry_blocked) .. " (compare the red area with the shot before)"
+		end,
+	},
+	{
+		name = "industry_blocked_area_shown",
+		act = function() api.gui.fireReactEvent("uio.industry.blocked_area", true) end,
+		wait = 30,
+		check = function() return true, "shown again" end,
 	},
 	{
 		name = "bulldozer_station_warning",

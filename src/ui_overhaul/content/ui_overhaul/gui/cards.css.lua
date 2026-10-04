@@ -40,6 +40,8 @@ function data()
 	add("R::UioIndustryDevelopment TextView!uio-industry-per-year",
 		{ margin = { 0, 0, 0, 8 }, gravity = { 0, 0.5 }, color = colorDefault.NeutralLight })
 	add("R::UioIndustryDevelopment ImageView!uio-industry-alert", { size = { 16, 16 }, gravity = { 0, 0.5 } })
+	add("R::UioIndustryDevelopment ToggleButton!uio-industry-area-toggle",
+		{ size = { 24, 24 }, padding = { 3, 3, 3, 3 }, gravity = { 1, 0.5 } })
 	add("R::UioIndustryServedBy BoxLayout!uio-industry-lines", { innerSpacing = { 0, 2 } })
 	return result
 end
