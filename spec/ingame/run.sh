@@ -3,8 +3,10 @@
 # with the testbench's app script, waits for the scenarios to finish and prints their results.
 #
 # Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME] [--with-mod ID ...]
+#                           [--only CHECK ...]
 #   --save NAME    run on a copy of the savegame NAME (without .sav) instead of a new small map. The
 #                  copy is called uio_fixture; it and its autosaves are deleted afterwards.
+#   --only CHECK   run only the GUI checks of that name (and the fixture facts); repeatable
 #   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
 #                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
@@ -14,12 +16,14 @@ timeout=900
 keep_testbench=0
 save=""
 with_mods=()
+only=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--timeout) timeout="$2"; shift 2 ;;
 		--keep-testbench) keep_testbench=1; shift ;;
 		--save) save="$2"; shift 2 ;;
 		--with-mod) with_mods+=("$2"); shift 2 ;;
+		--only) only+=("$2"); shift 2 ;;
 		*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 done
@@ -69,11 +73,14 @@ if [ -n "$save" ]; then
 	fixture_save="\"$fixture_name\""
 	echo "running on a copy of savegame '$save' ($fixture_name)"
 fi
-if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ]; then
+if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ]; then
 	extra=""
 	for m in "${with_mods[@]}"; do extra="$extra\"$m\", "; done
+	only_list=""
+	for c in "${only[@]}"; do only_list="$only_list\"$c\", "; done
 	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
-	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s} }\n' "$fixture_save" "$extra" > "$staged_fixture"
+	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s} }\n' "$fixture_save" "$extra" \
+		"$only_list" > "$staged_fixture"
 	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
 fi
 

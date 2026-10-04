@@ -372,6 +372,52 @@ local checks = {
 		end,
 	},
 	{
+		-- the minimize button in the title bar, then the window folded to it
+		name = "entity_window_minimize",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		shot = "vehicle_window_minimized",
+		check = function(ctx)
+			if not ctx.card_vehicle then return true, "skipped: no vehicle" end
+			local window = visible("temp.view.entity_" .. tostring(ctx.card_vehicle))
+			return window, "window still open=" .. tostring(window) .. " (see the folded window in the screenshot)"
+		end,
+	},
+	{
+		name = "entity_window_restore",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		check = function() return true, "restored" end,
+	},
+	{
+		-- closing the windows the mod wrapped, then opening a new one (an engine crash once)
+		name = "close_windows",
+		act = function() api.gui.fireReactEvent("closeAllWindows", nil) end,
+		wait = 30,
+		check = function() return true, "closed" end,
+	},
+	{
+		name = "catchment_overlay",
+		act = function()
+			-- the overlay shows while no tool draws its own (Statistics, Line Manager ...)
+			api.gui.fireReactEvent("clearToolStack", nil)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			api.gui.fireReactEvent("uio.catchment", { person = true, cargo = true })
+		end,
+		wait = 60,
+		shot = "catchment_overlay",
+		check = function()
+			local shown = visible("uio.catchment.person")
+			return true, "toggle visible=" .. tostring(shown) .. " (see the overlay in the screenshot)"
+		end,
+	},
+	{
+		name = "catchment_overlay_off",
+		act = function() api.gui.fireReactEvent("uio.catchment", { person = false, cargo = false }) end,
+		wait = 10,
+		check = function() return true, "off" end,
+	},
+	{
 		name = "vehicle_tooltip_block",
 		act = function(ctx)
 			if ctx.card_vehicle then api.gui.fireReactEvent("uio.debug.vehicle_tooltip", ctx.card_vehicle) end
@@ -860,6 +906,17 @@ local checks = {
 		end,
 	},
 }
+
+-- run.sh --only <name>: just those checks, after the fixture facts.
+if fixture.only and #fixture.only > 0 then
+	local wanted = { gui_fixture_facts = true }
+	for _i, name in ipairs(fixture.only) do wanted[name] = true end
+	local selected = {}
+	for _i, check in ipairs(checks) do
+		if wanted[check.name] then selected[#selected + 1] = check end
+	end
+	checks = selected
+end
 
 -- Crash probe (gui/probe.script.lua): set PROBE = true to open its window variants first.
 local PROBE = false

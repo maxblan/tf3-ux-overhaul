@@ -14,6 +14,7 @@ Thanks for looking. This file covers the parts of this repository that are hard 
 make lint test                     # luacheck, Lua 5.2 syntax rules, offline specs
 make test-ingame                   # starts the game, runs the GUI checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
+make test-ingame SAVE="My Save" ONLY="check_a check_b"   # just those GUI checks (to bisect a crash)
 make validate                      # the game's mod validator (close the game first)
 python3 tools/strings_check.py     # every text the mod uses exists in every language
 ```

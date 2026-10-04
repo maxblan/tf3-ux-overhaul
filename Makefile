@@ -51,8 +51,8 @@ else
 	"$(NODE)" $(LUA_TOOLS)/run.js $(LUA_TOOLS)/lint.lua $(LUA_FILES)
 endif
 
-test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods)
-	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m))
+test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods; ONLY="check_a check_b" runs just those GUI checks)
+	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(foreach c,$(ONLY),--only $(c))
 
 check: lint test test-ingame ## Run lint and all tests
 
