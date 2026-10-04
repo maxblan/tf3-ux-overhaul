@@ -48,6 +48,10 @@ The Warehouses tab shows each cargo's icon with its quantity, the largest first,
 
 Sorting is fixed where vanilla sorts by something other than what it shows: line vehicle counts, line balance, vehicle age (ascending is now youngest first) and station utilization. Vehicle ages are red once the lifespan is reached. *No lines* lists your stations that no line uses, which vanilla hides.
 
+### Finances
+
+- The Finances tab shows the game's figures as an income statement (revenue, running costs, operating result, interest, net income), a cash flow statement (net income, vehicles bought and sold, construction, loans taken and repaid, change in the bank account) and a balance sheet (bank account, vehicles at their depreciated value, other assets, debt, company value). *Details* shows the game's own table.
+
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.

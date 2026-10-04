@@ -45,6 +45,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Notifications | icons of the same kind grouped with a count | `notifications.lua` | Lua conversion of the base ridge (`notification_popups.tl`), replacing it |
 | Notifications | subsidy icons coloured by state, timer ring opaque and amber/red as time runs out | `notifications.lua`, `notifications.css.lua` | as the ridge above; a state class around the base icon recipes |
 | Subsidies | offer expiry ring and text, labelled time limit and time left, effect duration | `subsidies.lua` | patches `subvention_util.makeDefaultCardData` (GUI state only) |
+| Finance window | income statement, cash flow, balance sheet next to the game's table | `finances.lua`, `core/statements.lua` | replaces the exported `FinancesTable` (finances_table.tl); *Details* calls the original |
 | Game bar | Earnings tooltip with the cash flow of the last 30 days and the 30 days before | `earnings.lua` | replaces `GameBarEarningsPlugin` |
 | Vehicle store | newest model first and preselected (list layout) | `store_tweaks.lua` | patches `react.useState` for the one sort state `{ mode = "YearFrom", ascending = true, groupTypes = true }` |
 
