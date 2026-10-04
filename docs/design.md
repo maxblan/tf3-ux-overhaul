@@ -34,6 +34,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Town window | growth bottleneck and progress to the next level as text | `window_tweaks.lua` | patches `content_card.makeRecipeAndParam` while `TownLevelPlugin` renders |
 | Construction | locked perk says *Promotion pending* | `window_tweaks.lua` | patches `company_util.getConstructionDisableReason` (GUI state only) |
 | Construction | merged Rail/Tracks and Road/Roads menus, fastest track first, module tab order, bulldozer warning | `construction.lua` | patches `construction_react_util.getMenuCategories` and `getActionParams` |
+| Construction | settings panel and Settings window stay above the game bar at large scales | `construction.css.lua` | CSS: height limits in `vh`, bottom padding per text scale |
 | Construction | gradient, curve radius, elevation, bridge height and tunnel depth in the build tooltip | `construction.lua`, `core/geometry.lua` | `getActionParams`: wraps `getProposalStringsFn` of the track and street builders |
 | Notifications | icons of the same kind grouped with a count | `notifications.lua` | Lua conversion of the base ridge (`notification_popups.tl`), replacing it |
 | Notifications | subsidy icons coloured by state, timer ring opaque and amber/red as time runs out | `notifications.lua`, `notifications.css.lua` | as the ridge above; a state class around the base icon recipes |

@@ -115,7 +115,7 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	react.onEvent("uio.debug.terminal_button", function(_e, line)
 		local windows = game_react_globals.getDefaultWindowApi()
 		windows.removeAllWindows(popover_react_util.PopoverWindow)
-		if line then mod_terminals().open(line, 0, { x = 700, y = 300 }, "Select Terminals") end
+		if line then mod_terminals().open(line, 0, { x = 1000, y = 250 }, "Select Terminals") end
 	end)
 
 	-- A terminal change through the parameters of those buttons: { line, add } adds (add = true) or
@@ -140,7 +140,7 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		if not line then return end
 		windows.addWindow(popover_react_util.PopoverWindow, "uio-test-foreign-terminals", {
 			onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
-			x = 700, y = 300,
+			x = 1000, y = 250,
 			windowTitle = "Select Terminals",
 			windowClass = "select-terminal, management",
 			recipe = FakeTerminalSelection,
@@ -210,7 +210,7 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		end
 		windows.addWindow(popover_react_util.PopoverWindow, "uio-test-terminals", {
 			onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
-			x = 700, y = 300,
+			x = 1000, y = 250,
 			windowTitle = "Select Terminals",
 			windowClass = "select-terminal, management",
 			recipe = FakeTerminalSelection,

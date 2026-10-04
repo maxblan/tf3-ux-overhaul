@@ -14,6 +14,7 @@
         "ui_overhaul/gui/cards.lua",
         "ui_overhaul/gui/cards.script.lua",
         "ui_overhaul/gui/cleanup.lua",
+        "ui_overhaul/gui/construction.css.lua",
         "ui_overhaul/gui/construction.lua",
         "ui_overhaul/gui/construction.res.lua",
         "ui_overhaul/gui/construction.script.lua",
