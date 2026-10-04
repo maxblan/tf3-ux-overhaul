@@ -43,12 +43,12 @@ The card numbers are the gallery order; the captions are for the gallery, the lo
 | 4 | `04-terminals` | Set a stop's terminals in one click |
 | 5 | `05-industry` | Know why an industry isn't growing |
 | 6 | `06-statistics` | Find the lines that lose money in one click |
-| 7 | `07-finances` | Read your company like a balance sheet |
+| 7 | `07-workflow-replace-model` | Replace a bus model across your whole network |
 | 8 | `08-build-tooltip` | Know the gradient before you build |
 | 9 | `09-notifications` | Fewer icons, clearer colours, offers that say when they end |
 | 10 | `10-minimize` | Minimize any window to its title bar |
 
-`compose.py` also has cards for the warehouses, catchment areas, the model workflow and an overview; they
+`compose.py` also has cards for the warehouses, the finance statements, catchment areas and an overview; they
 are left out of `CARDS` to stay within the 10 images.
 
 1. **Line Manager.** Every line shows its vehicle count and its balance over the last 12 months, red
@@ -68,8 +68,9 @@ are left out of `CARDS` to stay within the 10 images.
    hides the red area of a blocked expansion. Served by lists the lines that reach it.
 6. **Statistics.** Quick filters above the Lines, Vehicles, Stations and Warehouses tabs (losing
    money, problems, no vehicles, old, crowded …), and totals for exactly what the filter shows.
-7. **Finances.** The Finances tab shows the game's figures as an income statement, a cash flow
-   statement and a balance sheet; *Details* keeps the game's own table.
+7. **Replacing a model.** Select the model in the row above the vehicle list, add its vehicles from
+   every line with "In all lines", then replace them in one go. The Line Manager asks before it
+   replaces or clones several vehicles.
 8. **Construction.** While you draw track or road, the build tooltip gives the length, the steepest
    gradient and the tightest curve with the limits of the chosen type, the height range and the angle.
 9. **Notifications.** Notifications of the same kind share one icon with a count; click to visit

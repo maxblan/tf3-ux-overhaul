@@ -272,7 +272,7 @@ def statistics():
 
 
 def workflow():
-    c = Card(13, TOTAL, "Workflow", "Replace a bus model across your whole network",
+    c = Card(7, TOTAL, "Workflow", "Replace a bus model across your whole network",
              "Pick the model, pull its vehicles from every line, replace them all at once.")
     crop = (100, 250, 690, 700)
     steps = [
@@ -294,7 +294,7 @@ def workflow():
             c.arrow(x + w + gap / 2, y + h / 2, 13)
     c.text(W / 2, y + h + 62, "The Line Manager asks first, so nothing is replaced by accident.", 24, MUTED, 400,
            "middle")
-    return "13-workflow-replace-model", c
+    return "07-workflow-replace-model", c
 
 
 def overview():
@@ -381,7 +381,7 @@ def warehouses():
 
 
 def finances():
-    c = Card(7, TOTAL, "Finances", "Read your company like a balance sheet",
+    c = Card(11, TOTAL, "Finances", "Read your company like a balance sheet",
              "Income statement, cash flow and balance sheet from the game's own figures, next to its table.")
     src = MOD + "gallery_finances_cashflow.png"
     crop = (730, 96, 1990, 784)  # the window, from its title to the last row
@@ -391,7 +391,7 @@ def finances():
     m = c.shot(src, crop, (x, TOP + 8, w, h))
     c.outline(c.mapped(m, (746, 252, 682, 52)))    # the statements
     c.outline(c.mapped(m, (750, 752, 1940, 112)))  # change in the bank account, bank account
-    return "07-finances", c
+    return "11-finances", c
 
 
 def build_tooltip():
@@ -456,8 +456,8 @@ def minimize():
     return "10-minimize", c
 
 
-CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, finances, build_tooltip, notifications, minimize]
-# not in the gallery (mod.io takes at most 10 images per upload): warehouses, catchment, workflow, overview
+CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, workflow, build_tooltip, notifications, minimize]
+# not in the gallery (mod.io takes at most 10 images per upload): warehouses, finances, catchment, overview
 
 
 def main():
