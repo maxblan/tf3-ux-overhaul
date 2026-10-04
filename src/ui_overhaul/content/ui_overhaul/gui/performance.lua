@@ -54,15 +54,13 @@ end
 
 local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
 	local r = params.ratings
+	-- fully loaded in the card (the case that limits a train); without load in the tooltip
+	local tooltip = r.empty and (_("Without load") .. "\n" .. r.empty) or nil
 	local children = {
-		text(_("Performance") .. ": " .. r.rating, "font-scale-headline"),
-		text(_("Fully loaded"), "font-scale-body, uio-performance-heading"),
-		text(r.loaded),
+		builtin.TextView{ meta = { class = "font-scale-headline", tooltip = tooltip },
+			text = _("Performance") .. ": " .. r.rating .. " (" .. _("Fully loaded") .. ")" },
+		builtin.TextView{ meta = { class = "font-scale-body", tooltip = tooltip }, text = r.loaded },
 	}
-	if r.empty then
-		children[#children + 1] = text(_("Without load"), "font-scale-body, uio-performance-heading")
-		children[#children + 1] = text(r.empty)
-	end
 	children[#children + 1] = text(slopes_text(), "font-scale-annotation")
 	return builtin.BoxLayout{
 		meta = { class = "uio-performance", id = "uio.vehicle.performance." .. tostring(params.entityId) },
