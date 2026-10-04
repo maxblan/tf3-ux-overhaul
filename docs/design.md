@@ -29,6 +29,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Line Manager | *Select Terminals*: preferred terminal highlighted, unusable or unreachable terminals greyed with the reason | `terminals.lua`, `core/line_problems.lua` | as *Select Terminals* above |
 | Line Manager | add-stop hover names a missing path from the stop before or to the next | `lvm_tweaks.lua` | replaces `manager_tooltips_util.LMAddStop`; `api.engine.util.pathfinding.findPathNodeToNode` |
 | Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
+| Statistics | Warehouses tab: cargo icons with quantities, cargo picker that filters and sorts, quick filters, totals | `statistics_warehouses.lua` | Lua conversion of the base tab, replacing it |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
 | Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |
 | Map | vehicle hover tooltip: line, next stop, speed, load, condition, delivery quality | `vehicle_tooltip.lua`, `vehicle_info.lua` | replaces `game_tooltips.DefaultEntityToolTip`, calls the original |

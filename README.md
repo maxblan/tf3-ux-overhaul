@@ -44,6 +44,8 @@ The Lines, Vehicles and Stations tabs get quick filters above the table and the 
 | Vehicles | All, Losing money, Problems, Old | vehicles, balance |
 | Stations | All, Problems, Crowded, No lines | stations, upkeep |
 
+The Warehouses tab shows each cargo's icon with its quantity, the largest first, and has the quick filters All, Full and Empty with the totals (warehouses, stored of capacity, upkeep). The cargo icons above the table list the warehouses that hold or take one cargo and sort the Stocks column by its quantity.
+
 Sorting is fixed where vanilla sorts by something other than what it shows: line vehicle counts, line balance, vehicle age (ascending is now youngest first) and station utilization. Vehicle ages are red once the lifespan is reached. *No lines* lists your stations that no line uses, which vanilla hides.
 
 ### Windows
