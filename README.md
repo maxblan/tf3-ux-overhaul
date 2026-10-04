@@ -56,6 +56,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - Tracks are listed fastest first, and tracks you can already build come before future ones, so the preselected track is the best one available.
 - *Configure* on a station opens the Tracks, Platforms, Road Access or Building tab instead of Decoration.
 - The bulldozer's tooltip warns before it removes a station that lines stop at.
+- While you draw track or road, the build tooltip measures it: the steepest gradient and the tightest curve radius, each with the limit of the chosen type, the height range, and how far bridges run above and tunnels below the ground.
 
 ### Notifications
 

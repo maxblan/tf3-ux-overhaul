@@ -11,11 +11,15 @@
 --   * the bulldozer's tooltip warns when the removal includes a station that lines stop at:
 --     "Removes Blumenstrasse - 2 lines stop here" (the game has no undo and a mod cannot show a
 --     confirmation dialog, so the tooltip is the last moment before the click)
+--   * while drawing track or road, the same tooltip measures what is drawn: steepest gradient and
+--     tightest curve radius, each with the type's build limit, the height range, and how high
+--     bridges and how deep tunnels run above or below the ground (core/geometry.lua)
 -- Patches the exported functions construction_react_util.getMenuCategories and getActionParams
 -- before the UI starts (construction.script.lua); any error leaves the base result unchanged.
 -- @module ui_overhaul.gui.construction
 local construction_react_util = require("::/gui/construction/construction_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
+local geometry = require("/ui_overhaul/core/geometry.lua")
 
 local construction = {}
 
@@ -188,20 +192,143 @@ end
 
 construction.station_warnings = station_warnings -- for the testbench
 
-local function patch_bulldozer_tooltip()
+-- Measurements while drawing track or road --------------------------------------------------------
+
+local function vec(v) return { x = v.x, y = v.y, z = v.z } end
+
+local function edge(comp)
+	return { p0 = vec(comp.position0), p1 = vec(comp.position1), t0 = vec(comp.tangent0), t1 = vec(comp.tangent1),
+		type = comp.type }
+end
+
+-- Items of an engine list: a native vector (size/at) or a Lua list.
+local function items(list)
+	if list == nil then return {} end
+	local ok, size = pcall(function() return list:size() end)
+	local result = {}
+	if ok then
+		for i = 1, size do result[i] = list:at(i) end
+	else
+		for i, item in ipairs(list) do result[i] = item end
+	end
+	return result
+end
+
+-- Height of the ground under `p`, or nil if the terrain cannot be read here.
+local function ground(p)
+	local ok, height = pcall(api.engine.terrain.getHeightAt, api.type.Vec2f.new(p.x, p.y))
+	return ok and type(height) == "number" and height or nil
+end
+
+--- Plain measurements of the edges of `kind` (0 street, 1 track) that the proposal adds.
+local function measure(proposal, kind)
+	local street = proposal.proposal
+	local edges, removed = {}, {}
+	for _i, segment in ipairs(items(street.addedSegments_native or street.addedSegments)) do
+		if segment.type == kind then edges[#edges + 1] = edge(segment.comp) end
+	end
+	for _i, segment in ipairs(items(street.removedSegments)) do removed[#removed + 1] = edge(segment.comp) end
+	local summary = geometry.summary(edges, removed)
+	if not summary then return nil end
+	-- bridges and tunnels: largest distance to the ground along them
+	local base_type = api.type.enum.BaseEdgeType
+	for _i, e in ipairs(edges) do
+		if e.type == base_type.BRIDGE or e.type == base_type.TUNNEL then
+			for _j, p in ipairs(geometry.edge_metrics(e).points) do
+				local g = ground(p)
+				if g then
+					if e.type == base_type.BRIDGE then
+						summary.above = math.max(summary.above or 0, p.z - g)
+					else
+						summary.below = math.max(summary.below or 0, g - p.z)
+					end
+				end
+			end
+		end
+	end
+	return summary
+end
+
+local function template_limits(res_name)
+	local id = res_name and api.res.streetTemplateRep.find(res_name) or -1
+	if id < 0 then return {} end
+	local template = api.res.streetTemplateRep.get(id)
+	return { max_slope = template.maxSlopeBuild, min_radius = template.minCurveRadiusBuild }
+end
+
+local function metres(value)
+	return api.util.formatLength(value)
+end
+
+--- Tooltip lines for a drawn track or road.
+local function measurement_strings(proposal, kind, res_name)
+	local m = measure(proposal, kind)
+	if not m then return {} end
+	local limits = template_limits(res_name)
+	local strings = {}
+	local grade = api.util.toStringPercentPrecision(m.max_grade, 1)
+	if limits.max_slope and limits.max_slope > 0 then
+		strings[#strings + 1] = lang_util.format(_("Gradient: up to {value} (limit {limit})"),
+			{ value = grade, limit = api.util.toStringPercentPrecision(limits.max_slope, 1) })
+	else
+		strings[#strings + 1] = lang_util.format(_("Gradient: up to {value}"), { value = grade })
+	end
+	if m.min_radius < 100000 then
+		if limits.min_radius and limits.min_radius > 0 then
+			strings[#strings + 1] = lang_util.format(_("Curve radius: {value} (minimum {limit})"),
+				{ value = metres(m.min_radius), limit = metres(limits.min_radius) })
+		else
+			strings[#strings + 1] = lang_util.format(_("Curve radius: {value}"), { value = metres(m.min_radius) })
+		end
+	else
+		strings[#strings + 1] = _("Curve radius: straight")
+	end
+	if m.z_max - m.z_min < 0.5 then
+		strings[#strings + 1] = lang_util.format(_("Elevation: {value}"), { value = metres(m.z_min) })
+	else
+		strings[#strings + 1] = lang_util.format(_("Elevation: {from} to {to}"),
+			{ from = metres(m.z_min), to = metres(m.z_max) })
+	end
+	if m.above and m.above >= 0.5 then
+		strings[#strings + 1] = lang_util.format(_("Bridge: up to {value} above ground"), { value = metres(m.above) })
+	end
+	if m.below and m.below >= 0.5 then
+		strings[#strings + 1] = lang_util.format(_("Tunnel: up to {value} below ground"), { value = metres(m.below) })
+	end
+	return strings
+end
+
+construction.measurement_strings = measurement_strings -- for the testbench
+
+-- Wraps the action's getProposalStringsFn: `extra(proposal)` returns lines; `first` puts them first.
+local function add_strings(action, extra, first)
+	local strings_fn = action.getProposalStringsFn
+	action.getProposalStringsFn = function(proposal, proposal_data)
+		local strings = strings_fn(proposal, proposal_data) or {}
+		local ok, lines = pcall(extra, proposal)
+		if ok then
+			for i, line in ipairs(lines) do
+				if first then table.insert(strings, i, line) else strings[#strings + 1] = line end
+			end
+		end
+		return strings
+	end
+end
+
+local function patch_proposal_tooltips()
 	local original = construction_react_util.getActionParams
 	construction_react_util.getActionParams = function(...)
 		local result = original(...)
 		local action = result and result.constructionActionParams
-		if action and action.bulldozer ~= nil and type(action.getProposalStringsFn) == "function" then
-			local strings_fn = action.getProposalStringsFn
-			action.getProposalStringsFn = function(proposal, proposal_data)
-				local strings = strings_fn(proposal, proposal_data) or {}
-				local ok, warnings = pcall(station_warnings, proposal)
-				if ok then
-					for _i, warning in ipairs(warnings) do table.insert(strings, 1, warning) end
-				end
-				return strings
+		if action and type(action.getProposalStringsFn) == "function" then
+			if action.bulldozer ~= nil then
+				add_strings(action, station_warnings, true)
+			elseif action.trackEdgeBuilder ~= nil then
+				local res_name = action.trackEdgeBuilder.resName
+				add_strings(action, function(proposal) return measurement_strings(proposal, 1, res_name) end)
+			elseif action.streetEdgeBuilder ~= nil then
+				local res_name = action.streetEdgeBuilder.resName
+				add_strings(action, function(proposal) return measurement_strings(proposal, 0, res_name) end)
 			end
 		end
 		return result
@@ -211,7 +338,7 @@ end
 --- Called from the react-replacement-config before the UI starts.
 function construction.install(_replacement_api)
 	patch_menu_categories()
-	patch_bulldozer_tooltip()
+	patch_proposal_tooltips()
 	debugPrint("[ui_overhaul] construction menu patch installed")
 end
 
