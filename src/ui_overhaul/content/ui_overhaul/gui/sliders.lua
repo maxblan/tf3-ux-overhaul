@@ -7,7 +7,9 @@
 --     slider (a number spin box, as the Line Manager's wait times have)
 -- Construction sliders (and all other script parameters) move through a list of values, which their
 -- label shows (height "2.5 m", incline "3 %"); a typed value picks the entry whose label is nearest,
--- so it is always one the game offers.
+-- so it is always one the game offers. Evenly spaced lists (incline in 1 % steps, bend in 0.05
+-- steps) get snap points every few positions, anchored at the neutral value (0 % incline, no bend),
+-- drawn as ticks; the wheel moves from one to the next.
 --
 -- Two hooks, both installed before the UI starts (sliders.script.lua):
 --   * the module field builtin.Slider is wrapped: base recipes look it up when they render, so every
@@ -172,8 +174,19 @@ local function label(scriptParam, value)
 	return lang_util.formatNumber(value, 3)
 end
 
+-- Snap points of a value-list slider: detent interval (positions) and anchor position, or nil.
+local function param_detents(scriptParam)
+	local numbers = scriptParam.numbers
+	if not numbers or not slider_snap.evenly_spaced(numbers) then return nil end
+	local anchor = index_of(scriptParam, 0)
+	if math.abs(numbers[anchor]) > math.abs(numbers[2] - numbers[1]) * 0.01 then anchor = 1 end
+	local detent = slider_snap.index_detent(#numbers, anchor)
+	return detent, anchor
+end
+
 local function render_param_slider(param)
 	local scriptParam = param.scriptParam
+	local detent, anchor = param_detents(scriptParam)
 	local pending = react.useState(nil) -- value while dragging (coalesced: sent on release)
 	local shown = react.useState(nil) -- value the label shows while dragging
 	local mouse_pressed = react.useRef(false)
@@ -204,7 +217,11 @@ local function render_param_slider(param)
 			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
 				local dir = wheel_dir(evt)
 				local value
-				if scriptParam.stepValueFn ~= nil then
+				if detent and not precise() then
+					local index = slider_snap.wheel(index_of(scriptParam, param.currentValue), 1, choices(scriptParam), 1,
+						detent, dir, false, anchor)
+					value = value_of(scriptParam, index)
+				elseif scriptParam.stepValueFn ~= nil then
 					value = scriptParam.stepValueFn(param.currentValue, dir, precise())
 				else
 					local index = math.max(1, math.min(choices(scriptParam), index_of(scriptParam, param.currentValue) + dir))
@@ -255,6 +272,7 @@ local function render_param_slider(param)
 			base_slider{
 				value = index_of(scriptParam, current),
 				onValueChange = function(index)
+					if detent and not precise() then index = slider_snap.snap(index, 1, choices(scriptParam), detent, anchor) end
 					local value = value_of(scriptParam, index)
 					if not param.allowCoalesce or not mouse_pressed:get() then
 						send(value)
@@ -266,7 +284,8 @@ local function render_param_slider(param)
 				min = 1,
 				max = choices(scriptParam),
 				step = 1,
-				pageStep = 10,
+				pageStep = detent or 10,
+				withTicks = detent ~= nil,
 				disableGamepadNavigation = param.disableGamepadNavigation,
 			},
 			value_node,
