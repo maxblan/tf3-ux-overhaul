@@ -5,14 +5,55 @@
 -- @module ui_overhaul.core.geometry
 local geometry = {}
 
+---@class uo.core.geometry.Vec
+---@field x number
+---@field y number
+---@field z number
+
+--- p0, p1: node positions; t0, t1: tangents.
+---@class uo.core.geometry.Edge
+---@field p0 uo.core.geometry.Vec
+---@field p1 uo.core.geometry.Vec
+---@field t0 uo.core.geometry.Vec
+---@field t1 uo.core.geometry.Vec
+---@field type? BaseEdgeType the BaseEdge's type, passed through for the caller
+
+---@class uo.core.geometry.Metrics
+---@field length number
+---@field max_grade number
+---@field min_radius number
+---@field z_min number
+---@field z_max number
+---@field points uo.core.geometry.Vec[]
+
+---@class uo.core.geometry.Summary
+---@field length number
+---@field max_grade number
+---@field min_radius number
+---@field z_min number
+---@field z_max number
+---@field count integer
+---@field above? number set by gui/construction.lua: highest bridge above the ground
+---@field below? number set by gui/construction.lua: deepest tunnel below the ground
+
 local SAMPLES = 16 -- per edge; edges are short enough that this finds the tightest point
 
 --- Position, first and second derivative of the edge `e` = { p0, p1, t0, t1 } at s in [0, 1].
+---@param e uo.core.geometry.Edge
+---@param s number
+---@return uo.core.geometry.Vec position
+---@return uo.core.geometry.Vec d1
+---@return uo.core.geometry.Vec d2
 function geometry.hermite(e, s)
 	local s2, s3 = s * s, s * s * s
 	local h00, h10, h01, h11 = 2 * s3 - 3 * s2 + 1, s3 - 2 * s2 + s, -2 * s3 + 3 * s2, s3 - s2
 	local d00, d10, d01, d11 = 6 * s2 - 6 * s, 3 * s2 - 4 * s + 1, 6 * s - 6 * s2, 3 * s2 - 2 * s
 	local a00, a10, a01, a11 = 12 * s - 6, 6 * s - 4, 6 - 12 * s, 6 * s - 2
+	---@param c00 number
+	---@param c10 number
+	---@param c01 number
+	---@param c11 number
+	---@return uo.core.geometry.Vec
 	local function combine(c00, c10, c01, c11)
 		return {
 			x = c00 * e.p0.x + c10 * e.t0.x + c01 * e.p1.x + c11 * e.t1.x,
@@ -24,6 +65,9 @@ function geometry.hermite(e, s)
 end
 
 --- Horizontal curve radius at a point with first and second derivative d1, d2 (math.huge if straight).
+---@param d1 uo.core.geometry.Vec
+---@param d2 uo.core.geometry.Vec
+---@return number
 local function radius(d1, d2)
 	local speed2 = d1.x * d1.x + d1.y * d1.y
 	local cross = math.abs(d1.x * d2.y - d1.y * d2.x)
@@ -34,9 +78,12 @@ end
 --- { length, max_grade, min_radius, z_min, z_max, points } of edge `e`: length along the curve,
 -- the steepest gradient (rise per horizontal distance, a fraction), the tightest horizontal radius
 -- (math.huge for a straight edge), the height range, and the sampled points.
+---@param e uo.core.geometry.Edge
+---@return uo.core.geometry.Metrics
 function geometry.edge_metrics(e)
+	---@type uo.core.geometry.Metrics
 	local m = { length = 0, max_grade = 0, min_radius = math.huge, z_min = math.huge, z_max = -math.huge, points = {} }
-	local previous
+	local previous ---@type uo.core.geometry.Vec?
 	for i = 0, SAMPLES do
 		local s = i / SAMPLES
 		local p, d1, d2 = geometry.hermite(e, s)
@@ -57,6 +104,10 @@ end
 
 --- Whether `point` lies on edge `e` (within `eps` metres): finds the new parts of an existing edge
 -- that a proposal splits.
+---@param point uo.core.geometry.Vec
+---@param e uo.core.geometry.Edge
+---@param eps? number
+---@return boolean
 function geometry.on_edge(point, e, eps)
 	eps = eps or 0.5
 	local best = math.huge
@@ -71,8 +122,11 @@ end
 
 --- The edges a player draws: `edges` (the proposal's new edges) without those lying on one of
 -- `removed` (the edges the proposal removes), which are parts of a split existing edge.
+---@param edges uo.core.geometry.Edge[]
+---@param removed? uo.core.geometry.Edge[]
+---@return uo.core.geometry.Edge[]
 function geometry.drawn(edges, removed)
-	local result = {}
+	local result = {} ---@type uo.core.geometry.Edge[]
 	for _i, e in ipairs(edges) do
 		local split = false
 		for _j, old in ipairs(removed or {}) do
@@ -85,8 +139,11 @@ end
 
 --- Summary of the edges a player draws (see geometry.drawn): nil without any, else
 -- { length, max_grade, min_radius, z_min, z_max, count }.
+---@param edges uo.core.geometry.Edge[]
+---@param removed? uo.core.geometry.Edge[]
+---@return uo.core.geometry.Summary?
 function geometry.summary(edges, removed)
-	local result
+	local result ---@type uo.core.geometry.Summary?
 	for _i, e in ipairs(geometry.drawn(edges, removed)) do
 		local m = geometry.edge_metrics(e)
 		result = result or { length = 0, max_grade = 0, min_radius = math.huge, z_min = math.huge,

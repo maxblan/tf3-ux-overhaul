@@ -74,6 +74,19 @@ function lvm_rows.cargo_slots(ids, slots)
 	return shown, more
 end
 
+--- Whether a vehicle's lifespan is reached and, if not, the share of it used so far. Like the base
+-- vehicle table's age cell (line_eow.script.tl LineTableCellAge), a model without a lifespan
+-- (lifespan 0, some modded models) counts as reached, so nothing is divided by it.
+---@param purchase integer game time of purchase (ms)
+---@param lifespan integer ms; 0 for a model without one
+---@param t integer game time now (ms)
+---@return boolean reached
+---@return number|nil fraction of the lifespan used, nil once reached
+function lvm_rows.lifetime(purchase, lifespan, t)
+	if lifespan <= 0 or t >= purchase + lifespan then return true, nil end
+	return false, (t - purchase) / lifespan
+end
+
 --- Plain data for a row's entity (engine reads only; runs in a timer callback).
 local function read(entity)
 	if not api.engine.entityExists(entity) then return nil end
@@ -133,9 +146,9 @@ end
 
 local function render_vehicle(d)
 	local age = api.engine.util.formatAge(d.purchase, d.now)
-	local reached = d.lifespan > 0 and d.now >= d.purchase + d.lifespan
+	local reached, used = lvm_rows.lifetime(d.purchase, d.lifespan, d.now)
 	local tooltip = reached and _("Lifetime Reached") or lang_util.format(_("{total} of Lifetime ({age} Remaining)"), {
-		total = api.util.toStringPercentPrecision((d.now - d.purchase) / d.lifespan, 0),
+		total = api.util.toStringPercentPrecision(used, 0),
 		age = api.engine.util.formatAge(d.now, d.purchase + d.lifespan),
 	})
 	local children = {}
@@ -158,7 +171,12 @@ local function render_vehicle(d)
 end
 
 local function render(entity)
-	local state = engine_react_util.useStepStateTimer(function() return read(entity) end, REFRESH)
+	-- The callback runs inside the hook on the first render: an error there would leave the hook half
+	-- declared, so it is caught and the hook is the same on every render.
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, d = pcall(read, entity)
+		return ok and d or nil
+	end, REFRESH)
 	local d = state:old()
 	if not d then return horizontal{} end
 	if d.kind == "line" then return render_line(entity, d) end

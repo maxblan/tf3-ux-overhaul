@@ -144,6 +144,12 @@ local function oldest_vehicle(line)
 	return best
 end
 
+--- The vehicle is still there and not on its way to be sold.
+local function kept(vehicle)
+	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+	return tv ~= nil and tv.sellOnArrival ~= true
+end
+
 local checks = {
 	{
 		name = "gui_fixture_facts",
@@ -216,6 +222,7 @@ local checks = {
 		shot = "statistics_warehouses",
 		check = function()
 			local shown = visible("uio.statistics.warehouses.totals")
+			-- the shot: the quick-filter bar has the Lines tab's spacing and margins (statistics_common.css.lua)
 			return shown, "warehouses totals visible=" .. tostring(shown)
 		end,
 	},
@@ -397,6 +404,17 @@ local checks = {
 		check = function() return true, "closed" end,
 	},
 	{
+		-- the game reaches the tool stack through a ref to the replacement (game.tl), whose api is the
+		-- shown stack's (fallback.lua); with every window closed the default tool is on top
+		name = "tool_stack_api",
+		check = function()
+			local game_react_globals = require("::/gui/main/game_react_globals.tl")
+			local ok, tool = pcall(function() return game_react_globals.getDefaultToolStackApi().getActiveTool() end)
+			local name = ok and tool and tool.name or tostring(tool)
+			return ok and tool ~= nil, "active tool=" .. tostring(name)
+		end,
+	},
+	{
 		name = "catchment_overlay",
 		act = function()
 			-- the overlay shows while no tool draws its own (Statistics, Line Manager ...)
@@ -448,6 +466,32 @@ local checks = {
 		check = function(ctx)
 			if not ctx.town then return true, "skipped: no town" end
 			return visible("uio.town.bottleneck"), "bottleneck line visible=" .. tostring(visible("uio.town.bottleneck"))
+		end,
+	},
+	{
+		-- the installed section functions, driven like vehicle.tl does (a key no real card uses): open in
+		-- one window, remembered by the next, closed there by Modify's "collapse all" (vehicle.tl:501)
+		name = "sections_collapse_all",
+		check = function()
+			local content_card = require("::/gui/main/content_card.tl")
+			local function window()
+				local state = { value = {} }
+				function state.old() return state.value end
+				function state.set(_self, v) state.value = v end
+				local update, is_expanded = content_card.makeContentCardsCollapsibleFunctions(state, true)
+				return { update = update, is_expanded = is_expanded }
+			end
+			local key = "uio.testbench.section"
+			local first = window()
+			first.update(key, true)
+			local second = window()
+			local remembered = second.is_expanded(key)
+			second.update("", false)
+			local collapsed = not second.is_expanded(key)
+			local next_window = window().is_expanded(key)
+			window().update(key, false)
+			return remembered and collapsed and next_window, "remembered=" .. tostring(remembered)
+				.. " collapsed=" .. tostring(collapsed) .. " next window=" .. tostring(next_window)
 		end,
 	},
 	{
@@ -572,6 +616,43 @@ local checks = {
 			if not ctx.models_line then return true, "skipped: no model row" end
 			return api.gui.byId.isVisibleRecursive("menu.management"),
 				"see '[ui_overhaul] lvm models: pull ... ok' (MISMATCH = wrong selection)"
+		end,
+	},
+	{
+		-- Replace keeps the vehicle id: one vehicle of the line's second model becomes its first model
+		name = "lvm_models_replace",
+		act = function(ctx)
+			ctx.replaced, ctx.replaced_to = nil, nil
+			if not ctx.models_line then return end
+			local first, keys = {}, {} -- model key -> the line's first vehicle of it
+			for _i, v in ipairs(line_vehicles(ctx.models_line)) do
+				local key = model_key(v)
+				if key and not first[key] then first[key], keys[#keys + 1] = v, key end
+			end
+			if #keys < 2 then return end
+			local tv = api.engine.getComponent(first[keys[1]], api.type.ComponentType.TRANSPORT_VEHICLE)
+			ctx.replaced, ctx.replaced_to = first[keys[2]], keys[1]
+			api.cmd.sendCommand(api.cmd.makeVehicleReplaceCmd(ctx.replaced, tv.transportVehicleConfig))
+		end,
+		wait = 180, -- the model row re-reads the fleet every 2 s
+		check = function(ctx)
+			if not ctx.replaced then return true, "skipped: no line with two models" end
+			local applied = model_key(ctx.replaced) == ctx.replaced_to
+			return applied, string.format("vehicle %d replaced in place with model %s: %s", ctx.replaced,
+				ctx.replaced_to, tostring(applied))
+		end,
+	},
+	{
+		name = "lvm_models_after_replace",
+		act = function(ctx)
+			if ctx.replaced then api.gui.fireReactEvent("uio.debug.lvm_models", { action = "verify" }) end
+		end,
+		wait = 10,
+		shot = "line_manager_models_after_replace",
+		check = function(ctx)
+			if not ctx.replaced then return true, "skipped: nothing replaced" end
+			return api.gui.byId.isVisibleRecursive("menu.management"),
+				"see '[ui_overhaul] lvm models: verify ... ok' (STALE = the row still shows the old models)"
 		end,
 	},
 	{
@@ -926,6 +1007,59 @@ local checks = {
 				or tv.state == api.type.enum.TransportVehicleState.IN_DEPOT
 			return going and tv.sellOnArrival == true, string.format("vehicle %d state=%s sellOnArrival=%s",
 				ctx.vehicle, tostring(tv.state), tostring(tv.sellOnArrival))
+		end,
+	},
+	{
+		-- a mission protects the oldest vehicle (the event mission_sim.script.tl fires): the uio.action
+		-- event must leave it alone
+		name = "action_remove_protected_vehicle",
+		act = function(ctx)
+			ctx.line = ctx.line or busiest_line()
+			ctx.protected = ctx.line and oldest_vehicle(ctx.line)
+			if not (ctx.protected and kept(ctx.protected)) then ctx.protected = nil return end
+			api.gui.fireReactEvent("setProtectedEntities", { [ctx.protected] = true })
+			api.gui.fireReactEvent("uio.action", { name = "remove_vehicle", entity = ctx.line })
+		end,
+		wait = 120,
+		check = function(ctx)
+			if not ctx.protected then return true, "skipped: no line with a vehicle in service" end
+			api.gui.fireReactEvent("setProtectedEntities", {})
+			local ok = kept(ctx.protected)
+			return ok, string.format("vehicle %d kept=%s (log: \"Vehicle cannot be sold at this time.\")",
+				ctx.protected, tostring(ok))
+		end,
+	},
+	{
+		-- the line window's Remove Vehicle on a protected vehicle: kept, and the reason under the buttons
+		name = "line_window_protected_vehicle",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.protected = ctx.line and oldest_vehicle(ctx.line)
+			if not (ctx.protected and kept(ctx.protected)) then ctx.protected = nil return end
+			api.gui.fireReactEvent("selectEntity", { entity = ctx.line, stack = false })
+			api.gui.fireReactEvent("setProtectedEntities", { [ctx.protected] = true })
+		end,
+		wait = 90,
+		check = function(ctx)
+			if not ctx.protected then return true, "skipped: no line with a vehicle in service" end
+			return stops_card(ctx.line), "line window open=" .. tostring(stops_card(ctx.line))
+		end,
+	},
+	{
+		name = "line_window_remove_protected_feedback",
+		act = function(ctx)
+			if ctx.protected then
+				api.gui.fireReactEvent("uio.debug.line_vehicles", { line = ctx.line, action = "remove" })
+			end
+		end,
+		wait = 30,
+		shot = "line_window_protected_feedback",
+		check = function(ctx)
+			if not ctx.protected then return true, "skipped: no line with a vehicle in service" end
+			api.gui.fireReactEvent("setProtectedEntities", {})
+			local ok = kept(ctx.protected)
+			return ok, string.format("vehicle %d kept=%s (screenshot: \"Vehicle cannot be sold at this time.\" "
+				.. "under the Vehicles card's buttons)", ctx.protected, tostring(ok))
 		end,
 	},
 }

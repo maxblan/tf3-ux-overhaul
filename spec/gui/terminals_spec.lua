@@ -185,3 +185,58 @@ describe("terminals", function()
 		end)
 	end)
 end)
+
+describe("terminals popover fallback", function()
+	local fake_react = require("fake_react")
+	local fake = fake_react.new()
+	local builtin = fake_react.any()
+	builtin.BoxLayout = function(t) return { layout = t } end
+	local function step_state(name)
+		return function(fn)
+			local value = fn(nil)
+			fake.hook(name)
+			return { old = function() return value end }
+		end
+	end
+	local module = fake_react.load("/ui_overhaul/gui/terminals.lua", {
+		["::/gui/main/react.lua"] = fake.react,
+		["::/gui/main/builtin.lua"] = builtin,
+		["::/gui/main/engine_react_util.tl"] = {
+			useStepState = step_state("useStepState"),
+			useStepStateTimer = step_state("useStepStateTimer"),
+		},
+	})
+	local base = fake.react.RegisterRecipe("TerminalSelection", function() end)
+	local PARENT_HOOKS = { "useState", "onStep", "useRef", "useRef" }
+
+	it("declares its hooks without a via state too, and shows nothing then", function()
+		local child = fake.mount(fake.recipe("TerminalSelection", 1))
+		local node = child.render({ commonParams = {} })
+		assert.are.same({ "useStepState", "useStepStateTimer", "useStepStateTimer" }, child.hooks)
+		assert.are.same({ layout = {} }, node)
+		assert.is_false(module.switch.failed)
+	end)
+
+	it("switches to the base popover once after a failure, never back", function()
+		local params = { viaState = { old = function() return {} end }, commonParams = {}, lineEntity = 1 }
+		-- the base popover the Line Manager opened, taken over
+		local swapped = module.swap({ recipe = base, params = params }, fake.react.GetRecipeName)
+		assert.are.equal(module.TerminalSelection, swapped.recipe)
+
+		local parent = fake.mount(module.TerminalSelection)
+		local child_node = parent.render(params).layout.children[1]
+		assert.are.same(PARENT_HOOKS, parent.hooks)
+		local child = fake.render_node(child_node) -- no engine here: fails after its hooks
+		assert.is_true(module.switch.failed)
+		local hooks = child.hooks
+		assert.are.same({ "useStepState", "useStepStateTimer", "useStepStateTimer" }, hooks)
+		child.render(params)
+		assert.are.same(hooks, child.hooks)
+
+		parent.step()
+		local node = parent.render(params)
+		assert.are.same(PARENT_HOOKS, parent.hooks)
+		assert.are.equal(base, node.layout.children[1].recipe)
+		assert.are.equal(base, parent.render(params).layout.children[1].recipe)
+	end)
+end)

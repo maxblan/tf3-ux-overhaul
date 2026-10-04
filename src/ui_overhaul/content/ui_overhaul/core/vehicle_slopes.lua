@@ -5,20 +5,54 @@
 -- @module ui_overhaul.core.vehicle_slopes
 local vehicle_slopes = {}
 
+--- The figures of a train (vehicle_store_util.collectVehicleData): weight in t, power in kW,
+--- tractive effort in kN, top speed in the game's unit.
+---@class uo.core.vehicle_slopes.Vehicle
+---@field weight number
+---@field power number
+---@field tractiveEffort number
+---@field speed number
+---@field rollingFriction number
+
+--- speed, time and distance are set when the train has `enough` tractive effort for the slope.
+---@class uo.core.vehicle_slopes.Row
+---@field slope number
+---@field enough boolean
+---@field speed? number
+---@field time? number seconds
+---@field distance? number metres
+
+--- Integrates fn over [a, a + h] to `tolerance`: { value, error estimate }, as romberg.rombergIntegration.
+---@alias uo.core.vehicle_slopes.Integrator
+---| fun(a: number, h: number, tolerance: number, fn: fun(x: number): number): number[]
+
+---@type number[]
 vehicle_slopes.SLOPES = { 0, 0.0375, 0.075 } -- the game's flat, medium and high slope
 local G = 3.27 -- the game's constant (calcDownhillSlopeForce)
 
+---@param power number
+---@param effort number
+---@param speed number
+---@return number
 local function tractive_effort(power, effort, speed)
 	if effort == 0 then return 0 end
 	if speed <= power / effort then return effort end
 	return power / speed
 end
 
+---@param slope number
+---@param weight number
+---@return number
 local function slope_force(slope, weight)
 	return G * slope * weight
 end
 
 --- Simpson's rule over [a, b] with n (even) intervals: { integral, error estimate 0 }.
+---@param a number
+---@param b number
+---@param fn fun(x: number): number
+---@param n? integer
+---@return number[]
 function vehicle_slopes.simpson(a, b, fn, n)
 	n = n or 400
 	local h = (b - a) / n
@@ -33,9 +67,13 @@ end
 -- time in seconds, distance in metres), and the rating index 1..4 (Poor, Mediocre, Good,
 -- Excellent). `v` = { weight, power, tractiveEffort, speed, rollingFriction }. `integrate(a, h, tol,
 -- fn)` returns { value, error }; nil means the game's formula gives up (returns nil).
+---@param v uo.core.vehicle_slopes.Vehicle
+---@param integrate? uo.core.vehicle_slopes.Integrator
+---@return uo.core.vehicle_slopes.Row[]? rows nil when the game's formula gives up
+---@return integer? rating
 function vehicle_slopes.compute(v, integrate)
 	integrate = integrate or function(a, h, _tol, fn) return vehicle_slopes.simpson(a, a + h, fn) end
-	local rows, feasible = {}, 1
+	local rows, feasible = {}, 1 ---@type uo.core.vehicle_slopes.Row[], integer
 	for i, slope in ipairs(vehicle_slopes.SLOPES) do
 		local traction = slope_force(slope, v.weight) + v.rollingFriction
 		if traction > 0.95 * v.tractiveEffort then

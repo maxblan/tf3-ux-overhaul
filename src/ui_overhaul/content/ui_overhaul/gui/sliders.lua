@@ -106,24 +106,16 @@ local base_slider
 
 local function render_slider(params)
 	local p = params.p
-	local min, max = p.min or 0, p.max or 100
-	local step = (p.step and p.step > 0) and p.step or 1
-	local detent = slider_snap.detent(min, max, step)
-	local anchor = slider_snap.anchor(min, step)
+	-- The hooks come first, before anything that can fail: UioSlider shows the base slider after a
+	-- failed render, and a recipe has to declare the same hooks on every render (fallback.lua).
 	-- Sliders that only set initialValue keep their own value; here it is held so the wheel can
 	-- move them too.
-	local own = react.useState(p.initialValue or p.value or min)
+	local own = react.useState(p.initialValue or p.value or p.min or 0)
 	local editing = react.useState(false)
 	local intent = use_wheel_intent()
 	local sync = use_thumb_sync()
-	local value = p.value ~= nil and p.value or own:old()
-
-	local function commit(v)
-		v = slider_snap.on_grid(v, min, max, step)
-		if v == value then return end
-		if p.value == nil then own:set(v) end
-		if p.onValueChange then p.onValueChange(v) end
-	end
+	-- set below; the mouse listener is set with the hooks and reads them when an event comes
+	local min, max, step, detent, anchor, value, commit
 
 	react.onMouseEvent(function(evt)
 		local ok, consumed = pcall(function()
@@ -147,6 +139,19 @@ local function render_slider(params)
 		report("mouse", consumed)
 		return false
 	end)
+
+	min, max = p.min or 0, p.max or 100
+	step = (p.step and p.step > 0) and p.step or 1
+	detent = slider_snap.detent(min, max, step)
+	anchor = slider_snap.anchor(min, step)
+	value = p.value ~= nil and p.value or own:old()
+
+	commit = function(v)
+		v = slider_snap.on_grid(v, min, max, step)
+		if v == value then return end
+		if p.value == nil then own:set(v) end
+		if p.onValueChange then p.onValueChange(v) end
+	end
 
 	if editing:old() then
 		return builtin.BoxLayout{ children = {
@@ -197,7 +202,8 @@ end
 
 local function wrapped_slider(...)
 	local args = { ... }
-	local ok, enhance = pcall(sliders.enhance, args, react.getCurrentRecipeName())
+	-- outside a render (a callback, another mod) getCurrentRecipeName asserts: the call stays the base one
+	local ok, enhance = pcall(function() return sliders.enhance(args, react.getCurrentRecipeName()) end)
 	if ok and enhance then return UioSlider{ p = args[1] } end
 	return base_slider(...)
 end
@@ -243,13 +249,14 @@ end
 
 local function render_param_slider(param)
 	local scriptParam = param.scriptParam
-	local detent, anchor = param_detents(scriptParam)
+	-- the hooks first, as in render_slider
 	local pending = react.useState(nil) -- value while dragging (coalesced: sent on release)
 	local shown = react.useState(nil) -- value the label shows while dragging
 	local mouse_pressed = react.useRef(false)
 	local editing = react.useState(false)
 	local intent = use_wheel_intent()
 	local sync = use_thumb_sync()
+	local detent, anchor -- set below, after the mouse listener
 	local current = pending:old() or param.currentValue
 
 	local function send(value)
@@ -302,6 +309,7 @@ local function render_param_slider(param)
 		report("param mouse", consumed)
 		return false
 	end)
+	detent, anchor = param_detents(scriptParam)
 
 	local value_text = label(scriptParam, shown:old() or current)
 	local value_node
@@ -359,17 +367,29 @@ local function render_param_slider(param)
 end
 
 -- Registered under the base name: the base stylesheet sizes it (R::ScriptParamSliderAndText).
+-- The plain base slider over the positions of the value list, for a row whose render failed. The data
+-- that made it fail may be odd, so nothing here may raise: an unreadable list is a slider of one.
+local function plain_param_slider(param)
+	local scriptParam = param.scriptParam
+	local ok_count, count = pcall(choices, scriptParam)
+	local ok_index, index = pcall(index_of, scriptParam, param.currentValue)
+	count = ok_count and type(count) == "number" and count >= 1 and count or 1
+	index = ok_index and type(index) == "number" and math.max(1, math.min(count, index)) or 1
+	return base_slider{
+		value = index,
+		min = 1, max = count, step = 1,
+		onValueChange = function(i)
+			local ok, err = pcall(function() param.onValueChange(value_of(scriptParam, i)) end)
+			if not ok then report("plain slider", err) end
+		end,
+	}
+end
+
 local ScriptParamSliderAndText = react.RegisterRecipe("ScriptParamSliderAndText", function(param)
 	local ok, node = pcall(render_param_slider, param)
 	if ok then return node end
 	report("param render", node)
-	return builtin.BoxLayout{ children = {
-		base_slider{
-			value = index_of(param.scriptParam, param.currentValue),
-			min = 1, max = choices(param.scriptParam), step = 1,
-			onValueChange = function(index) param.onValueChange(value_of(param.scriptParam, index)) end,
-		},
-	} }
+	return builtin.BoxLayout{ children = { plain_param_slider(param) } }
 end)
 
 -- The slider branch of the base buildScriptParamCompSimple (script_param_util.tl), with this

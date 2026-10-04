@@ -1,21 +1,22 @@
---- Plugin body for ::ModEntryPointExtension: an invisible root that keeps the shared snapshot fresh,
--- runs the one-time cleanup and owns the mod's "uio.action" event ({ name, entity }: add_vehicle,
--- remove_vehicle, clone_vehicle, retire_vehicle, open_entity, open_line_manager), which other mods and
--- the testbench use. Rendered by the guarded stub entry.script.lua.
+--- Plugin body for ::ModEntryPointExtension: an invisible root that runs the one-time cleanup, keeps
+-- the mission's protected entities for actions.lua and owns the mod's "uio.action" event
+-- ({ name, entity }: add_vehicle, remove_vehicle, clone_vehicle, retire_vehicle, open_entity,
+-- open_line_manager), which other mods and the testbench use. Rendered by the guarded stub
+-- entry.script.lua.
 -- @module ui_overhaul.gui.entry
 local react = require("::/gui/main/react.lua")
-local store = require("/ui_overhaul/engine/store.lua")
 local actions = require("/ui_overhaul/gui/actions.lua")
 local cleanup = require("/ui_overhaul/gui/cleanup.lua")
 local lvm_tweaks = require("/ui_overhaul/gui/lvm_tweaks.lua")
-local defer = require("/ui_overhaul/gui/defer.lua")
 local ui = require("/ui_overhaul/gui/ui.lua")
 
 local entry = {}
 
 function entry.render()
 	react.onEvent(actions.ACTION_EVENT, function(_e, param) actions.run(param) end)
-	react.onStepTimer(store.refresh, store.REFRESH_SECONDS)
+	-- The entry point mounts with the game's UI root, which keeps gameCtx.filters the same way
+	-- (game.tl), so the copy sees every change a mission makes.
+	react.onEvent("setProtectedEntities", function(_e, param) actions.set_protected_entities(param) end)
 	react.onEvent("openVehicleManager", function(_e, param) lvm_tweaks.on_open(param) end)
 	-- testbench: replace `vehicles` with identical configs the way the vehicle store does; expects the
 	-- Line Manager's question instead of an immediate replace
@@ -27,7 +28,7 @@ function entry.render()
 			local config = api.type.TransportVehicleConfig.new(tv.transportVehicleConfig)
 			changes[#changes + 1] = { vehicleEntity = v, config = config }
 		end
-		vehicle_react_util.HandleVehicleChanges(changes, {}, nil, nil, nil, nil)
+		vehicle_react_util.HandleVehicleChanges(changes, actions.protected_entities(), nil, nil, nil, nil)
 	end)
 	-- testbench: the bulldozer warning for a proposal that removes `entity`
 	react.onEvent("uio.debug.bulldoze", function(_e, entity)
@@ -48,7 +49,6 @@ function entry.render()
 	react.onStep(function()
 		cleanup.step()
 		lvm_tweaks.step()
-		defer.step()
 	end)
 	return ui.row({})
 end

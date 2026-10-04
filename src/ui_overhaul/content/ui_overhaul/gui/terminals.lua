@@ -35,6 +35,7 @@ local react = require("::/gui/main/react.lua")
 local styleutil = require("::/gui/main/styleutil.tl")
 local table_util = require("::/scripts/table_util.tl")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local terminals = {}
 
@@ -429,10 +430,8 @@ local function incompatibility_text(issue)
 end
 
 local function render(params)
-	if not params.viaState or not params.viaState:old() then
-		return builtin.BoxLayout{}
-	end
-
+	-- the hooks come before the base's check for a missing via state, so they are the same on every
+	-- render; their callbacks catch the error a missing state raises
 	local terminalsState = engine_react_util.useStepState(function(old)
 		local ok, result = pcall(read_terminals, params)
 		if ok then return result end
@@ -455,6 +454,9 @@ local function render(params)
 		report("compatibility", result)
 		return old or {}
 	end, 1.0)
+	if not params.viaState or not params.viaState:old() then
+		return builtin.BoxLayout{}
+	end
 	local index2problems = params.index2problems or {}
 	if own_problems and problemsState:old() then
 		local ok, result = pcall(own_index2problems, problemsState:old())
@@ -682,14 +684,12 @@ local function render(params)
 	}
 end
 
--- Recipe bodies run later than the call that creates their node, so the body guards itself.
-local TerminalSelection = react.RegisterRecipe(BASE_NAME, function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	report("render (showing the base popover)", node)
-	if base_recipe then return builtin.BoxLayout{ children = { base_recipe(params) } } end
-	return builtin.BoxLayout{}
-end)
+-- The popover shows this recipe until it fails once, then the base popover for the rest of the
+-- session (fallback.lua): a choice per render would mount one and then the other.
+terminals.switch = fallback.switch("terminal popover")
+local TerminalSelection = fallback.replacement(terminals.switch, BASE_NAME, render, nil, {
+	render_base = function(params) return base_recipe and base_recipe(params) or nil end,
+})
 terminals.TerminalSelection = TerminalSelection
 
 --- Popover parameters with this recipe in place of the base terminal selection; other popovers' parameters

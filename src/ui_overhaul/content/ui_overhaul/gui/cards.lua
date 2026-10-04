@@ -1,5 +1,5 @@
 --- Addition inside the vanilla line window, built from the game's own widgets and styles: a "Stops"
--- card listing every stop with its waiting passengers (cargo in the tooltip) and a button for the
+-- card listing every stop with what waits there (passengers plus cargo, split in the tooltip) and a button for the
 -- stop's terminals (the Line Manager's popover, terminals.lua). A stop the line's vehicles cannot
 -- reach (no path into it, or a duplicate or incompatible stop) is greyed with an alert icon, and its
 -- tooltip gives the game's own problem text. All in the same table as the
@@ -29,6 +29,10 @@ local REFRESH = 1.0 -- seconds
 -- line -> plain problem data (terminals.read_problems), refreshed by the stops table's timer and read
 -- by its cells, so the engine's problem search runs once per line and refresh, not once per stop.
 local problems_by_line = {}
+-- line -> waiting at each stop by 1-based index ({ passengers, cargo, total }), refreshed by the same
+-- timer: the cells show it and the Waiting column sorts by it, so a stop is read once per refresh,
+-- the sort reads no engine data, and a cell never asks for a stop the line no longer has.
+local waiting_by_line = {}
 
 local function horizontal(children)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
@@ -48,16 +52,53 @@ local function waiting_at_stop(line, index)
 	return passengers, cargo
 end
 
+---@class uo.cards.StopWaiting
+---@field passengers integer
+---@field cargo { name: string, count: integer }[]
+---@field total integer passengers plus cargo, as the cell shows it
+
+--- Stop count of `line` and the waiting at each stop (a stop whose read fails has no entry), or nil
+-- if the line is gone. Engine reads only (timer callback).
+---@param line Engine.Entity
+---@return integer? count
+---@return table<integer, uo.cards.StopWaiting>? waiting
+function cards.read_waiting(line)
+	if not api.engine.entityExists(line) then return nil end
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	if not component then return nil end
+	local waiting = {}
+	for index = 1, #component.stops do
+		local ok, passengers, cargo = pcall(waiting_at_stop, line, index)
+		if ok then
+			local total = passengers
+			for _i, entry in ipairs(cargo) do total = total + entry.count end
+			waiting[index] = { passengers = passengers, cargo = cargo, total = total }
+		end
+	end
+	return #component.stops, waiting
+end
+
+--- What stop `index` of `line` has waiting, as of the stops table's last refresh (0 if unknown).
+---@param line Engine.Entity
+---@param index integer
+---@return integer
+function cards.waiting_total(line, index)
+	local waiting = waiting_by_line[line]
+	local stop = waiting and waiting[index]
+	return stop and stop.total or 0
+end
+
 --- A waiting cell: passengers plus cargo, the split per cargo type in the tooltip.
-local function waiting_cell(passengers, cargo)
-	local total = passengers
-	local lines = { string.format("%s: %d", _("Passengers"), passengers) }
-	for _i, entry in ipairs(cargo) do
-		total = total + entry.count
+---@param waiting uo.cards.StopWaiting
+local function waiting_cell(waiting)
+	local lines = { string.format("%s: %d", _("Passengers"), waiting.passengers) }
+	for _i, entry in ipairs(waiting.cargo) do
 		lines[#lines + 1] = string.format("%s: %d", _(entry.name), entry.count)
 	end
 	return horizontal{
-		builtin.TextView{ meta = { class = "font-scale-body", tooltip = table.concat(lines, "\n") }, text = tostring(total) },
+		builtin.TextView{
+			meta = { class = "font-scale-body", tooltip = table.concat(lines, "\n") }, text = tostring(waiting.total),
+		},
 	}
 end
 
@@ -76,17 +117,28 @@ end
 
 -- Line window: stops -----------------------------------------------------------------------------
 
+--- Station group and problems of stop `index` of `line`, or nil if the line or the stop is gone.
+-- Engine reads only (timer callback).
+---@param line Engine.Entity
+---@param index integer
+---@return { stationGroup: Engine.Entity, problems: uo.core.line_problems.Problem[] }?
+local function read_stop(line, index)
+	if not api.engine.entityExists(line) then return nil end
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	local stop = component and component.stops[index]
+	if not stop then return nil end
+	local data = problems_by_line[line]
+	return {
+		stationGroup = stop.stationGroup,
+		problems = data and line_problems.stop_problems(data.stops, data.segments, index) or {},
+	}
+end
+
 local UioStopCell = react.RegisterRecipe("UioStopCell", function(params)
 	local line = params.userParam.line
 	local state = engine_react_util.useStepStateTimer(function()
-		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
-		local stop = component and component.stops[params.rowKey]
-		if not stop then return nil end
-		local data = problems_by_line[line]
-		return {
-			stationGroup = stop.stationGroup,
-			problems = data and line_problems.stop_problems(data.stops, data.segments, params.rowKey) or {},
-		}
+		local ok, stop = pcall(read_stop, line, params.rowKey)
+		return ok and stop or nil
 	end, REFRESH)
 	local d = state:old()
 	if not d then return horizontal{} end
@@ -126,27 +178,32 @@ end)
 
 local UioStopWaitingCell = react.RegisterRecipe("UioStopWaitingCell", function(params)
 	local line = params.userParam.line
+	-- the table's refresh read it; a removed stop leaves it in that refresh, while its row may still show
 	local state = engine_react_util.useStepStateTimer(function()
-		if not api.engine.entityExists(line) then return nil end
-		local passengers, cargo = waiting_at_stop(line, params.rowKey)
-		return { passengers = passengers, cargo = cargo }
+		local waiting = waiting_by_line[line]
+		return waiting and waiting[params.rowKey] or nil
 	end, REFRESH)
 	local d = state:old()
 	if not d then return horizontal{} end
-	return waiting_cell(d.passengers, d.cargo)
+	return waiting_cell(d)
 end)
 
 local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 	local line = params.line
 	-- the line's problems are kept only while its window shows them
-	react.onUnmount(function() problems_by_line[line] = nil end)
+	react.onUnmount(function()
+		problems_by_line[line] = nil
+		waiting_by_line[line] = nil
+	end)
 	local state = engine_react_util.useStepStateTimer(function()
-		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+		local ok, count, waiting = pcall(cards.read_waiting, line)
+		if not ok then count, waiting = nil, nil end
+		waiting_by_line[line] = waiting
 		local keys = {}
-		for index = 1, component and #component.stops or 0 do keys[index] = index end
-		if terminals and component then
-			local ok, data = pcall(terminals.read_problems, line)
-			problems_by_line[line] = ok and data or nil
+		for index = 1, count or 0 do keys[index] = index end
+		if terminals and count then
+			local ok_problems, data = pcall(terminals.read_problems, line)
+			problems_by_line[line] = ok_problems and data or nil
 		end
 		return keys
 	end, REFRESH)
@@ -159,7 +216,7 @@ local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 				builtin.ColumnDesc{ name = _("Station"), recipe = UioStopCell, weight = 1,
 					getCompareValue = function(index) return index end },
 				builtin.ColumnDesc{ name = _("Waiting"), recipe = UioStopWaitingCell, headerStyleClass = "age",
-					getCompareValue = function(index) return index end },
+					getCompareValue = function(index) return cards.waiting_total(line, index) end },
 			},
 			rowKeys = state:old(),
 			userParam = { line = line },

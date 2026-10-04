@@ -11,20 +11,29 @@
 -- The selection is written to the Line Manager's vehicleManagerStateRef the way its master check
 -- box does (manager_window.tl:4946-4964), filtered like makeVehicleManagerState (local there,
 -- manager_window.tl:1462-1505).
+-- A Replace keeps the vehicle ids (makeVehicleReplaceCmd) and other lines' fleets change without the
+-- list changing, so the row re-reads the models on a timer, as the base VehicleWidget does, and
+-- every action re-reads them before it selects anything.
 -- @module ui_overhaul.gui.lvm_models
 local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
+local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
+local table_util = require("::/scripts/table_util.tl")
 local entity_util = require("::/scripts/entity_util.tl")
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
 
 local lvm_models = {}
 
---- Latest VehicleList parameters and their model view; one Line Manager exists at a time.
-local live = { params = nil, view = nil }
+local REFRESH = 2.0 -- seconds; a refresh reads every vehicle on the player's lines
+
+--- Latest VehicleList parameters; one Line Manager exists at a time.
+local live = { params = nil }
 lvm_models.live = live
 
-local cache = { signature = nil, view = nil }
+--- The model view of the latest list. `fleet` is what the engine said (read_fleet), `view` is built
+-- from it on demand; `stamp` changes whenever a refresh found a different fleet.
+local cache = { signature = nil, vehicles = nil, fleet = nil, view = nil, stamp = 0 }
 local names = {} -- model id -> name
 
 local function report(what, err)
@@ -170,31 +179,79 @@ local function line_vehicles(skip)
 	return result
 end
 
---- Vehicles of model `key` on the player's lines that are not in `skip`.
-function lvm_models.scan(key, skip)
-	local result = {}
-	for _i, v in ipairs(line_vehicles(skip or {})) do
+--- What the engine says about a vehicle list (engine reads only, so it can run in a timer
+-- callback): `keys` maps each listed vehicle to its model key, `ids` each key to its model ids and
+-- `others` each key to the vehicles of that model on the player's lines that are not listed
+-- ("In all lines" adds those).
+---@param vehicles integer[]
+---@return { keys: table<integer, string>, ids: table<string, integer[]>, others: table<string, integer[]> }
+function lvm_models.read_fleet(vehicles)
+	local keys, ids_of, others = {}, {}, {}
+	for _i, v in ipairs(vehicles) do
 		local ids = lvm_models.read_ids(v)
-		if ids and #ids > 0 and lvm_models.model_key(ids) == key then result[#result + 1] = v end
-	end
-	return result
-end
-
---- Model view of a vehicle list, recomputed only when the list's members change.
-function lvm_models.view(vehicles)
-	local signature = lvm_models.signature(vehicles)
-	if cache.signature == signature then return cache.view end
-	local groups, by_entity, by_key = lvm_models.group(vehicles, lvm_models.read_ids, lvm_models.name_of)
-	if #groups > 0 then
-		for _i, v in ipairs(line_vehicles(by_entity)) do
-			local ids = lvm_models.read_ids(v)
-			local group = ids and #ids > 0 and by_key[lvm_models.model_key(ids)]
-			if group then group.more = group.more + 1 end
+		if ids and #ids > 0 then
+			local key = lvm_models.model_key(ids)
+			keys[v] = key
+			ids_of[key] = ids_of[key] or ids
+			others[key] = {}
 		end
 	end
-	cache.signature = signature
-	cache.view = { groups = groups, by_entity = by_entity, by_key = by_key }
+	if next(others) then
+		for _i, v in ipairs(line_vehicles(keys)) do
+			local ids = lvm_models.read_ids(v)
+			local found = ids and #ids > 0 and others[lvm_models.model_key(ids)]
+			if found then found[#found + 1] = v end
+		end
+	end
+	return { keys = keys, ids = ids_of, others = others }
+end
+
+local function build_view(vehicles, fleet)
+	local groups, by_entity, by_key = lvm_models.group(vehicles, function(v)
+		local key = fleet.keys[v]
+		return key and fleet.ids[key]
+	end, lvm_models.name_of)
+	for key, group in pairs(by_key) do group.more = #(fleet.others[key] or {}) end
+	return { groups = groups, by_entity = by_entity, by_key = by_key }
+end
+
+--- Model view of a vehicle list. The engine is read when the list's members change; refresh()
+-- re-reads it for the same members.
+---@param vehicles integer[]
+function lvm_models.view(vehicles)
+	local signature = lvm_models.signature(vehicles)
+	if cache.signature ~= signature then
+		local copy = {}
+		for i, v in ipairs(vehicles) do copy[i] = v end
+		cache.signature, cache.vehicles = signature, copy
+		cache.fleet, cache.view = lvm_models.read_fleet(copy), nil
+	end
+	if not cache.view then cache.view = build_view(cache.vehicles, cache.fleet) end
 	return cache.view
+end
+
+--- Re-reads the fleet of the cached list (engine reads only, so it can run in a timer callback)
+-- and drops the view if the fleet changed: a vehicle was replaced in place, or other lines gained
+-- or lost vehicles of a listed model. Returns the stamp, which changes with every such drop.
+---@return integer
+function lvm_models.refresh()
+	if cache.vehicles then
+		local fleet = lvm_models.read_fleet(cache.vehicles)
+		if not table_util.deepEquals(fleet, cache.fleet) then
+			cache.fleet, cache.view = fleet, nil
+			cache.stamp = cache.stamp + 1
+		end
+	end
+	return cache.stamp
+end
+
+--- The open list's view as the engine has it now, for an action that is about to select vehicles.
+-- Reads the fleet once: view() reads it for a new list, refresh() for the cached one.
+local function current_view()
+	if not live.params then return nil end
+	local vehicles = live.params.vehicles or {}
+	if cache.signature == lvm_models.signature(vehicles) then lvm_models.refresh() end
+	return lvm_models.view(vehicles)
 end
 
 --- Lines of the vehicles (en route or at a terminal), counted up to `limit`.
@@ -280,26 +337,30 @@ end
 
 --- Selects exactly the listed vehicles of model `key`.
 function lvm_models.select_model(key)
-	local group = live.view and live.view.by_key[key]
-	if not (group and live.params) then return 0 end
+	local view = current_view()
+	local group = view and view.by_key[key]
+	if not group then return 0 end
 	return lvm_models.select_set(live.params, set_of(group.vehicles), {})
 end
 
 --- Adds the vehicles of model `key` from all lines to the list and selects exactly that model.
+-- The other lines' vehicles come from the fleet current_view() has just read.
 function lvm_models.pull_model(key)
-	local group = live.view and live.view.by_key[key]
-	if not (group and live.params) then return 0 end
+	local view = current_view()
+	local group = view and view.by_key[key]
+	if not group then return 0 end
 	local listed = set_of(group.vehicles)
-	local found = lvm_models.scan(key, listed)
+	local found = cache.fleet.others[key] or {}
 	for _i, v in ipairs(found) do listed[v] = true end
 	return lvm_models.select_set(live.params, listed, found)
 end
 
 --- Shift+click on a listed vehicle: selects all listed vehicles of its model. Returns true if done.
 function lvm_models.select_same_model(entity)
-	local key = live.view and live.view.by_entity[entity]
+	local view = current_view()
+	local key = view and view.by_entity[entity]
 	if not key then return false end
-	lvm_models.select_model(key)
+	lvm_models.select_set(live.params, set_of(view.by_key[key].vehicles), {})
 	return true
 end
 
@@ -346,14 +407,26 @@ local function pull_button(target)
 	}
 end
 
+--- Timer callback of the row: re-reads the fleet and returns the cache stamp, so the row renders
+-- again when the fleet changed. The first call (at mount, old == nil) reads nothing.
+local function poll(old)
+	if old == nil then return cache.stamp end
+	local ok, stamp = pcall(lvm_models.refresh)
+	return ok and stamp or old
+end
+
 local function render_row(p)
+	engine_react_util.useStepStateTimer(poll, REFRESH)
+	local view = lvm_models.view(p.vehicles)
+	if not lvm_models.row_visible(view.groups) then return builtin.BoxLayout{} end
+	local exact_key = lvm_models.exact_key(view.by_entity, view.by_key, p.selected)
 	local chips = {}
-	for _i, group in ipairs(p.groups) do
+	for _i, group in ipairs(view.groups) do
 		local key = group.key
 		chips[#chips + 1] = builtin.Button{
 			meta = {
 				localKey = "model-" .. key,
-				class = key == p.exact_key and "vehicle-button, selected" or "vehicle-button",
+				class = key == exact_key and "vehicle-button, selected" or "vehicle-button",
 				tooltip = group.name,
 			},
 			content = vehicle_react_util.VehicleWidget{ vehicleEntities = group.vehicles, tooltipOverride = group.name },
@@ -373,7 +446,7 @@ local function render_row(p)
 						content = builtin.Component{ layout = builtin.BoxLayout{
 							orientation = builtin.type.Orientation.Horizontal, children = chips } },
 					},
-					pull_button(p.target),
+					pull_button(lvm_models.target(view.groups, view.by_entity, view.by_key, p.selected)),
 				},
 			},
 		},
@@ -389,28 +462,37 @@ local Row = react.RegisterRecipe("UioLvmModels", function(p)
 end)
 
 --- Called by the VehicleList wrapper on every render: records the parameters and returns the row
--- node, or nil while it is hidden.
+-- node. The row stays mounted while it is hidden (an empty layout), so that its refresh can show it
+-- once a Replace or another line makes it useful.
 function lvm_models.update(params)
 	live.params = params
-	live.view = lvm_models.view(params.vehicles or {})
-	local view = live.view
-	if not lvm_models.row_visible(view.groups) then return nil end
-	local selected = selected_vehicles(params)
 	return Row{
 		meta = { localKey = "uio-lvm-models" },
-		groups = view.groups,
-		exact_key = lvm_models.exact_key(view.by_entity, view.by_key, selected),
-		target = lvm_models.target(view.groups, view.by_entity, view.by_key, selected),
+		vehicles = params.vehicles or {},
+		selected = selected_vehicles(params),
 	}
 end
 
---- Testbench ("uio.debug.lvm_models", { action = "select" | "pull", index = 1 }): acts on the
--- index-th model of the open list and logs the selection count against the expected one.
+--- Testbench ("uio.debug.lvm_models", { action = "select" | "pull" | "verify", index = 1 }): acts on
+-- the index-th model of the open list and logs the selection count against the expected one;
+-- "verify" logs whether the fleet the row is built from matches the engine (after a Replace, say).
 function lvm_models.debug(param)
 	param = type(param) == "table" and param or {}
 	local action, index = param.action or "select", param.index or 1
-	local group = live.view and live.view.groups[index]
-	if not (group and live.params) then
+	if action == "verify" then
+		local fleet = cache.vehicles and lvm_models.read_fleet(cache.vehicles)
+		local counts = {}
+		for i, group in ipairs(fleet and build_view(cache.vehicles, fleet).groups or {}) do
+			counts[i] = string.format("%d+%d", group.count, group.more)
+		end
+		local same = fleet ~= nil and table_util.deepEquals(fleet, cache.fleet)
+		debugPrint(string.format("[ui_overhaul] lvm models: verify vehicles=%d models=%s %s",
+			cache.vehicles and #cache.vehicles or 0, table.concat(counts, " "), same and "ok" or "STALE"))
+		return
+	end
+	local view = current_view()
+	local group = view and view.groups[index]
+	if not group then
 		debugPrint("[ui_overhaul] lvm models: no model ", tostring(index))
 		return
 	end
@@ -423,7 +505,7 @@ function lvm_models.debug(param)
 	end
 	local selected = #selected_vehicles(live.params)
 	debugPrint(string.format("[ui_overhaul] lvm models: %s %s selected=%d expected=%d models=%d %s", action,
-		(group.name:gsub("\n", " ")), selected, expected, #live.view.groups, selected == expected and "ok" or "MISMATCH"))
+		(group.name:gsub("\n", " ")), selected, expected, #view.groups, selected == expected and "ok" or "MISMATCH"))
 end
 
 return lvm_models

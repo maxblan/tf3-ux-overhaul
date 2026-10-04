@@ -30,7 +30,7 @@ describe("geometry", function()
 		local existing = { p0 = v(0, 0), p1 = v(200, 0), t0 = v(200, 0), t1 = v(200, 0) }
 		local part = { p0 = v(0, 0), p1 = v(100, 0), t0 = v(100, 0), t1 = v(100, 0) }
 		local drawn = quarter_circle(150, 0, 6)
-		local s = geometry.summary({ part, drawn }, { existing })
+		local s = assert(geometry.summary({ part, drawn }, { existing }))
 		assert.are.equal(1, s.count)
 		assert.is_true(math.abs(s.min_radius - 150) / 150 < 0.05)
 		assert.is_true(s.max_grade > 0.02 and s.max_grade < 0.05, "grade " .. s.max_grade)

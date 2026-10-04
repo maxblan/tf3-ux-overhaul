@@ -115,9 +115,11 @@ local function slope_rows(rows)
 	return result
 end
 
-local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
+local card_failed = false -- logged once
+
+-- The card's content; `emptyState` is the recipe's state of the load switch.
+local function render_card(params, emptyState)
 	local r = params.ratings
-	local emptyState = react.useState(false)
 	local show_empty = emptyState:old() and r.empty ~= nil
 	local switch = r.empty and builtin.ToggleButtonGroup{
 		meta = { class = "uio-performance-load" },
@@ -147,6 +149,17 @@ local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
 			},
 		},
 	}
+end
+
+local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
+	local emptyState = react.useState(false)
+	local ok, node = pcall(render_card, params, emptyState)
+	if ok then return node end
+	if not card_failed then
+		card_failed = true
+		debugPrint("[ui_overhaul] vehicle performance card failed: ", tostring(node))
+	end
+	return builtin.BoxLayout{}
 end)
 
 --- Plugin recipe body of the vehicle window (guarded by performance.script.lua).

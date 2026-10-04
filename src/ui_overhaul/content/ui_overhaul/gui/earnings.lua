@@ -3,12 +3,13 @@
 -- without opening the finance window. Nothing else changes on screen.
 -- Copy of the base plugin recipe GameBarEarningsPlugin (game_bar_display_earnings.script.tl),
 -- registered under the same name so the base stylesheet applies; installed through a
--- react-replacement-config (earnings.script.lua). If rendering fails, the base display is shown.
+-- react-replacement-config (earnings.script.lua). If rendering fails, the base display is shown for
+-- the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.earnings
-local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local earnings_plugin = require("::/gui/game_bar/game_bar_display_earnings_plugin/game_bar_display_earnings.script.tl")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local earnings = {}
 
@@ -63,12 +64,9 @@ local function render()
 	}
 end
 
-local Replacement = react.RegisterRecipe("GameBarEarningsPlugin", function(...)
-	local ok, node = pcall(render)
-	if ok then return node end
-	debugPrint("[ui_overhaul] earnings display failed, showing the base one: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(earnings_plugin.GameBarEarningsPlugin, ...) } }
-end)
+earnings.switch = fallback.switch("earnings display")
+local Replacement = fallback.replacement(earnings.switch, "GameBarEarningsPlugin", render,
+	earnings_plugin.GameBarEarningsPlugin)
 
 --- Called from the react-replacement-config before the UI starts.
 function earnings.install(replacement_api)

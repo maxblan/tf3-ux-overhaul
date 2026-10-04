@@ -8,8 +8,8 @@
 --   * a perk locked by rank says "Promotion pending - open the Company window" when the rank is
 --     already reached but not yet applied (the game applies a promotion only when the Company window
 --     is opened, while the game bar already shows the new rank)
--- Patches the module functions content_card.makeContentCardsCollapsibleFunctions and
--- company_util.getConstructionDisableReason (GUI state only) and wraps the exported recipe
+-- Wraps the module functions content_card.makeContentCardsCollapsibleFunctions, content_card.makeRecipeAndParam and
+-- company_util.getConstructionDisableReason (GUI state only), each calling the previous one, and replaces the recipe
 -- entity_window_util.ActionButtonBar; installed before the UI starts (window_tweaks.script.lua).
 -- @module ui_overhaul.gui.window_tweaks
 local react = require("::/gui/main/react.lua")
@@ -29,29 +29,57 @@ local window_tweaks = {}
 
 -- Sections ----------------------------------------------------------------------------------------
 
-local remembered = {} -- section key -> expanded, for the session
+---@alias uo.sections.Expanded table<string, boolean> section key -> expanded
+---@alias uo.sections.State react.State<uo.sections.Expanded>
+---@alias uo.sections.Update fun(key: string, expanded: boolean)
+---@alias uo.sections.IsExpanded fun(key: string): boolean
+---@alias uo.sections.Make fun(state: uo.sections.State, only_one: boolean): uo.sections.Update, uo.sections.IsExpanded
 
-local function patch_sections()
-	content_card.makeContentCardsCollapsibleFunctions = function(state, _only_one_expandable)
+local remembered = {} ---@type uo.sections.Expanded for the session
+
+-- The base "collapse all" key: vehicle.tl:501 closes every section with it before Modify, so that the
+-- vehicle config change reaches the engine before a section shows it again. The base never reopens
+-- them (the store stays open for further changes), so a window state that holds this key stays
+-- collapsed: its sections no longer fall back to `remembered`. `remembered` itself is kept, as the
+-- collapse is not the player's choice; the next window opens their sections again.
+local COLLAPSE_ALL = ""
+
+--- Wraps the previous makeContentCardsCollapsibleFunctions (base or another mod's wrap). Every base
+-- window passes onlyOneExpandable = true; section keys deliberately go through the previous function
+-- with false, because several sections may be open at once (README: "stay open the next time, and
+-- several can be open at once"). COLLAPSE_ALL keeps the caller's value, so the base collapse runs.
+---@param previous uo.sections.Make
+---@return uo.sections.Make
+function window_tweaks.wrap_collapsible(previous)
+	return function(state, only_one_expandable)
+		local update_section, is_expanded_base = previous(state, false)
+		local update_all = previous(state, only_one_expandable)
+		---@param key string
+		---@param expanded boolean
 		local function update(key, expanded)
-			local new_state = {}
-			for k, v in pairs(state:old()) do new_state[k] = v end
-			if key == "" then
-				-- base "collapse all" (vehicle window before Modify); not remembered
-				for k in pairs(new_state) do new_state[k] = false end
+			if key == COLLAPSE_ALL then
+				update_all(key, expanded)
 			else
 				remembered[key] = expanded
+				update_section(key, expanded)
 			end
-			new_state[key] = expanded
-			state:set(new_state)
 		end
+		---@param key string
+		---@return boolean
 		local function is_expanded(key)
-			local value = state:old()[key]
-			if value == nil then return remembered[key] == true end
-			return value == true
+			local own = state:old()
+			if own[key] == nil and own[COLLAPSE_ALL] == nil and remembered[key] ~= nil then
+				return remembered[key]
+			end
+			return is_expanded_base(key)
 		end
 		return update, is_expanded
 	end
+end
+
+local function patch_sections()
+	content_card.makeContentCardsCollapsibleFunctions =
+		window_tweaks.wrap_collapsible(content_card.makeContentCardsCollapsibleFunctions)
 end
 
 -- Sell confirmation -------------------------------------------------------------------------------
@@ -146,32 +174,99 @@ local function growth_factors()
 	return factors
 end
 
-local TownLevelWithBottleneck = react.RegisterRecipe("UioTownLevel", function(params)
-	local town = params.innerParam.entityId
-	-- hooks in a fixed order: one parallel state per factor, plus the level state
-	local worst, worst_rank = nil, math.huge
-	for _i, factor in ipairs(growth_factors()) do
-		local level = engine_react_util.useStepStateParallelSimple(factor.fn,
+--- True once the bottleneck text failed; from then on the base card is shown alone.
+window_tweaks.town_level_failed = false
+
+---@param err any
+local function town_level_failed(err)
+	if window_tweaks.town_level_failed then return end
+	window_tweaks.town_level_failed = true
+	debugPrint("[ui_overhaul] town level text failed, showing the base card: ", tostring(err))
+end
+
+---@class uo.town.States
+---@field factors react.State<string|nil>[] growth level of each factor, in the order of the factor list
+---@field level_widget react.State<table|nil> town_util_parallel.getTownLevelWidgetState
+---@field development react.State<boolean|nil>
+
+--- The hooks of the bottleneck text, one parallel state per factor, then the level and development
+-- states.
+---@param town integer town entity
+---@param factors table[] growth_factors()
+---@return uo.town.States
+local function use_town_states(town, factors)
+	local states = { factors = {} }
+	for i, factor in ipairs(factors) do
+		states.factors[i] = engine_react_util.useStepStateParallelSimple(factor.fn,
 			{ townEntity = town, extraParam = factor.extra })
-		local rank = LEVEL_RANK[level:old()] or math.huge
-		if rank < worst_rank then worst, worst_rank = factor, rank end
 	end
-	local levelState = engine_react_util.useStepStateParallelSimple(PARALLEL .. "getTownLevelWidgetState", town)
-	local development = engine_react_util.useStepState(function()
+	states.level_widget = engine_react_util.useStepStateParallelSimple(PARALLEL .. "getTownLevelWidgetState", town)
+	states.development = engine_react_util.useStepState(function()
 		local component = api.engine.getComponent(town, api.type.ComponentType.TOWN)
 		return component and component.developmentActive
 	end)
-	local children = { params.inner(params.innerParam) }
-	if development:old() then
-		local level, fraction = town_cargo_util.getLevelAndFraction(levelState:old().experience)
-		local parts = {}
-		if worst and worst_rank < LEVEL_RANK.Excellent then
-			parts[#parts + 1] = lang_util.format(_("Limited by {factor}"), { factor = worst.name })
-		end
+	return states
+end
+
+--- The text under the base level widget, or nil.
+---@param factors table[] growth_factors()
+---@param states uo.town.States
+---@return react.TreeNodeId|nil
+local function bottleneck_text(factors, states)
+	if not states.development:old() then return nil end
+	local worst, worst_rank = nil, math.huge
+	for i, factor in ipairs(factors) do
+		local rank = LEVEL_RANK[states.factors[i]:old()] or math.huge
+		if rank < worst_rank then worst, worst_rank = factor, rank end
+	end
+	local parts = {}
+	if worst and worst_rank < LEVEL_RANK.Excellent then
+		parts[#parts + 1] = lang_util.format(_("Limited by {factor}"), { factor = worst.name })
+	end
+	-- nil until the parallel function has run once, or if the game no longer has it
+	-- (useStepStateParallel logs that instead of raising)
+	local level_state = states.level_widget:old()
+	if level_state and level_state.experience then
+		local level, fraction = town_cargo_util.getLevelAndFraction(level_state.experience)
 		parts[#parts + 1] = lang_util.format(_("{percentage} Towards {nextTownLevelName}"), {
 			percentage = api.util.toStringPercent(fraction), nextTownLevelName = town_util.level2name(level + 1) })
-		children[#children + 1] = builtin.TextView{ meta = { class = "font-scale-body", id = "uio.town.bottleneck" },
-			text = table.concat(parts, "  \xC2\xB7  ") }
+	end
+	if #parts == 0 then return nil end
+	return builtin.TextView{ meta = { class = "font-scale-body", id = "uio.town.bottleneck" },
+		text = table.concat(parts, "  \xC2\xB7  ") }
+end
+
+-- Owns every hook of the town level text, so that its parent declares none. One instance always
+-- declares the same hooks in the same order: the factor list is fixed on its first render, and a
+-- failure does not skip hooks on later renders. After a failure it renders an empty layout until
+-- the parent, which checks town_level_failed, unmounts it.
+local TownBottleneck = react.RegisterRecipe("UioTownBottleneck", function(params)
+	local factors_ref = react.useRef(nil)
+	if factors_ref:get() == nil then
+		local ok, factors = pcall(growth_factors)
+		if not ok then town_level_failed(factors) end
+		factors_ref:set(ok and factors or false)
+	end
+	local factors = factors_ref:get() or {}
+	local ok, states = pcall(use_town_states, params.town, factors)
+	if not ok then town_level_failed(states) end
+	local node
+	if not window_tweaks.town_level_failed then
+		local text_ok, text = pcall(bottleneck_text, factors, states)
+		if text_ok then node = text else town_level_failed(text) end
+	end
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical,
+		children = { not window_tweaks.town_level_failed and node or nil } }
+end)
+
+-- Declares no hooks: the base widget, and the text below it while it works. The text is a child
+-- recipe, so dropping it after a failure unmounts it instead of changing this recipe's hooks.
+local TownLevelWithBottleneck = react.RegisterRecipe("UioTownLevel", function(params)
+	local children = { params.inner(params.innerParam) }
+	if not window_tweaks.town_level_failed then
+		local ok, node = pcall(TownBottleneck, { meta = { localKey = "uio.town.bottleneck" },
+			town = params.innerParam.entityId })
+		if ok then children[2] = node else town_level_failed(node) end
 	end
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
 end)

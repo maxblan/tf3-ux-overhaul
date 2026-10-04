@@ -7,7 +7,8 @@
 --     (base: by { used, capacity })
 -- A Lua conversion of the base tab (gui/statistics/statistic_stations.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_stations.script.lua). If rendering fails, the base tab is shown.
+-- (statistics_stations.script.lua). If rendering fails, the base tab is shown for the
+-- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_stations
 local builtin = require("::/gui/main/builtin.lua")
 local cargo_util = require("::/gui/main/cargo_util.tl")
@@ -22,6 +23,7 @@ local statistics_react_util = require("::/gui/statistics/statistics_react_util.t
 local table_util = require("::/scripts/table_util.tl")
 local base_stations_statistic = require("::/gui/statistics/statistic_stations.tl")
 local statistics_common = require("/ui_overhaul/gui/statistics_common.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_stations = {}
 
@@ -402,12 +404,10 @@ local function render(params)
 	}
 end
 
-local Replacement = react.RegisterRecipe("StationsStatistic", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] statistics stations tab failed, showing the base tab: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_stations_statistic, params) } }
-end)
+statistics_stations.switch = fallback.switch("statistics stations tab")
+-- The tab node keeps the base tab's focus child.
+local Replacement = fallback.replacement(statistics_stations.switch, "StationsStatistic", render,
+	base_stations_statistic, { focus = true })
 
 --- Called from the react-replacement-config before the UI starts.
 function statistics_stations.install(replacement_api)

@@ -37,6 +37,14 @@ local SERVED_REFRESH = 5.0 -- the line search walks all the player's stops
 local MAX_LINES = 8
 local BLOCKED_AREA_EVENT = "uio.industry.blocked_area"
 
+-- A card whose content fails shows nothing and logs once; its recipe declared its hooks before.
+local reported = {}
+local function report(key, err)
+	if reported[key] then return end
+	reported[key] = true
+	debugPrint("[ui_overhaul] industry ", key, " card failed: ", tostring(err))
+end
+
 -- Whether the red area of a blocked expansion is shown on the map (for the session).
 local show_blocked_area = true
 -- True while the industry window's map action renders with the area switched off.
@@ -218,14 +226,8 @@ local function recipe_node(recipe)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
 end
 
-local Development = react.RegisterRecipe("UioIndustryDevelopment", function(params)
-	local state = engine_react_util.useStepStateTimer(function()
-		local ok, facts = pcall(industry_cards.read, params.entity)
-		return ok and facts or nil
-	end, REFRESH)
-	local showState = react.useState(show_blocked_area)
-	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
-	local f = state:old()
+-- The Development card's content; `f` from industry_cards.read, or nil.
+local function render_development(params, f, show)
 	if not f then return vertical{} end
 	local growing = f.level < f.maxLevel
 	local children = {}
@@ -263,7 +265,7 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 					meta = { class = "uio-industry-area-toggle", tooltip = _("Show the blocked area on the map") },
 					content = builtin.ImageView{ path = "::/gui/statistics/icons/symbol_eye_18.tga",
 						scaling = builtin.type.ImageViewScaling.AutoFit },
-					value = showState:old() and 1 or 0,
+					value = show and 1 or 0,
 					onValueChange = function(value) industry_cards.set_show_blocked_area(value == 1) end,
 				}
 			end
@@ -280,14 +282,23 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 			layout = vertical(children, "uio-industry-development"),
 		},
 	} }
+end
+
+local Development = react.RegisterRecipe("UioIndustryDevelopment", function(params)
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, facts = pcall(industry_cards.read, params.entity)
+		return ok and facts or nil
+	end, REFRESH)
+	local showState = react.useState(show_blocked_area)
+	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
+	local ok, node = pcall(render_development, params, state:old(), showState:old())
+	if ok then return node end
+	report("development", node)
+	return vertical{}
 end)
 
-local ServedBy = react.RegisterRecipe("UioIndustryServedBy", function(params)
-	local state = engine_react_util.useStepStateTimer(function()
-		local ok, lines = pcall(industry_cards.read_lines, params.entity)
-		return ok and lines or {}
-	end, SERVED_REFRESH)
-	local lines = state:old() or {}
+-- The Served by card's content: entries of industry_cards.read_lines.
+local function render_served_by(lines)
 	if #lines == 0 then
 		return vertical{ text(_("No line of yours stops within reach of this industry."), "font-scale-body") }
 	end
@@ -309,6 +320,17 @@ local ServedBy = react.RegisterRecipe("UioIndustryServedBy", function(params)
 		}
 	end
 	return vertical(children, "uio-industry-lines")
+end
+
+local ServedBy = react.RegisterRecipe("UioIndustryServedBy", function(params)
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, lines = pcall(industry_cards.read_lines, params.entity)
+		return ok and lines or {}
+	end, SERVED_REFRESH)
+	local ok, node = pcall(render_served_by, state:old() or {})
+	if ok then return node end
+	report("served by", node)
+	return vertical{}
 end)
 
 local function card(local_key, title, recipe, param, params)

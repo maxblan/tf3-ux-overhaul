@@ -1,5 +1,5 @@
--- lvm_rows.lua: which cargo icons a Line Manager line row shows. The base modules it requires are
--- stand-ins; only the cargo helpers run.
+-- lvm_rows.lua: which cargo icons a Line Manager line row shows and how a vehicle row reads its
+-- lifespan. The base modules it requires are stand-ins; only the pure helpers run.
 local PASSENGERS = 0
 local sorted -- what the stand-in cargo_util.getSortedProducedCargoTypes returns
 local stops -- the stand-in LINE component's stops
@@ -71,5 +71,54 @@ describe("lvm_rows cargo", function()
 		shown, more = lvm_rows.cargo_slots({}, 3)
 		assert.are.same({}, shown)
 		assert.are.same({}, more)
+	end)
+end)
+
+describe("lvm_rows lifetime", function()
+	local lvm_rows_module
+	before_each(function() lvm_rows_module = require("/ui_overhaul/gui/lvm_rows.lua") end)
+
+	it("gives the share of the lifespan used until it is reached", function()
+		local reached, used = lvm_rows_module.lifetime(1000, 4000, 2000)
+		assert.is_false(reached)
+		assert.are.equal(0.25, used)
+		assert.is_true((lvm_rows_module.lifetime(1000, 4000, 5000)))
+		assert.is_true((lvm_rows_module.lifetime(1000, 4000, 9000)))
+	end)
+
+	it("counts a model without a lifespan as reached, like the base age cell, and divides by nothing", function()
+		for _i, now in ipairs({ 1000, 1500, 999999 }) do
+			local reached, used = lvm_rows_module.lifetime(1000, 0, now)
+			assert.is_true(reached)
+			assert.is_nil(used)
+		end
+	end)
+end)
+
+describe("lvm_rows row info hooks", function()
+	local fake_react = require("fake_react")
+	local fake = fake_react.new()
+	local builtin = fake_react.any()
+	builtin.BoxLayout = function(t) return { layout = t } end
+	fake_react.load("/ui_overhaul/gui/lvm_rows.lua", {
+		["::/gui/main/react.lua"] = fake.react,
+		["::/gui/main/builtin.lua"] = builtin,
+		-- as the game's hook: declared once its callback returned (useStateLazy calls it)
+		["::/gui/main/engine_react_util.tl"] = {
+			useStepStateTimer = function(fn)
+				local value = fn(nil)
+				fake.hook("useStepStateTimer")
+				return { old = function() return value end }
+			end,
+		},
+	})
+
+	it("declares its hook even when reading the row fails", function()
+		_G.api = nil -- reading raises
+		local row = fake.mount(fake.recipe("UioLvmRowInfo"))
+		local node = row.render(7)
+		assert.are.same({ "useStepStateTimer" }, row.hooks)
+		assert.are.same({}, node.layout.children)
+		_G.api = saved_api
 	end)
 end)

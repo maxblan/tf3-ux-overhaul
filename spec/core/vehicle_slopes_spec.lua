@@ -8,6 +8,7 @@ describe("vehicle_slopes", function()
 
 	it("reaches full speed everywhere with enough power", function()
 		local rows, rating = vehicle_slopes.compute(strong)
+		assert(rows and rating)
 		assert.are.equal(4, rating)
 		for _i, row in ipairs(rows) do
 			assert.is_true(row.enough)
@@ -20,6 +21,7 @@ describe("vehicle_slopes", function()
 
 	it("slows down and stops on slopes it cannot climb", function()
 		local rows, rating = vehicle_slopes.compute(weak)
+		assert(rows and rating)
 		assert.is_true(rows[1].enough)
 		assert.is_true(rows[2].enough)
 		assert.is_true(rows[2].speed < 30)

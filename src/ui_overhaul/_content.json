@@ -1,17 +1,13 @@
 {
     "archives": null,
     "files": [
-        "ui_overhaul/core/format.lua",
         "ui_overhaul/core/geometry.lua",
-        "ui_overhaul/core/health.lua",
         "ui_overhaul/core/industry_development.lua",
         "ui_overhaul/core/line_problems.lua",
         "ui_overhaul/core/notification_groups.lua",
         "ui_overhaul/core/slider_snap.lua",
         "ui_overhaul/core/statements.lua",
         "ui_overhaul/core/vehicle_slopes.lua",
-        "ui_overhaul/engine/snapshot.lua",
-        "ui_overhaul/engine/store.lua",
         "ui_overhaul/gui/actions.lua",
         "ui_overhaul/gui/builtin_wraps.lua",
         "ui_overhaul/gui/card_line.res.lua",
@@ -29,13 +25,13 @@
         "ui_overhaul/gui/construction.lua",
         "ui_overhaul/gui/construction.res.lua",
         "ui_overhaul/gui/construction.script.lua",
-        "ui_overhaul/gui/defer.lua",
         "ui_overhaul/gui/earnings.lua",
         "ui_overhaul/gui/earnings.res.lua",
         "ui_overhaul/gui/earnings.script.lua",
         "ui_overhaul/gui/entry.lua",
         "ui_overhaul/gui/entry.res.lua",
         "ui_overhaul/gui/entry.script.lua",
+        "ui_overhaul/gui/fallback.lua",
         "ui_overhaul/gui/finances.css.lua",
         "ui_overhaul/gui/finances.lua",
         "ui_overhaul/gui/finances.res.lua",
@@ -77,8 +73,8 @@
         "ui_overhaul/gui/station_terminals.lua",
         "ui_overhaul/gui/station_terminals.res.lua",
         "ui_overhaul/gui/station_terminals.script.lua",
+        "ui_overhaul/gui/statistics_common.css.lua",
         "ui_overhaul/gui/statistics_common.lua",
-        "ui_overhaul/gui/statistics_lines.css.lua",
         "ui_overhaul/gui/statistics_lines.lua",
         "ui_overhaul/gui/statistics_lines.res.lua",
         "ui_overhaul/gui/statistics_lines.script.lua",
@@ -112,7 +108,6 @@
         "ui_overhaul/gui/vehicle_tooltip.script.lua",
         "ui_overhaul/gui/window_tweaks.lua",
         "ui_overhaul/gui/window_tweaks.res.lua",
-        "ui_overhaul/gui/window_tweaks.script.lua",
-        "ui_overhaul/logger.lua"
+        "ui_overhaul/gui/window_tweaks.script.lua"
     ]
 }

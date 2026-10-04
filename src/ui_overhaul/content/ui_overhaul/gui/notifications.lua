@@ -4,13 +4,16 @@
 --     the next one of the group (newest first, wrapping), so repeated clicks visit each
 --   * right-click (gamepad: IA_OPTION2) dismisses the whole group
 --   * the hover card is the base card of the shown notification, with "2 of 3" next to the title
--- A group of one looks and behaves like the base icon.
+-- A group of one looks and behaves like the base icon. An icon follows its notifications, as the
+-- base keys icons by id (groups.place): it keeps its node and place while one of them is shown, and
+-- Resolve plays only when a notification leaves the ridge or the ridge itself goes, as in the base.
 -- Subsidy icons show their state in colours with at least 7:1 contrast to the white symbol (WCAG
 -- AAA): available blue, in progress orange, effect active green, failed red, a missed offer grey;
 -- the timer ring is drawn in plain white (notifications.css.lua). The hover card's icon matches.
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
--- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown.
+-- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown for
+-- the rest of the session (fallback.lua), without a Resolve for the icons it takes over.
 -- Which notifications exist, are hidden or are dismissed is left to the game: this module only
 -- sends the base "dismiss" and "initialSound" events, as the base ridge does.
 -- @module ui_overhaul.gui.notifications
@@ -26,11 +29,19 @@ local table_util = require("::/scripts/table_util.tl")
 local util = require("::/scripts/util.tl")
 local base_popups = require("::/game_mechanics/notifications/gui/notification_popups.tl")
 local groups = require("/ui_overhaul/core/notification_groups.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local notifications = {}
 
 --- Counts of the last render, for the in-game checks: raw notifications shown, icons, largest group.
 notifications.stats = { raw = 0, groups = 0, largest = 0 }
+
+--- Marked failed once rendering failed: the base ridge is shown for the rest of the session.
+notifications.switch = fallback.switch("notification ridge")
+
+--- The icons of the last render (groups.place): which notifications are on the ridge, read when an
+-- icon member unmounts. There is one ridge.
+notifications.tiles = nil
 
 local SFX_PATH = "::/game_mechanics/notifications/gui/sound/notification_sfx.gres"
 
@@ -42,12 +53,12 @@ local function report(what, err)
 end
 
 --- `fn` wrapped so that an error in an engine callback is logged once instead of escaping.
-local function safe(what, fn, fallback)
+local function safe(what, fn, default)
 	return function(...)
 		local ok, result = pcall(fn, ...)
 		if ok then return result end
 		report(what, result)
-		return fallback
+		return default
 	end
 end
 
@@ -138,11 +149,18 @@ local NotificationPopup = react.RegisterRecipe("NotificationPopup", function(par
 	local dataState = dataStateFn and dataStateFn(params.notification.params, params.notification.simParams) or nil
 	local guiType = notification_util.getGuiTypeFromNotificationType(params.notification.type)
 	local notification = params.notification
-	local subsidyClass = notifications.subsidy_class(notification.type,
-		type(notification.params) == "table" and notification.params.status or nil)
-	local position = params.count > 1
-		and lang_util.format(_("{index} of {count}"), { index = tostring(params.index), count = tostring(params.count) })
-		or nil
+	-- the additions to the base card: without them it is the base card
+	local ok, subsidyClass, position = pcall(function()
+		local class = notifications.subsidy_class(notification.type,
+			type(notification.params) == "table" and notification.params.status or nil)
+		return class, (params.count or 1) > 1
+			and lang_util.format(_("{index} of {count}"), { index = tostring(params.index), count = tostring(params.count) })
+			or nil
+	end)
+	if not ok then
+		report("hover card", subsidyClass)
+		subsidyClass, position = nil, nil
+	end
 
 	return builtin.BoxLayout{orientation = builtin.type.Orientation.Vertical, children = {
 		builtin.Component {
@@ -273,22 +291,67 @@ local function on_member_mount(notificationId, dataState)
 	end
 end
 
-local function on_member_unmount(notificationId)
+local function resolve(notificationId)
 	click_handlers[notificationId] = nil
 	local data = sfx()
 	play("resolve", data and data.Resolve)
 end
 
+-- Members that unmounted this step while their notification was still on the ridge.
+local kept = {}
+
+local function on_member_unmount(notificationId)
+	-- The mod's ridge failed and the base ridge takes over with the same notifications: nothing goes,
+	-- so nothing plays (the base ridge plays Initialize only for a notification that has not had it).
+	if notifications.switch.failed then
+		click_handlers[notificationId] = nil
+		return
+	end
+	-- Still on the ridge: either the member moved to another icon, which already holds its click
+	-- action, or the whole ridge is going. The base plays Resolve when an icon goes, so for a move
+	-- (the icon is rebuilt) nothing plays, and for the ridge its unmount decides (on_ridge_unmount).
+	if groups.shown(notifications.tiles, notificationId) then
+		kept[notificationId] = true
+		return
+	end
+	resolve(notificationId)
+end
+
+-- The ridge unmounts: every icon goes, and the base plays Resolve for each. The engine's order of
+-- parent and child unmount callbacks is not documented (react.lua leaves it to the native context),
+-- so both orders resolve: members unmounted before this are in `kept`, members unmounted after it
+-- find no notification on the ridge.
+local function on_ridge_unmount()
+	notifications.tiles = nil
+	if notifications.switch.failed then
+		kept = {}
+		return
+	end
+	for notificationId in pairs(kept) do resolve(notificationId) end
+	kept = {}
+end
+
+-- A new GUI step: sounds may play again, and members kept last step moved (the ridge stayed).
+local function on_ridge_step()
+	played = {}
+	kept = {}
+end
+
+--- The ridge's step and unmount handlers, public for the specs.
+notifications.lifecycle = { step = on_ridge_step, unmount = on_ridge_unmount }
+
 -- One notification of a group: its data state (a hook, so one recipe per notification, keyed by
 -- id), the base mount and unmount sounds, and the icon while it is the one the group shows.
 local function render_member(params)
-	local dataStateFn = util.useFn(params.notification.type .. "@useDataState")
-	local dataState = dataStateFn and dataStateFn(params.notification.params, params.notification.simParams) or nil
-	local guiType = notification_util.getGuiTypeFromNotificationType(params.notification.type)
 	local id = params.notificationId
-
+	-- The sound handlers come before the data state, whose hooks run the notification type's code:
+	-- if that fails, the member still declares them (Member renders an empty layout then).
+	local dataState
 	react.onMount(safe("sound", function() on_member_mount(id, dataState) end))
 	react.onUnmount(safe("sound", function() on_member_unmount(id) end))
+	local dataStateFn = util.useFn(params.notification.type .. "@useDataState")
+	dataState = dataStateFn and dataStateFn(params.notification.params, params.notification.simParams) or nil
+	local guiType = notification_util.getGuiTypeFromNotificationType(params.notification.type)
 
 	click_handlers[id] = dataState and dataState.onClick or false
 	if not (params.current and dataState) then return empty() end
@@ -426,11 +489,27 @@ local function render()
 	local focusableState = react.useState(false)
 	local gamepadFocusedState = react.useState(false)
 	local hoveredListIndexState = react.useState(-1)
-	local cursorState = react.useState({}) -- group key -> id of the notification the group shows
+	local cursorState = react.useState({}) -- icon (group.tile) -> id of the notification it shows
+	local tilesRef = react.useRef(nil)
 	local animatedRef = react.useRef(false)
 	local enteredListIndexRef = react.useRef(-1)
 	local listRef = react.useNodeRef(builtin.Component)
 	local notificationIconRef = react.useNodeRef(builtin.Component)
+	-- declared before anything that can fail, so a failed render declares them too
+	react.onUnmount(safe("sound", on_ridge_unmount))
+	react.onStep(function()
+		on_ridge_step()
+		if hoveredListIndexState:old() < 1 then
+			animatedRef:set(true)
+		end
+		if animatedRef:get() and hoveredListIndexState:old() > 0 and enteredListIndexRef:get() < 0 then
+			enteredListIndexRef:set(hoveredListIndexState:old())
+		end
+		if enteredListIndexRef:get() > 0 and hoveredListIndexState:old() ~= enteredListIndexRef:get() then
+			animatedRef:set(false)
+			enteredListIndexRef:set(-1)
+		end
+	end)
 
 	react.useInputAction("IA_NOTIFICATIONS_OPEN", react.iaHandler(safe("open", function()
 		focusableState:set(not focusableState:old())
@@ -473,11 +552,13 @@ local function render()
 	react.setMouseTransparent(true)
 	react.setDisableFocusable(not focusableState:old() or isMouseInputState:old())
 
-	local groupList = make_groups(guiNotificationsState:old())
+	local groupList, tiles = groups.place(make_groups(guiNotificationsState:old()), tilesRef:get())
+	tilesRef:set(tiles)
+	notifications.tiles = tiles
 	local cursor = cursorState:old() or {}
 
 	local function current_index(group)
-		return groups.index(group, cursor[group.key])
+		return groups.index(group, cursor[group.tile])
 	end
 
 	local function dismiss(group)
@@ -498,9 +579,10 @@ local function render()
 	end
 
 	local function advance(group, currentId)
-		local newCursor = {}
-		for key, id in pairs(cursorState:old() or {}) do newCursor[key] = id end
-		newCursor[group.key] = groups.next_id(group, currentId)
+		local old, newCursor = cursorState:old() or {}, {}
+		-- only icons still shown: icon keys are never reused
+		for _i, other in ipairs(groupList) do newCursor[other.tile] = old[other.tile] end
+		newCursor[group.tile] = groups.next_id(group, currentId)
 		cursorState:set(newCursor)
 	end
 
@@ -508,7 +590,7 @@ local function render()
 	for k, group in ipairs(groupList) do
 		local currentId = group.members[current_index(group)].id
 		local tileParams = {
-			meta = { localKey = group.key },
+			meta = { localKey = group.tile },
 			members = group.members,
 			currentId = currentId,
 			onDismiss = function() dismiss(group) end,
@@ -526,20 +608,6 @@ local function render()
 	end
 
 	local animated = animatedRef:get()
-
-	react.onStep(function()
-		played = {}
-		if hoveredListIndexState:old() < 1 then
-			animatedRef:set(true)
-		end
-		if animatedRef:get() and hoveredListIndexState:old() > 0 and enteredListIndexRef:get() < 0 then
-			enteredListIndexRef:set(hoveredListIndexState:old())
-		end
-		if enteredListIndexRef:get() > 0 and hoveredListIndexState:old() ~= enteredListIndexRef:get() then
-			animatedRef:set(false)
-			enteredListIndexRef:set(-1)
-		end
-	end)
 
 	if #children == 0 and focusableState:old() then
 		focusableState:set(false)
@@ -604,18 +672,15 @@ local function render()
 	}
 end
 
---- True once rendering failed; the base ridge is shown from then on.
-notifications.failed = false
-
-local Replacement = react.RegisterRecipe("NotificationPopups", function(...)
-	if not notifications.failed then
-		local ok, node = pcall(render)
-		if ok then return node end
-		notifications.failed = true
-		debugPrint("[ui_overhaul] notification ridge failed, showing the base one: ", tostring(node))
-	end
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_popups, ...) } }
-end)
+-- The ridge node keeps what the base ridge sets on itself and the ridge root sets on it
+-- (game.tl NotificationsRidge): mouse transparent, not focusable itself. The child, registered under
+-- the base name too, sets its focus class and focusability as the base ridge does.
+local Replacement = fallback.replacement(notifications.switch, "NotificationPopups", render, base_popups, {
+	internals = function()
+		react.setMouseTransparent(true)
+		react.setDisableFocusable(true)
+	end,
+})
 
 --- Called from the react-replacement-config before the UI starts.
 function notifications.install(replacement_api)

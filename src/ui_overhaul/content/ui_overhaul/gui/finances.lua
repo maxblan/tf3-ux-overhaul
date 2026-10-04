@@ -12,7 +12,7 @@
 -- computeFinanceTable data as the game's table (core/statements.lua) and drawn with the table's
 -- own cells and classes (the recipe ViewCell is registered under the base name).
 -- Replaces the exported recipe of finances_table.tl (react-replacement-config, finances.script.lua);
--- if rendering fails, the game's table is shown.
+-- if rendering fails, the game's table is shown for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.finances
 local builtin = require("::/gui/main/builtin.lua")
 local content_card = require("::/gui/main/content_card.tl")
@@ -20,6 +20,7 @@ local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local base_finances_table = require("::/game_mechanics/finance/finances_table.tl")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 local statements = require("/ui_overhaul/core/statements.lua")
 
 local finances = {}
@@ -88,11 +89,10 @@ function finances.read_balance()
 	local player = api.engine.util.getPlayer()
 	local value = api.engine.util.headquarters.getCompaniesValue()
 	local vehicles = 0
-	for _i, vehicle in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE)) do
-		local owned = api.engine.getComponent(vehicle, api.type.ComponentType.PLAYER_OWNED)
-		if owned and owned.player == player then
-			vehicles = vehicles + api.engine.util.vehicle.getDepreciatedValue(vehicle)
-		end
+	-- the engine keeps only the player's vehicles, as the statistics Vehicles tab asks for them
+	local own = { requireOwnedByPlayer = player }
+	for _i, vehicle in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE, own)) do
+		vehicles = vehicles + api.engine.util.vehicle.getDepreciatedValue(vehicle)
 	end
 	return {
 		cash = api.engine.util.finance.getPlayersBalance(player),
@@ -301,12 +301,8 @@ local function render(params)
 	}
 end
 
-local Replacement = react.RegisterRecipe("FinancesTable", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	report("render (showing the base table)", node)
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_finances_table, params) } }
-end)
+finances.switch = fallback.switch("finance statements")
+local Replacement = fallback.replacement(finances.switch, "FinancesTable", render, base_finances_table)
 
 --- Called from the react-replacement-config before the UI starts.
 function finances.install(replacement_api)

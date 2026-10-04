@@ -12,6 +12,8 @@ local MAX_DETENTS = 20 -- at most this many intervals across the range (about ev
 local NICE = { 1, 2, 2.5, 5 }
 local MAGNET = 0.3 -- share of a detent interval within which a dragged value jumps to the detent
 
+---@param x number
+---@return boolean
 local function is_whole(x)
 	return math.abs(x - math.floor(x + 0.5)) < 1e-9
 end
@@ -20,11 +22,15 @@ end
 -- that splits the range into at most 20 intervals, preferring round numbers (1, 2, 2.5, 5 x 10^k)
 -- and otherwise round multiples of the step (2, 5, 10, 20, 50 ... steps: a slider moving in 15s
 -- snaps every 75); nil when the range has 20 steps or fewer. The search is bounded by the range.
+---@param min number
+---@param max number
+---@param step? number
+---@return number?
 function slider_snap.detent(min, max, step)
 	step = (step and step > 0) and step or 1
 	local range = max - min
 	if range <= 0 or range / step <= MAX_DETENTS then return nil end
-	local candidates = {}
+	local candidates = {} ---@type number[]
 	local magnitude = 1
 	while magnitude <= range * 10 do
 		for _i, nice in ipairs(NICE) do
@@ -48,6 +54,9 @@ end
 --- Where detents are counted from: 0 when the slider's grid (min + k x step) contains the round
 -- values, else `min`. A slider of 1..60 in steps of 1 snaps at 5, 10, 15 (not 1, 6, 11); one of
 -- 1..59 in steps of 2 can only take odd values, so its detents count from 1.
+---@param min number
+---@param step? number
+---@return number
 function slider_snap.anchor(min, step)
 	step = (step and step > 0) and step or 1
 	if is_whole(min / step) then return 0 end
@@ -55,6 +64,11 @@ function slider_snap.anchor(min, step)
 end
 
 --- `value` moved onto the slider's grid (min + k x step) and into min..max.
+---@param value number
+---@param min number
+---@param max number
+---@param step? number
+---@return number
 function slider_snap.on_grid(value, min, max, step)
 	step = (step and step > 0) and step or 1
 	local v = min + math.floor((value - min) / step + 0.5) * step
@@ -63,6 +77,10 @@ function slider_snap.on_grid(value, min, max, step)
 	return v
 end
 
+---@param value number
+---@param min number
+---@param max number
+---@return number
 local function clamp(value, min, max)
 	if value < min then return min end
 	if value > max then return max end
@@ -72,6 +90,12 @@ end
 --- The value a dragged slider takes: the nearest detent if `value` is within 30 % of an interval
 -- of it, else `value`. Detents count from `anchor` (default `min`; see slider_snap.anchor). No
 -- detent interval: `value`.
+---@param value number
+---@param min number
+---@param max number
+---@param detent? number
+---@param anchor? number
+---@return number
 function slider_snap.snap(value, min, max, detent, anchor)
 	if not detent then return value end
 	anchor = anchor or min
@@ -85,6 +109,9 @@ end
 -- anchored at position `anchor` (the neutral value, e.g. 0 % incline): the first of 5, 4, 2 that
 -- puts a detent on the anchor and gives at most 20 intervals; nil for 12 positions
 -- or fewer, which need none.
+---@param count integer
+---@param anchor? integer
+---@return integer?
 function slider_snap.index_detent(count, anchor)
 	if count <= 12 then return nil end
 	anchor = anchor or 1
@@ -95,6 +122,8 @@ function slider_snap.index_detent(count, anchor)
 end
 
 --- Whether `numbers` are evenly spaced (within 1 %), so positions can carry detents.
+---@param numbers number[]
+---@return boolean
 function slider_snap.evenly_spaced(numbers)
 	if #numbers < 3 then return false end
 	local step = numbers[2] - numbers[1]
@@ -108,12 +137,21 @@ end
 --- The value after one wheel notch in direction `dir` (+1 up, -1 down): to the next detent (counted
 -- from `anchor`, default `min`), or one step with `precise` (the game's precision key) or without
 -- detents.
+---@param value number
+---@param min number
+---@param max number
+---@param step? number
+---@param detent? number
+---@param dir number +1 up, -1 down
+---@param precise? boolean
+---@param anchor? number
+---@return number
 function slider_snap.wheel(value, min, max, step, detent, dir, precise, anchor)
 	step = (step and step > 0) and step or 1
 	if precise or not detent then return clamp(value + dir * step, min, max) end
 	anchor = anchor or min
 	local position = (value - anchor) / detent
-	local target
+	local target ---@type number
 	if dir > 0 then
 		target = math.floor(position + 1e-9) + 1
 	else
@@ -124,10 +162,12 @@ end
 
 --- The first number in a text as the game shows values ("2,5 m", "-3 %", "1.5x"); nil if none.
 -- A comma is read as the decimal point.
+---@param text string? anything but a string gives nil
+---@return number?
 function slider_snap.parse_number(text)
 	if type(text) ~= "string" then return nil end
 	text = text:gsub("\xE2\x88\x92", "-") -- typographic minus
-	local number = text:match("[-+]?%d+[.,]?%d*")
+	local number = text:match("[-+]?%d+[.,]?%d*") ---@type string?
 	if not number then return nil end
 	number = number:gsub(",", ".")
 	return tonumber(number)
@@ -136,10 +176,13 @@ end
 --- Index (1-based) of the entry of `labels` (the texts a slider shows for each of its positions)
 -- that best matches what the player typed: the nearest number, or the first label starting with the
 -- text; nil if nothing matches.
+---@param labels string[]
+---@param typed string?
+---@return integer?
 function slider_snap.nearest_label(labels, typed)
 	local wanted = slider_snap.parse_number(typed)
 	if wanted then
-		local best, best_distance
+		local best, best_distance ---@type integer?, number
 		for i, label in ipairs(labels) do
 			local number = slider_snap.parse_number(label)
 			if number then

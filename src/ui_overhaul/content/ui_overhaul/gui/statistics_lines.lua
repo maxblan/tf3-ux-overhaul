@@ -5,7 +5,8 @@
 --     value it displays (base: by the sum over the line's current vehicles)
 -- A Lua conversion of the base tab (gui/statistics/statistic_lines.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_lines.script.lua). If rendering fails, the base tab is shown.
+-- (statistics_lines.script.lua). If rendering fails, the base tab is shown for the rest of the
+-- session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_lines
 local builtin = require("::/gui/main/builtin.lua")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
@@ -21,6 +22,7 @@ local statistics_react_util = require("::/gui/statistics/statistics_react_util.t
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
 local base_lines_statistic = require("::/gui/statistics/statistic_lines.tl")
 local statistics_common = require("/ui_overhaul/gui/statistics_common.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_lines = {}
 
@@ -377,12 +379,10 @@ local function render(params)
 	}
 end
 
-local Replacement = react.RegisterRecipe("LinesStatistic", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] statistics lines tab failed, showing the base tab: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_lines_statistic, params) } }
-end)
+statistics_lines.switch = fallback.switch("statistics lines tab")
+-- The tab node keeps the base tab's focus child and api (statistics.tl reads getVisualizeLines).
+local Replacement = fallback.replacement(statistics_lines.switch, "LinesStatistic", render,
+	base_lines_statistic, { focus = true, api = { "getVisualizeLines" } })
 
 --- Called from the react-replacement-config before the UI starts.
 function statistics_lines.install(replacement_api)

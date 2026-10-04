@@ -145,10 +145,10 @@ The full entries follow, in the same order. Section 4 lists vanilla bugs, sectio
   - The state is per-window `useState`, so everything is collapsed again on reopen.
 - Change: a section you opened stays open next time for that kind of window, and opening one no longer closes the others.
 - No load: nothing new to see; the window stops forgetting.
-- Route: monkey-patch `content_card.makeContentCardsCollapsibleFunctions` (module function :457) with a module-level `remembered[key]`.
+- Route: wrap `content_card.makeContentCardsCollapsibleFunctions` (module function :457) with a module-level `remembered[key]`; the wrap calls the previous function, so mods that patched it first still run.
   - `isExpanded` falls back to `remembered`; updates write both.
-  - Ignore `onlyOneExpandable`.
-  - Keep key `""` (collapse all, don't remember), which vehicle.tl:497 uses before Modify.
+  - Sections go through the previous function with `onlyOneExpandable = false`.
+  - Keep key `""` (collapse all, don't remember), which vehicle.tl:501 uses before Modify: it goes through with the caller's `onlyOneExpandable`, and a window state holding `""` no longer falls back to `remembered`, so remembered sections close too and stay closed in that window, as in the base game.
 - Caveats:
   - With Input and Output both open, the industry flow arrows show only the inputs (`if/elseif`, industry.tl:330-357).
   - An expanded card registers its own `IA_MENU_BACK` (content_card.tl:356-360). Check the Esc order in game.

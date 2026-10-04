@@ -24,8 +24,8 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 ### Line window
 
 - Each vehicle in the Vehicles card shows its load and a condition icon, with the next stop, speed, load, condition and delivery quality in the tooltip.
-- The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there.
-- A Stops card lists every stop with its waiting passengers and a *Select Terminals* button. The tooltip adds waiting cargo.
+- The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there. When the game refuses (not enough money, a vehicle a mission protects, no depot), the card says why under the buttons, as the vehicle window does.
+- A Stops card lists every stop with everything waiting there (passengers and cargo) and a *Select Terminals* button. The tooltip splits it by passengers and cargo type, and the column sorts by it.
 - A stop the line's vehicles cannot reach (no path into it, or an incompatible or doubled stop) is greyed with an alert icon. Its tooltip gives the game's own problem text, such as "Missing catenaries".
 
 ### Vehicle window

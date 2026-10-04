@@ -2,6 +2,7 @@
 
 local EN_ROUTE, IN_DEPOT = 1, 0
 local world, calls
+local timer -- the row's useStepStateTimer: { fn, interval, value }
 
 -- Stand-ins for the base modules lvm_models.lua loads.
 package.loaded["::/gui/main/react.lua"] = {
@@ -10,6 +11,20 @@ package.loaded["::/gui/main/react.lua"] = {
 package.loaded["::/gui/main/builtin.lua"] = setmetatable({
 	type = { Orientation = {}, ScrollBarPolicy = {} },
 }, { __index = function(_t, kind) return function(p) return { kind = kind, params = p } end end })
+package.loaded["::/gui/main/engine_react_util.tl"] = {
+	useStepStateTimer = function(fn, interval)
+		if not timer then timer = { fn = fn, interval = interval, value = fn(nil) } end
+		timer.fn = fn
+		return { old = function() return timer.value end }
+	end,
+}
+local function deep_equals(a, b)
+	if type(a) ~= "table" or type(b) ~= "table" then return a == b end
+	for k, v in pairs(a) do if not deep_equals(v, b[k]) then return false end end
+	for k in pairs(b) do if a[k] == nil then return false end end
+	return true
+end
+package.loaded["::/scripts/table_util.tl"] = { deepEquals = deep_equals }
 package.loaded["::/scripts/lang_util.tl"] = {
 	format = function(text, values) return (text:gsub("{(%w+)}", function(k) return tostring(values[k]) end)) end,
 	formatInt = tostring,
@@ -86,6 +101,22 @@ end
 
 local function ear(v) return { entity = v, revision = { num = { 1, 0, 0 } } } end
 
+--- One step of the row's timer, as useStepStateTimer runs it.
+local function tick()
+	timer.value = timer.fn(timer.value)
+	return timer.value
+end
+
+--- Replaces vehicle `v` in place (makeVehicleReplaceCmd keeps the id) with model ids `ids`.
+local function replace(v, ids) world.vehicles[v].ids = ids end
+
+--- Renders the row node that update() returned; returns the layout and the chips' buttons.
+local function render(row)
+	local node = row.fn(row.params)
+	local inner = node.params.children and node.params.children[1].params.layout.params.children
+	return node, inner and inner[1].params.content.params.layout.params.children, inner and inner[2].params
+end
+
 --- VehicleList parameters for a list with `selected` and `unselected` vehicles.
 local function list(selected, unselected)
 	local s, u, vehicles = {}, {}, {}
@@ -122,6 +153,7 @@ local LINES = { [100] = { 11, 12, 13, 14 }, [200] = { 21, 22, 23 }, [300] = { 31
 describe("lvm_models", function()
 	before_each(function()
 		install(FLEET, LINES)
+		timer = nil
 		package.loaded["/ui_overhaul/gui/lvm_models.lua"] = nil
 		lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
 	end)
@@ -161,8 +193,88 @@ describe("lvm_models", function()
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 14 }).groups))
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 12 }).groups))
 		assert.is_false(lvm_models.row_visible(lvm_models.view({ 31, 32 }).groups))
-		assert.is_nil(lvm_models.update(list({ 31, 32 }, {})))
-		assert.are.equal("UioLvmModels", lvm_models.update(list({ 11 }, { 14 })).recipe)
+		local row = lvm_models.update(list({ 31, 32 }, {}))
+		assert.are.equal("UioLvmModels", row.recipe) -- stays mounted, so its refresh can show it later
+		local node, chips = render(row)
+		assert.are.equal("BoxLayout", node.kind)
+		assert.is_nil(chips)
+		assert.are.equal(2, #select(2, render(lvm_models.update(list({ 11 }, { 14 })))))
+	end)
+
+	it("re-reads the models after a Replace that keeps the vehicle ids", function()
+		local row = lvm_models.update(list({ 11, 12, 13, 14 }, {}))
+		lvm_models.view({ 11, 12, 13, 14 })
+		local reads = calls.components
+		render(row)
+		assert.are.equal(reads, calls.components) -- mounting the timer reads nothing
+		assert.are.equal(3, lvm_models.view({ 11, 12, 13, 14 }).by_key["1"].count)
+		local view, stamp = lvm_models.view({ 11, 12, 13, 14 }), tick()
+		assert.are.equal(view, lvm_models.view({ 11, 12, 13, 14 })) -- nothing changed: same view
+		assert.are.equal(stamp, tick())
+
+		replace(12, { 2 })
+		replace(13, { 2 })
+		assert.truthy(tick() ~= stamp)
+		view = lvm_models.view({ 11, 12, 13, 14 })
+		assert.are.equal(1, view.by_key["1"].count)
+		assert.are.equal(3, view.by_key["2"].count)
+		assert.are.equal("2", view.by_entity[12])
+		local _node, chips, pull = render(row)
+		assert.are.equal(2, #chips)
+		assert.are.same({ 12, 13, 14 }, chips[1].params.content.widget.vehicleEntities)
+		assert.are.equal("Select vehicles of one model first", pull.meta.tooltip)
+	end)
+
+	it("selects by the models the vehicles have now, before the row refreshed", function()
+		local params = list({ 11, 12, 13, 14 }, {})
+		lvm_models.update(params)
+		assert.are.equal(3, lvm_models.view({ 11, 12, 13, 14 }).by_key["1"].count)
+		replace(12, { 2 })
+		assert.are.equal(2, lvm_models.select_model("1"))
+		local state = params.commonParams.vehicleManagerStateRef:get()
+		assert.are.same({ 11, 13 }, entities(state.vehicleListEntitiesSelected))
+
+		replace(13, { 2 })
+		world.shift = true
+		assert.is_true(lvm_models.select_same_model(13))
+		state = params.commonParams.vehicleManagerStateRef:get()
+		assert.are.same({ 12, 13, 14 }, entities(state.vehicleListEntitiesSelected))
+
+		assert.are.equal(4, lvm_models.pull_model("2")) -- 12, 13, 14 and line 200's 23
+		state = params.commonParams.vehicleManagerStateRef:get()
+		assert.are.same({ 12, 13, 14, 23 }, entities(state.vehicleListEntitiesSelected))
+	end)
+
+	it("follows the other lines' fleets", function()
+		local row = lvm_models.update(list({ 14 }, {}))
+		local pull = select(3, render(row))
+		assert.are.equal("Select all 2 Volvo from all lines", pull.meta.tooltip) -- 14 and 23
+
+		world.vehicles[24] = { ids = { 2 }, line = 200, rev = 1, carrier = 0, state = EN_ROUTE }
+		world.lines[200] = { 21, 22, 23, 24 }
+		tick()
+		pull = select(3, render(row))
+		assert.are.equal("Select all 3 Volvo from all lines", pull.meta.tooltip)
+
+		replace(23, { 1 })
+		replace(24, { 1 })
+		tick()
+		assert.are.equal(0, lvm_models.view({ 14 }).by_key["2"].more)
+		local node, chips = render(row)
+		assert.are.equal("BoxLayout", node.kind) -- one model no other line uses: hidden
+		assert.is_nil(chips)
+	end)
+
+	it("logs whether the row shows what the engine has", function()
+		render(lvm_models.update(list({ 11, 12, 13, 14 }, {})))
+		lvm_models.debug({ action = "verify" })
+		assert.truthy(world.log[#world.log]:find("models=3+2 1+1 ok", 1, true))
+		replace(12, { 2 })
+		lvm_models.debug({ action = "verify" })
+		assert.truthy(world.log[#world.log]:find("models=2+2 2+1 STALE", 1, true))
+		tick()
+		lvm_models.debug({ action = "verify" })
+		assert.truthy(world.log[#world.log]:find("ok", 1, true))
 	end)
 
 	it("targets the selection's single model, else the list's only model", function()
@@ -205,7 +317,11 @@ describe("lvm_models", function()
 	it("adds a model's vehicles from all lines, selected, and unselects the rest", function()
 		local params = list({ 11, 14 }, {})
 		lvm_models.update(params)
+		lvm_models.view({ 11, 14 })
+		local reads = calls.components
 		assert.are.equal(5, lvm_models.pull_model("1"))
+		-- one pass over the fleet (11, 14 and the 7 vehicles of other lines), then make_state's 6 entries
+		assert.are.equal(2 + 7 + 6, calls.components - reads)
 		local state = params.commonParams.vehicleManagerStateRef:get()
 		assert.are.same({ 11, 12, 13, 21, 22 }, entities(state.vehicleListEntitiesSelected))
 		assert.are.same({ 14 }, entities(state.vehicleListEntitiesUnselected))
@@ -231,13 +347,9 @@ describe("lvm_models", function()
 	end)
 
 	it("renders one button per model and the 'In all lines' button for the selected model", function()
-		local row = lvm_models.update(list({ 11, 12 }, { 14 }))
-		local node = row.fn(row.params)
-		local inner = node.params.children[1].params.layout.params.children
-		local chips = inner[1].params.content.params.layout.params.children
+		local _node, chips, pull = render(lvm_models.update(list({ 11, 12 }, { 14 })))
 		assert.are.equal(2, #chips)
 		assert.are.equal("vehicle-button, selected", chips[1].params.meta.class)
-		local pull = inner[2].params
 		assert.is_true(pull.meta.enabled)
 		assert.are.equal("Select all 5 Isuzu from all lines", pull.meta.tooltip)
 	end)

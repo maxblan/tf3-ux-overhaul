@@ -6,7 +6,8 @@
 --   * the Age cell turns red once the lifetime is reached, with the lifetime tooltip of the line window
 -- A Lua conversion of the base tab (gui/statistics/statistic_vehicles.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_vehicles.script.lua). If rendering fails, the base tab is shown.
+-- (statistics_vehicles.script.lua). If rendering fails, the base tab is shown for the
+-- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_vehicles
 local builtin = require("::/gui/main/builtin.lua")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
@@ -23,6 +24,7 @@ local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local base_vehicles_statistic = require("::/gui/statistics/statistic_vehicles.tl")
 local statistics_common = require("/ui_overhaul/gui/statistics_common.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_vehicles = {}
 
@@ -176,11 +178,15 @@ local VehicleAgeCell = react.RegisterRecipe("VehicleAgeCell", function(params)
 	end)
 	local info = ageState:old()
 	local reached = info.timeRemaining == nil
-	-- the tooltip of the line window's vehicle list (entity_window/line/line_eow.script.tl)
-	local tooltip = reached and _("Lifetime Reached") or lang_util.format(_("{total} of Lifetime ({age} Remaining)"), {
-		total = api.util.toStringPercentPrecision((info.agePercent or 0) / 100, 0),
-		age = info.timeRemaining,
-	})
+	-- the tooltip of the line window's vehicle list (entity_window/line/line_eow.script.tl); the base cell
+	-- has none, so a failure here only leaves it out
+	local ok, tooltip = pcall(function()
+		return reached and _("Lifetime Reached") or lang_util.format(_("{total} of Lifetime ({age} Remaining)"), {
+			total = api.util.toStringPercentPrecision((info.agePercent or 0) / 100, 0),
+			age = info.timeRemaining,
+		})
+	end)
+	if not ok then tooltip = nil end
 	react.setStyleClasses(styleClassRightAligned)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
@@ -411,12 +417,10 @@ local function render(params)
 	}
 end
 
-local Replacement = react.RegisterRecipe("VehiclesStatistic", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] statistics vehicles tab failed, showing the base tab: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_vehicles_statistic, params) } }
-end)
+statistics_vehicles.switch = fallback.switch("statistics vehicles tab")
+-- The tab node keeps the base tab's focus child.
+local Replacement = fallback.replacement(statistics_vehicles.switch, "VehiclesStatistic", render,
+	base_vehicles_statistic, { focus = true })
 
 --- Called from the react-replacement-config before the UI starts.
 function statistics_vehicles.install(replacement_api)

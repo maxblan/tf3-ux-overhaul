@@ -7,7 +7,8 @@
 --     upkeep
 -- A Lua conversion of the base tab (gui/statistics/statistic_warehouses.tl), registered under the
 -- base recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_warehouses.script.lua). If rendering fails, the base tab is shown.
+-- (statistics_warehouses.script.lua). If rendering fails, the base tab is shown for the
+-- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_warehouses
 local builtin = require("::/gui/main/builtin.lua")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
@@ -22,8 +23,17 @@ local statistics_react_util = require("::/gui/statistics/statistics_react_util.t
 local table_util = require("::/scripts/table_util.tl")
 local base_warehouses_statistic = require("::/gui/statistics/statistic_warehouses.tl")
 local statistics_common = require("/ui_overhaul/gui/statistics_common.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_warehouses = {}
+
+-- The mod's own cells log a failure once and stay empty.
+local reported = {}
+local function report(key, err)
+	if reported[key] then return end
+	reported[key] = true
+	debugPrint("[ui_overhaul] statistics warehouses ", key, " failed: ", tostring(err))
+end
 
 local styleClassRightAligned = "right-aligned"
 local SHOWN_CARGOS = 4 -- icons with quantities that fit the Stocks column
@@ -130,13 +140,8 @@ local function cargo_name(id)
 	return api.res.cargoTypeRep.get(id).name
 end
 
-local WarehouseCargoTypesCell = react.RegisterRecipe("WarehouseCargoTypesCell", function(params)
-	local entity = params.rowKey
-	local state = engine_react_util.useStepStateTimer(function()
-		local ok, data = pcall(statistics_warehouses.read_cached, entity)
-		return ok and data or nil
-	end, 1.0)
-	local data = state:old()
+-- The cargo cell's content; `data` from statistics_warehouses.read_cached, or nil.
+local function render_cargo_cell(data)
 	local children = {}
 	if data and #data.cargos > 0 then
 		local all_lines = {}
@@ -183,6 +188,19 @@ local WarehouseCargoTypesCell = react.RegisterRecipe("WarehouseCargoTypesCell", 
 			},
 		},
 	}
+end
+
+local WarehouseCargoTypesCell = react.RegisterRecipe("WarehouseCargoTypesCell", function(params)
+	local entity = params.rowKey
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, data = pcall(statistics_warehouses.read_cached, entity)
+		return ok and data or nil
+	end, 1.0)
+	-- the mod's own cell (the base one lists accepted cargo only): it guards itself
+	local ok, node = pcall(render_cargo_cell, state:old())
+	if ok then return node end
+	report("cargo cell", node)
+	return builtin.BoxLayout{}
 end)
 
 local function number_cell(name, value_fn, format)
@@ -193,6 +211,11 @@ local function number_cell(name, value_fn, format)
 			return ok and value or 0
 		end)
 		react.setStyleClasses(styleClassRightAligned)
+		local ok, text = pcall(format, state:old())
+		if not ok then
+			report(name, text)
+			text = ""
+		end
 		return builtin.BoxLayout{
 			orientation = builtin.type.Orientation.Horizontal,
 			children = {
@@ -200,7 +223,7 @@ local function number_cell(name, value_fn, format)
 					meta = { forceFocusable = true },
 					layout = builtin.BoxLayout{
 						orientation = builtin.type.Orientation.Horizontal,
-						children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = format(state:old()) } },
+						children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = text } },
 					},
 				},
 			},
@@ -399,12 +422,10 @@ local function render(params)
 	}
 end
 
-local Replacement = react.RegisterRecipe("WarehousesStatistic", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] statistics warehouses tab failed, showing the base tab: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_warehouses_statistic, params) } }
-end)
+statistics_warehouses.switch = fallback.switch("statistics warehouses tab")
+-- The tab node keeps the base tab's focus child.
+local Replacement = fallback.replacement(statistics_warehouses.switch, "WarehousesStatistic", render,
+	base_warehouses_statistic, { focus = true })
 
 --- Called from the react-replacement-config before the UI starts.
 function statistics_warehouses.install(replacement_api)

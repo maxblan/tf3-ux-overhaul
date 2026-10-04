@@ -11,10 +11,11 @@
 -- are hidden as before and come back afterwards.
 -- A copy of the vanilla builtin.ToolStack (gui/main/builtin.lua) with these rules marked "UIO";
 -- installed through a react-replacement-config (tool_stack.script.lua). If rendering fails, the
--- vanilla tool stack is used.
+-- vanilla tool stack is used for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.tool_stack
 local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local tool_stack = {}
 
@@ -283,12 +284,21 @@ local function render(params)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
 end
 
-local Replacement = react.RegisterRecipe("ToolStack", function(params)
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] tool stack failed, using the vanilla one: ", tostring(node))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(builtin.ToolStack, params) } }
-end)
+--- Marked failed once rendering failed: the vanilla tool stack is used for the rest of the session.
+-- Never per render: the stack's state (the open tools) lives in the shown recipe, so every switch
+-- closes them.
+tool_stack.switch = fallback.switch("tool stack")
+
+-- The game holds a ref to this node (game.tl) and pushes and pops tools through its api, so the node
+-- provides the api of the stack it shows, and keeps the vanilla stack's own settings.
+local Replacement = fallback.replacement(tool_stack.switch, "ToolStack", render, builtin.ToolStack, {
+	api = { "push", "pop", "clear", "setActionsDisabled", "getActiveTool" },
+	internals = function()
+		react.setName("ToolStack")
+		react.setDisableFocusable(true)
+		react.setMouseTransparent(true)
+	end,
+})
 
 --- Called from the react-replacement-config before the UI starts.
 function tool_stack.install(replacement_api)

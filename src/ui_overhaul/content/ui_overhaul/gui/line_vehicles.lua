@@ -1,13 +1,14 @@
 --- The line window's "Vehicles" card with two vanilla action buttons under the vehicle table:
 -- "Add Vehicle" (clone the line's newest vehicle onto the line) and "Remove Vehicle" (send the
 -- oldest to a depot and sell it there). Adding or removing a vehicle no longer needs the Line
--- Manager or the vehicle store. Each vehicle row also shows its load and a condition icon between
--- the name and the vehicle icon; their tooltip names the next stop, speed, load, condition and
--- delivery quality (vehicle_info.lua).
+-- Manager or the vehicle store. Like the vehicle window, the card lists under its buttons why the
+-- game refused (no money, mission lock, protected vehicle, no depot). Each vehicle row also shows
+-- its load and a condition icon between the name and the vehicle icon; their tooltip names the
+-- next stop, speed, load, condition and delivery quality (vehicle_info.lua).
 -- Replaces the exported base plugin recipe line_eow.LineVehiclesPlugin (react-replacement-config,
 -- see line_vehicles.script.lua). The vehicle table is a copy of the base one, registered under the
--- base recipe names so the base stylesheet applies unchanged. If rendering fails, the base card is
--- shown instead.
+-- base recipe names so the base stylesheet applies unchanged. If the card fails, the base card is
+-- shown for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.line_vehicles
 local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
@@ -18,11 +19,23 @@ local line_eow = require("::/gui/entity_window/line/line_eow.script.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
+local feedback_list_util = require("::/gui/line_vehicle_mgmt/feedback_list_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local actions = require("/ui_overhaul/gui/actions.lua")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
+local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local line_vehicles = {}
+
+--- Marked failed once the card failed: the base card is shown for the rest of the session.
+line_vehicles.switch = fallback.switch("line vehicles card")
+
+local reported = {}
+local function report(key, err)
+	if reported[key] then return end
+	reported[key] = true
+	debugPrint("[ui_overhaul] line vehicles card: ", key, " failed: ", tostring(err))
+end
 
 local function horizontal(children)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
@@ -32,13 +45,8 @@ local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
 
--- Load and condition of a vehicle, the five figures in the tooltip.
-local Status = react.RegisterRecipe("UioLineVehicleStatus", function(params)
-	local state = engine_react_util.useStepStateTimer(function()
-		local ok, info = pcall(vehicle_info.read, params.vehicle)
-		return ok and info or nil
-	end, 1.0)
-	local info = state:old()
+-- The status cell's content; `info` from vehicle_info.read, or nil.
+local function render_status(info)
 	if not info then return horizontal{} end
 	local ok, tooltip = pcall(vehicle_info.tooltip, info, false)
 	tooltip = ok and tooltip or nil
@@ -58,6 +66,18 @@ local Status = react.RegisterRecipe("UioLineVehicleStatus", function(params)
 			} or nil,
 		},
 	}
+end
+
+-- Load and condition of a vehicle, the five figures in the tooltip.
+local Status = react.RegisterRecipe("UioLineVehicleStatus", function(params)
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, info = pcall(vehicle_info.read, params.vehicle)
+		return ok and info or nil
+	end, 1.0)
+	local ok, node = pcall(render_status, state:old())
+	if ok then return node end
+	report("vehicle status", node)
+	return horizontal{}
 end)
 
 -- Copy of base LineTableCellVehicle (line_eow.script.tl), same name for the base stylesheet; the
@@ -123,31 +143,65 @@ end)
 
 local Content = react.RegisterRecipe("UioLineVehicles", function(params)
 	local line, game_ctx = params.line, params.gameCtx
-	local function protected(vehicle)
-		local filters = game_ctx and game_ctx.filters and game_ctx.filters:get()
-		return filters and filters.protectedEntities and filters.protectedEntities[vehicle]
+	-- The base handlers report why they did not act (money, mission, depot) through addFeedback; the
+	-- vehicle window shows that in a feedback list under its action buttons (vehicle.tl), and so does
+	-- this card.
+	local feedback_ref = react.useNodeRef(feedback_list_util.FeedbackList)
+	---@type uo.actions.Feedback
+	local function add_feedback(message, mode, dialog_data, id)
+		if not feedback_ref:hasExpired() and feedback_ref:get() then
+			feedback_ref:get():getApi().addFeedback(message, mode, dialog_data, nil, id, true)
+		end
 	end
-	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = {
-		Table(line),
-		entity_window_util.ActionButtonBar{
-			primaryButtons = {
-				{
-					description = _("Add Vehicle"),
-					icon = "::/gui/entity_window/icons/symbol_square_copy.tga",
-					onClick = function() actions.add_vehicle(line) end,
-					sound = "Buy",
-					tag = "uio.line.add_vehicle",
-				},
-				{
-					description = _("Remove Vehicle"),
-					icon = "::/gui/entity_window/icons/building_depot_arrow.tga",
-					onClick = function() actions.remove_vehicle(line, protected) end,
-					sound = "SendToDepot",
-					tag = "uio.line.remove_vehicle",
+	---@return uo.actions.Protected?
+	local function protected_entities()
+		local filters = game_ctx and game_ctx.filters and game_ctx.filters:get()
+		return filters and filters.protectedEntities
+	end
+	-- The vehicle window's "Sell" has no sound while the vehicle is protected (vehicle.tl:535); the
+	-- refused click shows the reason instead. Read on a timer, since filters is a ref and a mission's
+	-- change alone does not render the card again.
+	local refused = engine_react_util.useStepStateTimer(function()
+		local ok, result = pcall(function() return actions.remove_refused(line, protected_entities()) end)
+		if ok then return result end
+		report("protected vehicles", result)
+		return false
+	end)
+	local function add() actions.add_vehicle(line, add_feedback) end
+	local function remove() actions.remove_vehicle(line, add_feedback, protected_entities()) end
+	-- testbench: what the two buttons do, for a line window showing `param.line`
+	react.onEvent("uio.debug.line_vehicles", function(_e, param)
+		if type(param) ~= "table" or param.line ~= line then return end
+		if param.action == "add" then add() elseif param.action == "remove" then remove() end
+	end)
+	local ok, node = pcall(function()
+		return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = {
+			Table(line),
+			entity_window_util.ActionButtonBar{
+				primaryButtons = {
+					{
+						description = _("Add Vehicle"),
+						icon = "::/gui/entity_window/icons/symbol_square_copy.tga",
+						onClick = add,
+						sound = "Buy",
+						tag = "uio.line.add_vehicle",
+					},
+					{
+						description = _("Remove Vehicle"),
+						icon = "::/gui/entity_window/icons/building_depot_arrow.tga",
+						onClick = remove,
+						sound = not refused:old() and "SendToDepot" or nil,
+						tag = "uio.line.remove_vehicle",
+					},
 				},
 			},
-		},
-	} }
+			feedback_list_util.FeedbackList(react.ref(feedback_ref), {}),
+		} }
+	end)
+	if ok then return node end
+	-- after its hooks, so the card declares the same ones; the parent shows the base card from now on
+	fallback.fail(line_vehicles.switch, node)
+	return builtin.BoxLayout{}
 end)
 
 local function render(params)
@@ -164,13 +218,14 @@ local function render(params)
 	} }
 end
 
+-- The card's hooks are in its content recipe; this one declares fallback.use_base's two, always.
 local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
-	if params.ownershipState ~= "Player" then
-		return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
+	local use_base = fallback.use_base(line_vehicles.switch)
+	if not use_base and params.ownershipState == "Player" then
+		local ok, node = pcall(render, params)
+		if ok then return node end
+		fallback.fail(line_vehicles.switch, node)
 	end
-	local ok, node = pcall(render, params)
-	if ok then return node end
-	debugPrint("[ui_overhaul] line vehicles card failed, showing the base card: ", tostring(node))
 	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
 end)
 
