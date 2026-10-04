@@ -32,7 +32,7 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 
 - Hovering a vehicle on the map shows, under its name, its line, next stop, speed (or why it stands), load, condition and delivery quality (passenger happiness, cargo on time).
 
-- Trains and trams get a Performance card: the game's rating (Poor to Excellent) and the top speed on flat track and on medium and steep slopes, with the time and distance to reach it, fully loaded and without load. In the vehicle store's composition, the Performance row's tooltip shows the same.
+- Vehicles with power get a Performance card: the game's rating (Poor to Excellent) and a table of the top speed on flat track and on medium and steep slopes, with the time and distance to reach it, fully loaded or without load. In the vehicle store's composition, the Performance row's tooltip shows the same.
 
 ### Statistics
 
@@ -44,7 +44,7 @@ The Lines, Vehicles and Stations tabs get quick filters above the table and the 
 | Vehicles | All, Losing money, Problems, Old | vehicles, balance |
 | Stations | All, Problems, Crowded, No lines | stations, upkeep |
 
-The Warehouses tab shows each cargo's icon with its quantity, the largest first, and has the quick filters All, Full and Empty with the totals (warehouses, stored of capacity, upkeep). The cargo icons above the table list the warehouses that hold or take one cargo and sort the Stocks column by its quantity.
+The Warehouses tab shows each cargo's icon with its quantity, the largest first, and has the quick filters All, Full and Empty with the totals (warehouses, stored of capacity, upkeep). A cargo drop-down next to the quick filters lists the warehouses that hold one cargo and sorts the Stocks column by its quantity.
 
 Sorting is fixed where vanilla sorts by something other than what it shows: line vehicle counts, line balance, vehicle age (ascending is now youngest first) and station utilization. Vehicle ages are red once the lifespan is reached. *No lines* lists your stations that no line uses, which vanilla hides.
 
@@ -55,7 +55,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
-- Entity windows (vehicle, line, station, town, industry ...) have a minimize button in the top right corner of their content: it folds the window to its title bar and a restore button, and keeps its place.
+- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the close button's design: it folds the window to its title bar, keeps its place and its content.
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
 
@@ -95,7 +95,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 ### Subsidies
 
-- Subsidy icons in the notification row show their state: offers and active subsidies keep their purple, a subsidy whose effect is active is green and a missed one grey. The timer ring is easier to read and turns amber when half the time is gone and red at the last quarter.
+- Subsidy icons in the notification row show their state: offers and active subsidies keep their purple, a subsidy whose effect is active is green and a missed one grey. Their timer ring is drawn in plain white.
 - Offers have a ring and a bar for the time until the offer ends, and the card says "Time limit: 2 years - Offer ends in 3 months". Active subsidies say "Time limit" and "1 year 3 months left"; completed ones show how long their effect lasts.
 
 ### Game bar and vehicle store
@@ -115,7 +115,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
   - the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar.
 
   Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
-- It also wraps some vanilla functions, which other mods can wrap as well: the popover window content (terminal buttons; works together with Auto Assign Terminals), the slider widget and the construction sliders, the entity window content (minimize), the subsidy card texts, the default map action (catchment areas) and the store's performance rating.
+- It also wraps some vanilla functions, which other mods can wrap as well: the popover window content (terminal buttons; works together with Auto Assign Terminals), the slider widget and the construction sliders, windows (minimize, and window recipe registration), the subsidy card texts, the default map action (catchment areas) and the store's performance rating.
 - Terminal mods:
   - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
   - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.
