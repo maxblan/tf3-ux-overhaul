@@ -68,4 +68,45 @@ describe("line_problems", function()
 		assert.is_nil(line_problems.incompatibility({ carriers = { RAIL = true }, cargo = true },
 			{ carriers = { RAIL = true }, passengers = true, cargo = true }))
 	end)
+
+	it("finds the problems that keep vehicles from reaching a stop", function()
+		local stops = {
+			{ name = "A", terminal0 = 0, stopIndex = 1 },
+			{ name = "wp", terminal0 = W },
+			{ name = "B", terminal0 = 1, stopIndex = 2 },
+			{ name = "C", terminal0 = 0, stopIndex = 3 },
+		}
+		-- wp -> B has no path; C is incompatible; C -> A has no path
+		local segments = {
+			{ {}, { noPath = true, reason = "Catenary" } },
+			{ {} },
+			{ { incompatible = true, noPath = true } },
+		}
+		local b = line_problems.stop_problems(stops, segments, 2)
+		assert.are.equal(1, #b)
+		assert.are.equal("no_path", b[1].kind)
+		assert.are.equal("Catenary", b[1].params.reason)
+		assert.are.same({}, line_problems.stop_problems(stops, segments, 4))
+		local c = line_problems.stop_problems(stops, segments, 3)
+		assert.are.equal("incompatible", c[1].kind)
+		-- A is reached from C, whose state is "incompatible" (not a path problem into A)
+		assert.are.same({}, line_problems.stop_problems(stops, segments, 1))
+		local segments2 = { { {}, {} }, { {} }, { { noPath = true } } }
+		assert.are.equal("no_path", line_problems.stop_problems(stops, segments2, 1)[1].kind)
+	end)
+
+	it("finds the stops around an insert position, skipping waypoints", function()
+		local a, b, c = { stop = "A" }, { stop = "B" }, { stop = "C" }
+		local path = { a, {}, b, c }
+		local before, after = line_problems.neighbours(path, 2) -- after the waypoint
+		assert.are.equal(a, before)
+		assert.are.equal(b, after)
+		before, after = line_problems.neighbours(path, nil) -- at the end: wraps to the first stop
+		assert.are.equal(c, before)
+		assert.are.equal(a, after)
+		before, after = line_problems.neighbours(path, 1)
+		assert.are.equal(a, before)
+		assert.are.equal(b, after)
+		assert.is_nil(line_problems.neighbours({}, 1))
+	end)
 end)

@@ -9,6 +9,9 @@
 --     double the whole fleet without asking
 --   * reopening the Line Manager without a target (game bar button, hotkey) selects the line that
 --     was selected when it was closed, instead of starting empty
+--   * the "Add stop at ..." hover says when vehicles could not get there: no path from the stop
+--     before the insert position, or onward to the next stop (the engine's path search with the
+--     line's transport modes), in the game's own words
 --   * a row of the list's vehicle models above the vehicle list, and Shift+click on a vehicle row
 --     to select its model (lvm_models.lua); a new line started from vehicles of two or more lines
 --     starts empty, like one started with several lines selected
@@ -21,8 +24,11 @@ local builtin = require("::/gui/main/builtin.lua")
 local lang_util = require("::/scripts/lang_util.tl")
 local vehicle_list_react_util = require("::/gui/line_vehicle_mgmt/vehicle_list_react_util.tl")
 local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
+local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
+local manager_tooltips_util = require("::/gui/line_vehicle_mgmt/manager_tooltips_util.tl")
 local tool_stack = require("/ui_overhaul/gui/tool_stack.lua")
 local lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
+local line_problems = require("/ui_overhaul/core/line_problems.lua")
 
 local lvm_tweaks = {}
 
@@ -194,6 +200,89 @@ local function patch_handle_vehicle_changes()
 	end
 end
 
+-- Add-stop hover ----------------------------------------------------------------------------------
+
+-- Vehicle nodes of the terminals of a stop: one terminal, one station or the whole group.
+local function terminal_nodes(station_group, station_index1, terminal_index1)
+	local group = api.engine.getComponent(station_group, api.type.ComponentType.STATION_GROUP)
+	local nodes = {}
+	for s, station_entity in ipairs(group and group.stations or {}) do
+		if not station_index1 or station_index1 < 1 or s == station_index1 then
+			local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+			for t, terminal in ipairs(station.terminals) do
+				if not terminal_index1 or terminal_index1 < 1 or t == terminal_index1 then
+					nodes[#nodes + 1] = terminal.vehicleNodeId
+				end
+			end
+		end
+	end
+	return nodes
+end
+
+local function via_nodes(via)
+	return terminal_nodes(via.stop.stationGroup, via.stop.station1, via.stop.terminal1)
+end
+
+local reach_cache = { key = nil, value = nil }
+
+--- { origin, destination } (station group entities) of the first missing path that adding `pick`
+-- would create, or false. Cached per hovered stop, as the hover re-renders every frame.
+local function missing_path(pick)
+	local line_state = current and current.lineState and current.lineState:old()
+	if not (line_state and line_state.entityAndRevision and pick and pick.stationGroup) then return false end
+	local line = line_state.entityAndRevision.entity
+	local mode = current.getModeState and current.getModeState() or {}
+	local insert_at = mode[1] == "SEGMENT" and mode[2] or nil
+	local key = table.concat({ line, #line_state.path, pick.stationGroup, pick.stationIndex1 or 0,
+		pick.terminalIndex1 or 0, tostring(insert_at) }, ":")
+	if reach_cache.key == key then return reach_cache.value end
+	local value = false
+	local modes = {}
+	for transport_mode, on in pairs(api.engine.util.line.getLineTransportModesUnion(line) or {}) do
+		if on then modes[#modes + 1] = transport_mode end
+	end
+	local before, after = line_problems.neighbours(line_state.path, insert_at)
+	if #modes > 0 and before then
+		local here = terminal_nodes(pick.stationGroup, pick.stationIndex1, pick.terminalIndex1)
+		local find = api.engine.util.pathfinding.findPathNodeToNode
+		if before.stop.stationGroup ~= pick.stationGroup and #find(via_nodes(before), here, modes) == 0 then
+			value = { origin = before.stop.stationGroup, destination = pick.stationGroup }
+		elseif after and after.stop.stationGroup ~= pick.stationGroup and #find(here, via_nodes(after), modes) == 0 then
+			value = { origin = pick.stationGroup, destination = after.stop.stationGroup }
+		end
+	end
+	reach_cache.key, reach_cache.value = key, value
+	return value
+end
+
+local function entity_name(entity)
+	return api.engine.util.getEntityName(entity) or _("Station")
+end
+
+-- Base text of the hover (manager_tooltips_util.tl, LMAddStop).
+local function add_stop_text(pick)
+	if pick.flatStationTerminalIndex1 ~= nil then
+		return lang_util.format(_("Add stop at {name} terminal {index}."), {
+			name = entity_name(pick.stationGroup), index = lang_util.formatInt(pick.flatStationTerminalIndex1),
+		})
+	end
+	return lang_util.format(_("Add stop at {name}."), { name = entity_name(pick.stationGroup) })
+end
+
+local AddStopTooltip = react.RegisterRecipe("LMAddStop", function(pick)
+	local ok, text = pcall(function()
+		local base = add_stop_text(pick)
+		local missing = missing_path(pick)
+		if not missing then return base end
+		return base .. "\n" .. lang_util.format(_("No path from {origin} to {destination} exists."), {
+			origin = entity_name(missing.origin), destination = entity_name(missing.destination),
+		})
+	end)
+	if ok then return line_react_util.makeTooltip(text) end
+	debugPrint("[ui_overhaul] add-stop hover failed: ", tostring(text))
+	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(manager_tooltips_util.LMAddStop, pick) } }
+end)
+
 -- Memory ------------------------------------------------------------------------------------------
 
 local function remember_selection(entry)
@@ -228,6 +317,7 @@ function lvm_tweaks.install(replacement_api)
 	patch_handle_vehicle_changes()
 	table.insert(tool_stack.on_pop, remember_selection)
 	replacement_api.ReplaceRecipe(vehicle_list_react_util.VehicleList, VehicleList)
+	replacement_api.ReplaceRecipe(manager_tooltips_util.LMAddStop, AddStopTooltip)
 end
 
 return lvm_tweaks

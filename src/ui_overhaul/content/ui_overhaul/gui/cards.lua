@@ -1,6 +1,8 @@
 --- Addition inside the vanilla line window, built from the game's own widgets and styles: a "Stops"
 -- card listing every stop with its waiting passengers (cargo in the tooltip) and a button for the
--- stop's terminals (the Line Manager's popover, terminals.lua), in the same table as the
+-- stop's terminals (the Line Manager's popover, terminals.lua). A stop the line's vehicles cannot
+-- reach (no path into it, or a duplicate or incompatible stop) is greyed with an alert icon, and its
+-- tooltip gives the game's own problem text. All in the same table as the
 -- vanilla vehicle list (DataTable, class "line-vehicles-table", NameTextView cells). The base line
 -- window shows no stops at all; the station window already lists waiting counts per terminal.
 -- Rendered by the guarded stubs in cards.script.lua. State functions run in timer callbacks and only
@@ -14,12 +16,19 @@ local cargo_util = require("::/gui/main/cargo_util.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+-- loaded at render time (guard.plugin): only fully qualified paths reach this mod
+local line_problems = require("ui_overhaul_1::/ui_overhaul/core/line_problems.lua")
+local ui = require("ui_overhaul_1::/ui_overhaul/gui/ui.lua")
 -- optional: without it the stops have no terminal button
 local terminals = guard.module("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
 
 local cards = {}
 
 local REFRESH = 1.0 -- seconds
+
+-- line -> plain problem data (terminals.read_problems), refreshed by the stops table's timer and read
+-- by its cells, so the engine's problem search runs once per line and refresh, not once per stop.
+local problems_by_line = {}
 
 local function horizontal(children)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
@@ -72,14 +81,40 @@ local UioStopCell = react.RegisterRecipe("UioStopCell", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 		local stop = component and component.stops[params.rowKey]
-		return stop and stop.stationGroup or nil
+		if not stop then return nil end
+		local data = problems_by_line[line]
+		return {
+			stationGroup = stop.stationGroup,
+			problems = data and line_problems.stop_problems(data.stops, data.segments, params.rowKey) or {},
+		}
 	end, REFRESH)
-	local station_group = state:old()
-	if not station_group then return horizontal{} end
+	local d = state:old()
+	if not d then return horizontal{} end
+	local reasons = {}
+	if terminals then
+		for _i, problem in ipairs(d.problems) do reasons[#reasons + 1] = terminals.problem_text(problem) end
+	end
+	local unreachable = #reasons > 0
+	local tooltip = unreachable and table.concat(reasons, "\n") or nil
 	return horizontal{
-		builtin.TextView{ meta = { class = "font-scale-body, uio-stop-index" }, text = string.format("%d.", params.rowKey) },
-		line_react_util.NameTextView{
-			entity = station_group, locationButton = true, stackEntityOpen = true, editMode = false,
+		builtin.Component{
+			meta = {
+				class = unreachable and "uio-stop-unreachable" or nil,
+				tooltip = tooltip,
+				id = unreachable and ("uio.card.line.stops.unreachable." .. tostring(line) .. "." .. params.rowKey) or nil,
+			},
+			layout = horizontal{
+				builtin.TextView{
+					meta = { class = "font-scale-body, uio-stop-index" }, text = string.format("%d.", params.rowKey),
+				},
+				line_react_util.NameTextView{
+					entity = d.stationGroup, locationButton = true, stackEntityOpen = true, editMode = false,
+				},
+				unreachable and builtin.ImageView{
+					meta = { class = "uio-stop-alert", tooltip = tooltip }, path = ui.ICONS.alert,
+					scaling = builtin.type.ImageViewScaling.AutoFit,
+				} or nil,
+			},
 		},
 		gui_react_util.makeHorizontalSpacer(), -- keeps name and pin left-aligned like the vehicle table
 		terminals and terminals.TerminalButton{
@@ -107,6 +142,10 @@ local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 		local keys = {}
 		for index = 1, component and #component.stops or 0 do keys[index] = index end
+		if terminals and component then
+			local ok, data = pcall(terminals.read_problems, line)
+			problems_by_line[line] = ok and data or nil
+		end
 		return keys
 	end, REFRESH)
 	return horizontal{

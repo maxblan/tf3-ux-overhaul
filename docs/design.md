@@ -25,7 +25,9 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Line Manager | *Select Terminals* with three buttons per terminal | `terminals.lua` | wraps the module function `popover_react_util.PopoverWindowContent`; swaps only a popover with the Line Manager's parameters |
 | Station window | *Select Terminals* button for each line stop in the Terminals list | `station_terminals.lua`, `terminals.lua` | wraps the global `orderedPairs` and `gui_react_util.makeHorizontalSpacer` while the file-local recipe `TerminalStops` renders; off while another mod replaces the station window |
 | Line window | *Add Vehicle* and *Remove Vehicle* in the Vehicles card | `line_vehicles.lua` | replaces `line_eow.LineVehiclesPlugin` |
-| Line window | Stops card, with a *Select Terminals* button per stop | `cards.lua`, `terminals.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
+| Line window | Stops card, with a *Select Terminals* button per stop; unreachable stops greyed with the base problem text | `cards.lua`, `terminals.lua`, `core/line_problems.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
+| Line Manager | *Select Terminals*: preferred terminal highlighted, unusable or unreachable terminals greyed with the reason | `terminals.lua`, `core/line_problems.lua` | as *Select Terminals* above |
+| Line Manager | add-stop hover names a missing path from the stop before or to the next | `lvm_tweaks.lua` | replaces `manager_tooltips_util.LMAddStop`; `api.engine.util.pathfinding.findPathNodeToNode` |
 | Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
 | Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |

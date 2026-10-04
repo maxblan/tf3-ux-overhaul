@@ -19,11 +19,13 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 - Reopening the Line Manager selects the line you had selected before.
 - Cloning or replacing more than one vehicle asks first, in the Line Manager's own prompt.
 - With two or more lines ticked, or vehicles from several lines selected, clicking a station creates the new line without moving those vehicles onto it.
+- When adding a stop, the hover says if vehicles could not get there from the stop before it, or on to the next stop.
 
 ### Line window
 
 - The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there.
 - A Stops card lists every stop with its waiting passengers and a *Select Terminals* button. The tooltip adds waiting cargo.
+- A stop the line's vehicles cannot reach (no path into it, or an incompatible or doubled stop) is greyed with an alert icon. Its tooltip gives the game's own problem text, such as "Missing catenaries".
 
 ### Statistics
 
@@ -68,7 +70,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
 - It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list and row icons, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar. It also wraps the popover window content to swap in the terminal buttons, which works together with Auto Assign Terminals. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list, row icons and add-stop hover, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar. It also wraps the popover window content to swap in the terminal buttons, which works together with Auto Assign Terminals. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
 - Terminal mods:
   - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
   - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.

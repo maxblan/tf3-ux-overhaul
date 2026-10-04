@@ -187,14 +187,19 @@ local function relaxation(location)
 	return line_util.getRelaxationType(location.okModes, location.relaxedModes, location.allowedModes)
 end
 
---- Plain copy of the line's stops and detailed problems for line_problems.index2problems. Engine
+--- Plain copy of the line's stops and detailed problems for line_problems.index2problems: stops and
+-- waypoints in line order (stops carry `stopIndex`, 1-based), segments of plain stop states. Engine
 -- reads only (timer callback): names untranslated, reasons as relaxation types.
-local function read_problems(line)
+function terminals.read_problems(line)
 	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 	if not component then return nil end
 	local stops = {}
-	for _i, stop in ipairs(component.stops) do
-		stops[#stops + 1] = { name = api.engine.util.getEntityName(stop.stationGroup), terminal0 = flat_terminal(stop) }
+	for stop_index, stop in ipairs(component.stops) do
+		stops[#stops + 1] = {
+			name = api.engine.util.getEntityName(stop.stationGroup),
+			terminal0 = flat_terminal(stop),
+			stopIndex = stop_index,
+		}
 		for _j in ipairs(stop.waypoints) do stops[#stops + 1] = { terminal0 = line_problems.WAYPOINT } end
 	end
 	local segments = {}
@@ -219,7 +224,7 @@ end
 -- Base text of a problem (line_manager_panel.tl, the same strings, kept on one line each so the strings
 -- check finds them). GUI thread only.
 -- luacheck: push ignore 631
-local function problem_text(problem)
+function terminals.problem_text(problem)
 	local q = problem.params
 	if problem.kind == "duplicate" then return _("The same station appears twice consecutively.") end
 	if problem.kind == "incompatible" then return _("The stop is incompatible.") end
@@ -264,7 +269,7 @@ end
 local function own_index2problems(data)
 	local result = line_problems.index2problems(data.stops, data.segments)
 	for _index, problems in pairs(result) do
-		for _i, problem in ipairs(problems) do problem.tooltip = problem_text(problem) end
+		for _i, problem in ipairs(problems) do problem.tooltip = terminals.problem_text(problem) end
 	end
 	return result
 end
@@ -347,7 +352,7 @@ local function render(params)
 	local own_problems = next(params.index2problems or {}) == nil
 	local problemsState = engine_react_util.useStepStateTimer(function(old)
 		if not own_problems then return nil end
-		local ok, result = pcall(read_problems, params.lineEntity)
+		local ok, result = pcall(terminals.read_problems, params.lineEntity)
 		if ok then return result end
 		report("problems", result)
 		return old

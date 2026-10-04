@@ -85,6 +85,48 @@ function line_problems.index2problems(stops, segments)
 	return result
 end
 
+--- Problems that keep vehicles from reaching stop `stop_index` (1-based, without waypoints): the path
+-- problem of the segment that ends at the stop (from the stop or waypoint before it, wrapping from
+-- the last), and a duplicate or incompatible stop at the stop itself. `stops` as for index2problems,
+-- each stop with its `stopIndex`. Returns a list of problems (possibly empty).
+function line_problems.stop_problems(stops, segments, stop_index)
+	local flat
+	for index, entry in ipairs(stops) do
+		if entry.stopIndex == stop_index then flat = index end
+	end
+	if not flat then return {} end
+	local all = line_problems.index2problems(stops, segments)
+	local result = {}
+	local before = flat - 1
+	if before < 1 then before = #stops end
+	for _i, problem in ipairs(all[before] or {}) do
+		if problem.kind ~= "duplicate" and problem.kind ~= "incompatible" then result[#result + 1] = problem end
+	end
+	for _i, problem in ipairs(all[flat] or {}) do
+		if problem.kind == "duplicate" or problem.kind == "incompatible" then result[#result + 1] = problem end
+	end
+	return result
+end
+
+--- The stops before and after insert position `insert_at` of a Line Manager path (the new stop goes
+-- after path[insert_at]; nil = at the end), skipping waypoints (entries without `stop`) and wrapping
+-- around. Returns before, after (path entries), nil for an empty path.
+function line_problems.neighbours(path, insert_at)
+	local count = #path
+	if count == 0 then return nil, nil end
+	insert_at = insert_at or count
+	local before, after
+	for i = 0, count - 1 do
+		local via = path[((insert_at - 1 - i) % count) + 1]
+		if via.stop then before = via break end
+	end
+	for i = 1, count do
+		local via = path[((insert_at - 1 + i) % count) + 1]
+		if via.stop then after = via break end
+	end
+	return before, after
+end
+
 --- Why vehicles of a line cannot use a terminal, or nil. `terminal` = { carriers = { carrier = true },
 -- passengers = bool, cargo = bool }; `line` = { carriers = { carrier = true } (empty: unknown),
 -- passengers = bool, cargo = bool } (what the line's vehicles carry; both false: unknown).
