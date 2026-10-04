@@ -1,6 +1,8 @@
 --- Station window, Terminals list: a "Select Terminals" button on every line stop, at the right of
 -- the row before the waiting count. It opens the Line Manager's terminal popover for that stop
--- (terminals.TerminalButton), so the terminals of a line can be set from the station.
+-- (terminals.TerminalButton), so the terminals of a line can be set from the station. A line whose
+-- vehicles cannot reach this stop (no path into it, an incompatible or doubled stop) gets the
+-- statistics alert icon in front of the button, with the game's problem text as its tooltip.
 --
 -- The list (TerminalStops, gui/entity_window/station_group/station_group.tl) is file-local and cannot
 -- be replaced; replacing the whole station window would clash with every other mod that does. Two
@@ -17,6 +19,7 @@ local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local station_group = require("::/gui/entity_window/station_group/station_group.tl")
 local terminals = require("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
+local line_problems = require("/ui_overhaul/core/line_problems.lua")
 
 local station_terminals = {}
 
@@ -86,6 +89,26 @@ function station_terminals.wrap_ordered_pairs(previous, in_list)
 	end
 end
 
+-- Problems per line, read at most every two seconds (the list renders often, the search is costly).
+local problems_cache = {}
+local PROBLEMS_SECONDS = 2
+
+local function stop_problem_text(line, stop_index0)
+	local now = os.clock()
+	local entry = problems_cache[line]
+	if not entry or now - entry.time > PROBLEMS_SECONDS then
+		local ok, data = pcall(terminals.read_problems, line)
+		entry = { time = now, data = ok and data or nil }
+		problems_cache[line] = entry
+	end
+	if not entry.data then return nil end
+	local texts = {}
+	for _i, problem in ipairs(line_problems.stop_problems(entry.data.stops, entry.data.segments, stop_index0 + 1)) do
+		texts[#texts + 1] = terminals.problem_text(problem)
+	end
+	return #texts > 0 and table.concat(texts, "\n") or nil
+end
+
 --- The spacer, with the button of the current row's stop at its right while the list renders.
 function station_terminals.wrap_spacer(previous, in_list, button)
 	return function(...)
@@ -94,16 +117,23 @@ function station_terminals.wrap_spacer(previous, in_list, button)
 			if walk.line == nil or not in_list() then return nil end
 			local stop_index0 = walk.next_stop()
 			if stop_index0 == nil then return nil end
+			local children = { spacer }
+			local problem_ok, problem = pcall(stop_problem_text, walk.line, stop_index0)
+			if problem_ok and problem then
+				children[#children + 1] = builtin.ImageView{
+					meta = { class = "uio-station-stop-alert", tooltip = problem },
+					path = "::/gui/statistics/icons/alert.tga",
+					scaling = builtin.type.ImageViewScaling.AutoFit,
+				}
+			end
+			children[#children + 1] = button{
+				line = walk.line,
+				stopIndex0 = stop_index0,
+				id = station_terminals.button_id(walk.line, stop_index0),
+			}
 			return builtin.Component{
 				meta = { class = "horizontal-spacer, uio-station-terminal" },
-				layout = builtin.BoxLayout{
-					orientation = builtin.type.Orientation.Horizontal,
-					children = { spacer, button{
-						line = walk.line,
-						stopIndex0 = stop_index0,
-						id = station_terminals.button_id(walk.line, stop_index0),
-					} },
-				},
+				layout = builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children },
 			}
 		end)
 		if not ok then report("row", result) end

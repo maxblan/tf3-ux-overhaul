@@ -2,8 +2,10 @@
 -- [Don't Use | Alternative | Preferred] instead of the drop-down list, so one click sets its usage
 -- (base: open the list, then pick). The preferred terminal's row is highlighted; its Don't Use and
 -- Alternative buttons are disabled, as the base list is, and say why. Terminals the line's vehicles
--- cannot use (other carrier, passenger terminal for a freight line and the reverse) and terminals a
--- path problem starts or ends at are greyed, with the reason in the tooltip; they stay clickable, as
+-- cannot use (other carrier, passenger terminal for a freight line and the reverse), terminals the line's
+-- vehicles cannot get to from the stop before or on to the stop after (the engine's path search, cached per
+-- line version), and terminals a path problem starts or ends at are greyed, with the reason in the
+-- tooltip; they stay clickable, as
 -- the player may be about to build the missing track. Everything else in the popover is the base
 -- popover; the problem arrow of a terminal is also shown on the right terminal only (base compares
 -- terminal numbers modulo the stop count), and outside the Line Manager the mod computes the problems
@@ -306,12 +308,60 @@ local function read_line_needs(line, stop_index0)
 	return needs
 end
 
---- terminal number -> incompatibility kind, for the stop of the popover. Engine reads only.
+-- Vehicle nodes of the preferred terminal of an engine line stop.
+local function stop_nodes(stop)
+	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	local station_entity = group and group.stations[stop.station + 1]
+	local station = station_entity and api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+	local terminal = station and station.terminals[stop.terminal + 1]
+	return terminal and { terminal.vehicleNodeId } or nil
+end
+
+-- Path search results per line version, stop and terminal: the search is the expensive part.
+local reach_cache = {}
+
+local function revision_key(line)
+	local r = api.engine.getRevision(line)
+	return table.concat({ r.num[1], r.num[2], r.num[3] }, ".")
+end
+
+--- Whether the line's vehicles can get to a terminal from the stop before and on to the stop after
+-- (the engine's path search with the line's transport modes): nil if they can, else
+-- { kind = "from" | "to", station = name }. `stop_index0` is the stop of the popover.
+local function terminal_reach(line, component, stop_index0, node, number, modes)
+	local count = #component.stops
+	if count < 2 or #modes == 0 then return nil end
+	local key = table.concat({ line, revision_key(line), stop_index0, number }, "/")
+	local cached = reach_cache[key]
+	if cached ~= nil then return cached or nil end
+	local before = component.stops[((stop_index0 - 1) % count) + 1]
+	local after = component.stops[((stop_index0 + 1) % count) + 1]
+	local find = api.engine.util.pathfinding.findPathNodeToNode
+	local result = false
+	local before_nodes, after_nodes = stop_nodes(before), stop_nodes(after)
+	if before_nodes and #find(before_nodes, { node }, modes) == 0 then
+		result = { kind = "from", station = api.engine.util.getEntityName(before.stationGroup) }
+	elseif after_nodes and #find({ node }, after_nodes, modes) == 0 then
+		result = { kind = "to", station = api.engine.util.getEntityName(after.stationGroup) }
+	end
+	reach_cache[key] = result
+	return result or nil
+end
+
+--- terminal number -> why the line cannot use it ({ kind, station }), for the stop of the popover:
+-- vehicles that cannot stop there, or no path to it from the stop before or on to the stop after.
+-- Engine reads only.
 local function read_incompatible(params)
 	local via = params.viaState:old()[params.stopNumber]
 	local group_entity = via.stop.stationGroup
 	local group = api.engine.getComponent(group_entity, api.type.ComponentType.STATION_GROUP)
-	local needs = read_line_needs(params.lineEntity, params.stopIndex)
+	local line = params.lineEntity
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	local needs = read_line_needs(line, params.stopIndex)
+	local modes = {}
+	for mode, on in pairs(api.engine.util.line.getLineTransportModesUnion(line) or {}) do
+		if on then modes[#modes + 1] = mode end
+	end
 	local result, number = {}, 0
 	for station_index1, station_entity in ipairs(group.stations) do
 		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
@@ -319,20 +369,37 @@ local function read_incompatible(params)
 			number = number + 1
 			local carriers = api.engine.system.stationGroupSystem.getCarriers(group_entity, station_index1 - 1,
 				terminal_index1 - 1)
-			result[number] = line_problems.incompatibility({
+			local kind = line_problems.incompatibility({
 				carriers = carrier_set(carriers and carriers[1]),
 				passengers = terminal.passengersLoad or terminal.passengersUnload,
 				cargo = terminal.cargoLoad or terminal.cargoUnload,
 			}, needs)
+			if kind then
+				result[number] = { kind = kind }
+			elseif component then
+				local ok, reach = pcall(terminal_reach, line, component, params.stopIndex, terminal.vehicleNodeId,
+					number, modes)
+				if ok then result[number] = reach else report("path search", reach) end
+			end
 		end
 	end
 	return result
 end
 
-local function incompatibility_text(kind)
+local function incompatibility_text(issue)
+	if not issue then return nil end
+	local kind = issue.kind
 	if kind == "carrier" then return _("The vehicles of this line cannot stop at this terminal.") end
 	if kind == "passengers_only" then return _("Passenger terminal: this line carries only cargo.") end
 	if kind == "cargo_only" then return _("Cargo terminal: this line carries only passengers.") end
+	if kind == "from" then
+		return lang_util.format(_("Vehicles of this line cannot get here from {station}."),
+			{ station = issue.station or "" })
+	end
+	if kind == "to" then
+		return lang_util.format(_("Vehicles of this line cannot get from here to {station}."),
+			{ station = issue.station or "" })
+	end
 	return nil
 end
 

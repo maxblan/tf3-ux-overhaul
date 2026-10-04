@@ -24,13 +24,17 @@ function data()
 	-- The preferred terminal stands out: an accent band behind its row (the colour of a selected list
 	-- row) and white text, while its usage buttons keep Preferred lit.
 	add("R::TerminalSelection R::Component!main!uio-terminal-preferred", {
-		backgroundColor1 = color_util.withTransparencyRaw(colorDefault.AccentDark, transparency.Medium),
+		backgroundColor1 = color_util.withTransparencyRaw(colorDefault.AccentMedium, transparency.Low),
+		borderColor = colorDefault.AccentLight,
 	})
 	add("R::TerminalSelection R::Component!uio-terminal-preferred TextView!terminal-label-compact", {
 		color = colorDefault.NeutralLightest,
+		fontWeight = "Medium",
 	})
 	-- A terminal the line cannot use or reach: greyed text, as the game greys disabled entries; the
 	-- row's tooltip names the reason.
+	-- the whole row at half strength (as the game fades what is unavailable) and its texts grey
+	add("R::TerminalSelection R::Component!main!uio-terminal-unreachable", { alphaScale = 0.45 })
 	add([[R::TerminalSelection R::Component!uio-terminal-unreachable TextView!terminal-label-compact,
 		R::TerminalSelection R::Component!uio-terminal-unreachable TextView!terminal-length]], {
 		color = colorDefault.NeutralMedium,
@@ -41,6 +45,9 @@ function data()
 	add("R::UioTerminalButton Button!uio-terminal-button", { size = { 22, 22 }, padding = { 1, 1, 1, 1 } })
 	add("Table::TableLayout R::UioTerminalButton Button!uio-terminal-button", { gravity = { 0, -1 } })
 	add("R::TerminalStops Component!uio-station-terminal R::UioTerminalButton", { margin = { 0, 6, 0, 6 } })
+	-- a line that cannot reach this stop: the alert icon in front of its terminal button
+	add("R::TerminalStops ImageView!uio-station-stop-alert",
+		{ size = { 16, 16 }, gravity = { 0, 0.5 }, margin = { 0, 0, 0, 6 } })
 	-- inside the 300 wide station cell (cards.css.lua), clear of the waiting count
 	add("R::UioStopCell R::UioTerminalButton", { margin = { 0, 10, 0, 0 } })
 	return result
