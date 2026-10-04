@@ -28,7 +28,12 @@ function data()
 	add("R::LineVehiclesTable TextView!uio-line-vehicle-load", { size = { 40, -1 }, textAlignment = { 1, 0.5 } })
 	add("R::LineVehiclesTable ImageView!uio-line-vehicle-condition", { size = { 16, 16 }, gravity = { 0, 0.5 } })
 	-- industry window (industry_cards.lua): blockers in the game's warning colour, lines in a column
-	add("R::UioIndustryDevelopment TextView!uio-industry-blocker", { color = colorDefault.Warning })
+	-- the blocker fills its row and wraps there, so the eye button after it stays inside the card at
+	-- large text (it was pushed out, observed in game)
+	-- a capped width wraps the text, as the base wraps station names: the card is 400 wide, less the
+	-- alert, the eye button and the spacing
+	add("R::UioIndustryDevelopment TextView!uio-industry-blocker",
+		{ color = colorDefault.Warning, gravity = { -1, 0.5 }, maxSize = { 330, -1 } })
 	add("R::UioIndustryDevelopment BoxLayout!uio-industry-development", { innerSpacing = { 0, 6 } })
 	-- rows: a fixed-width label, so values line up; bars fill the rest
 	add("R::UioIndustryDevelopment BoxLayout!uio-industry-row", { innerSpacing = { 6, 0 } })
@@ -42,7 +47,7 @@ function data()
 		{ margin = { 0, 0, 0, 8 }, gravity = { 0, 0.5 }, color = colorDefault.NeutralLight })
 	add("R::UioIndustryDevelopment ImageView!uio-industry-alert", { size = { 16, 16 }, gravity = { 0, 0.5 } })
 	add("R::UioIndustryDevelopment ToggleButton!uio-industry-area-toggle",
-		{ size = { 24, 24 }, padding = { 3, 3, 3, 3 }, gravity = { 1, 0.5 } })
+		{ size = { 24, 24 }, minSize = { 24, 24 }, padding = { 3, 3, 3, 3 }, gravity = { 1, 0.5 } })
 	add("R::UioIndustryServedBy BoxLayout!uio-industry-lines", { innerSpacing = { 0, 2 } })
 	return result
 end

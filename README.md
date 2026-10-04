@@ -132,6 +132,7 @@ make lint typecheck test           # luacheck, strict type check and offline spe
 make test-ingame                   # in-game checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make validate                      # the game's mod validator
+make gallery                       # the mod.io gallery cards (docs/gallery.md)
 ```
 
 `_metadata/mod.io_fileid.txt` links the mod to its mod.io entry. Keep it in the repository: `make deploy` copies it to the staging area, so publishing from the game updates the existing mod instead of creating a new one.
@@ -145,6 +146,7 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 | `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |
 | `docs/design.md` | how the mod is built and the rules it follows |
+| `docs/gallery.md`, `assets/gallery/` | the mod.io gallery: how the cards are made, their captions, the cards |
 | `types/` | type stubs for the engine API and the base-game modules the mod requires (`make typecheck`) |
 | `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 

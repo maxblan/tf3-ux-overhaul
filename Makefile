@@ -23,7 +23,7 @@ LUALS      ?= $(or $(shell command -v lua-language-server 2>/dev/null),tools/lua
 LUA_FILES  := $(shell find src spec tools/lua -name '*.lua' -not -path '*/node_modules/*' -not -path '*/vendor/*')
 
 .DEFAULT_GOAL := help
-.PHONY: help deps test lint typecheck test-ingame check content preview deploy validate undeploy package clean
+.PHONY: help deps test lint typecheck test-ingame check content preview gallery deploy validate undeploy package clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -84,6 +84,9 @@ validate: deploy ## Run the game's mod validation (launches the game briefly)
 
 undeploy: ## Remove the mod and the testbench from the staging area
 	tools/deploy.sh --remove $(MOD_DIR) $(TESTBENCH)
+
+gallery: ## Compose the mod.io gallery cards in assets/gallery/ (screenshots first: see docs/gallery.md)
+	tools/gallery/build.sh
 
 package: content preview ## Build the upload zip in dist/
 	@mkdir -p $(DIST)

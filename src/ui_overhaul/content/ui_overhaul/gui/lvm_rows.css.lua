@@ -18,5 +18,11 @@ function data()
 	-- vehicle rows: load and condition before the age
 	add("R::UioLvmRowInfo TextView!uio-lvm-load", { size = { 40, -1 }, textAlignment = { 1, 0.5 } })
 	add("R::UioLvmRowInfo ImageView!uio-lvm-condition", { size = { 16, 16 }, gravity = { 0, 0.5 } })
+	-- wider figures at medium and large text, where "$-199 K" lost its last letter (observed in game)
+	for font, widths in pairs({ medium = { 30, 72, 44 }, large = { 34, 84, 50 } }) do
+		add("!font-" .. font .. " R::UioLvmRowInfo TextView!uio-lvm-count", { size = { widths[1], -1 } })
+		add("!font-" .. font .. " R::UioLvmRowInfo TextView!uio-lvm-money", { size = { widths[2], -1 } })
+		add("!font-" .. font .. " R::UioLvmRowInfo TextView!uio-lvm-load", { size = { widths[3], -1 } })
+	end
 	return result
 end

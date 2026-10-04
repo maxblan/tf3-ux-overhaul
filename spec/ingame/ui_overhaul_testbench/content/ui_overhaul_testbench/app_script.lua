@@ -9,10 +9,11 @@ local app_script = {}
 
 local TAG = "[testbench]"
 -- urbangames_no_costs: a new game starts without money, so builds would fail.
-local MODS = { "urbangames_no_costs_1", "ui_overhaul_1", "ui_overhaul_testbench_1" }
 local START_AFTER_FRAMES = 120
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
+local MODS = fixture.vanilla and { "urbangames_no_costs_1", "ui_overhaul_testbench_1" }
+	or { "urbangames_no_costs_1", "ui_overhaul_1", "ui_overhaul_testbench_1" }
 for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
 
 local frames, started = 0, false
@@ -65,10 +66,15 @@ local function load_fixture_game()
 	local details = api.type.SaveGameDetails.new(data.info)
 	local mods, names, listed = {}, {}, {} ---@type Mod.ModId[], string[], table<string, true>
 	for _, mod in ipairs(details.mods) do
-		mods[#mods + 1], names[#names + 1] = mod, mod.name
-		listed[mod.name] = true
+		-- the gallery shows this mod alone: of the savegame's mods only the game's own content stays
+		local keep = not fixture.gallery or mod.name:sub(1, #"urbangames_") == "urbangames_"
+		if fixture.vanilla and mod.name == "ui_overhaul_1" then keep = false end
+		if keep then
+			mods[#mods + 1], names[#names + 1] = mod, mod.name
+			listed[mod.name] = true
+		end
 	end
-	local added = { "ui_overhaul_1", "ui_overhaul_testbench_1" }
+	local added = fixture.vanilla and { "ui_overhaul_testbench_1" } or { "ui_overhaul_1", "ui_overhaul_testbench_1" }
 	for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).

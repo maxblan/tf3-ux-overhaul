@@ -209,6 +209,8 @@ end
 ---@field before? integer the line's vehicles before the action
 ---@field vehicle? Engine.Entity
 ---@field public protected? Engine.Entity a protected vehicle; `public` since the name is also a keyword
+---@field spot_x? number the gallery's free land for the track tool
+---@field spot_y? number
 
 ---@class uo.testbench.GuiCheck
 ---@field name string unique, shown in the PASS/FAIL line
@@ -1167,6 +1169,553 @@ if fixture.only and #fixture.only > 0 then
 		if wanted[check.name] then selected[#selected + 1] = check end
 	end
 	checks = selected
+end
+
+-- Gallery (run.sh --gallery): scenes for the mod.io gallery instead of the checks, each a "SHOT
+-- gallery_<name>" for tools/gallery. The game is paused, so the same scene looks the same in the run
+-- with the mod and in the one without it (run.sh --vanilla), which only takes the scenes marked
+-- `pair`; they drive the game's own events only. Scenes of the mod alone use its debug events.
+
+--- A player line with a stop its vehicles cannot reach (the station window's alert), and that stop's
+-- station group; else the busiest line and its first stop. The problems come per entry of the line's
+-- path (stops and waypoints); a missing path belongs to the next stop (line_problems.stop_problems).
+---@return Engine.Entity? line
+---@return Engine.Entity? station_group
+local function problem_stop()
+	local failures, empty = 0, 0
+	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+		local ok, segments = pcall(api.engine.util.line.getDetailedLineProblems, line)
+		if not ok then
+			failures = failures + 1
+			if failures == 1 then debugPrint("[testbench] gallery: line problems failed: ", tostring(segments)) end
+		elseif #segments == 0 then
+			empty = empty + 1
+		end
+		if component and ok then
+			local flat = {} ---@type (Engine.Entity|false)[] station group per path entry; false for a waypoint
+			for _j, stop in ipairs(component.stops) do
+				flat[#flat + 1] = stop.stationGroup
+				for _k in ipairs(stop.waypoints) do flat[#flat + 1] = false end
+			end
+			for index, segment in ipairs(segments) do
+				for _j, state in ipairs(segment) do
+					if state.noPath or state.noPathFromAlternative or state.noPathToAlternative then
+						for step = 1, #flat do
+							local group = flat[(index + step - 1) % #flat + 1]
+							if group then return line, group end
+						end
+					end
+				end
+			end
+		end
+	end
+	debugPrint("[testbench] gallery: no line problem found (", failures, " reads failed, ", empty, " empty)")
+	local line = busiest_line()
+	local component = line and api.engine.getComponent(line, api.type.ComponentType.LINE)
+	return line, component and component.stops[1] and component.stops[1].stationGroup
+end
+
+--- An industry whose expansion is blocked (the red area), else the one with the most output.
+---@return Engine.Entity?
+local function blocked_industry()
+	local script = api.engine.system.gameScriptSystem.getEntityForGameScript("::/game_mechanics/industries/industries.gs")
+	local game_script = script and api.engine.getComponent(script, api.type.ComponentType.GAME_SCRIPT)
+	local failed = game_script and game_script.state_native:find("industryFailedExtensions") --[[@as NativeLuaTable?]]
+	local best, best_output = nil, -1 ---@type Engine.Entity?, number
+	for _i, entity in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.INDUSTRY)) do
+		local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
+		---@cast industry -nil -- the entities with this component
+		local output = api.engine.util.stock.getCargoOutputPerYear(industry.stockList) ---@type number
+		if failed and failed:find(entity) ~= nil then output = output + 1e9 end
+		if output > best_output then best, best_output = entity, output end
+	end
+	return best
+end
+
+
+--- Asks run.sh to move the mouse to screen pixel `x`, `y` (and to click there with `click`): hovers
+-- and the track tool's first point cannot be driven otherwise. run.sh does it in log order, before
+-- the next SHOT, and leaves the cursor there for that shot.
+---@param x number
+---@param y number
+---@param click? boolean
+local function mouse(x, y, click)
+	debugPrint(string.format("[testbench] %s %d %d", click and "CLICK" or "MOUSE", math.floor(x + 0.5),
+		math.floor(y + 0.5)))
+end
+
+--- The screen pixel of world point `x`, `y` on the ground (plus `up` metres).
+---@param x number
+---@param y number
+---@param up? number
+---@return number x
+---@return number y
+local function screen_of(x, y, up)
+	local ground = api.engine.terrain.getHeightAt(api.type.Vec2f.new(x, y))
+	local p = api.gui.camera.world2Screen(api.type.Vec3f.new(x, y, ground + (up or 0)))
+	return p.x, p.y
+end
+
+--- Dry, flat land with nothing built within `clearance` metres, searched in rings from the map
+-- centre: { x, y }, or nil. Roads, tracks and buildings are read once into a grid of occupied cells.
+---@param clearance number
+---@return { x: number, y: number }?
+local function free_spot(clearance)
+	local cell = 100
+	local taken = {} ---@type table<string, true>
+	---@param x number
+	---@param y number
+	local function take(x, y) taken[math.floor(x / cell) .. "," .. math.floor(y / cell)] = true end
+	-- the engine refuses to loop over road nodes ("Cannot loop over this component", observed in game):
+	-- constructions only, which includes stations, depots, industries and town buildings
+	local read, err = pcall(api.engine.forEachEntityWithComponent, function(e)
+		local con = api.engine.getComponent(e, api.type.ComponentType.CONSTRUCTION)
+		if con then
+			local t = con.transf:getTransl()
+			take(t.x, t.y)
+		end
+	end, api.type.ComponentType.CONSTRUCTION)
+	if not read then debugPrint("[testbench] gallery: constructions not read: ", tostring(err)) end
+	local reach = math.ceil(clearance / cell)
+	---@param x number
+	---@param y number
+	---@return boolean
+	local function clear_at(x, y)
+		local cx, cy = math.floor(x / cell), math.floor(y / cell)
+		for dx = -reach, reach do
+			for dy = -reach, reach do
+				if taken[(cx + dx) .. "," .. (cy + dy)] then return false end
+			end
+		end
+		local lo, hi = math.huge, -math.huge
+		for dx = -150, 150, 50 do
+			for dy = -100, 100, 50 do
+				local p = api.type.Vec2f.new(x + dx, y + dy)
+				if not api.engine.terrain.isValidCoordinate(p) or api.engine.terrain.isOnWater(p) then return false end
+				local h = api.engine.terrain.getBaseHeightAt(p)
+				lo, hi = math.min(lo, h), math.max(hi, h)
+			end
+		end
+		return hi - lo < 12
+	end
+	local box = api.engine.terrain.getBoundingBox()
+	local mx, my = (box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2
+	for ring = 0, 30 do
+		for ix = -ring, ring do
+			for iy = -ring, ring do
+				if math.max(math.abs(ix), math.abs(iy)) == ring then
+					local x, y = mx + ix * 150, my + iy * 150
+					if clear_at(x, y) then return { x = x, y = y } end
+				end
+			end
+		end
+	end
+	return nil
+end
+
+local function clear()
+	-- the tool windows stay open side by side (tool_stack.lua): closed one by one
+	for _i, event in ipairs({ "closeVehicleManager", "closeStatisticsWindow", "closeFinanceWindow" }) do
+		api.gui.fireReactEvent(event, nil)
+	end
+	api.gui.fireReactEvent("clearToolStack", nil)
+	api.gui.fireReactEvent("closeAllWindows", nil)
+end
+
+---@class uo.testbench.GalleryScene: uo.testbench.GuiCheck
+---@field pair? boolean also shot without the mod, for a before/after image
+
+---@type uo.testbench.GalleryScene[]
+local scenes = {
+	{
+		-- the line problems exist once the simulation ran a moment
+		name = "gallery_warm_up",
+		pair = true,
+		wait = 300,
+		check = function() return true, "warmed up" end,
+	},
+	{
+		name = "gallery_start",
+		pair = true,
+		act = function(ctx)
+			api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(0)) -- paused: both runs show the same scene
+			clear()
+			ctx.card_line = busiest_line()
+			ctx.models_line = model_row_line()
+			ctx.terminal_line, ctx.terminal_station = problem_stop()
+			ctx.industry = blocked_industry()
+			ctx.card_vehicle = ctx.card_line and oldest_vehicle(ctx.card_line)
+			if ctx.terminal_station then api.gui.camera.focusEntity(ctx.terminal_station) end
+		end,
+		wait = 240,
+		check = function(ctx)
+			return true, string.format("line=%s models line=%s problem line=%s station=%s industry=%s vehicle=%s",
+				tostring(ctx.card_line), tostring(ctx.models_line), tostring(ctx.terminal_line),
+				tostring(ctx.terminal_station), tostring(ctx.industry), tostring(ctx.card_vehicle))
+		end,
+	},
+	{
+		name = "gallery_line_manager",
+		pair = true,
+		act = function(ctx)
+			clear()
+			if ctx.models_line then api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.models_line }) end
+		end,
+		wait = 240, -- the row info refreshes every 2 s
+		shot = "gallery_line_manager",
+		check = function() return visible("menu.management"), "line manager" end,
+	},
+	{
+		name = "gallery_models_select",
+		act = function(ctx)
+			if ctx.models_line then api.gui.fireReactEvent("uio.debug.lvm_models", { action = "select", index = 1 }) end
+		end,
+		wait = 60,
+		shot = "gallery_models_select",
+		check = function() return visible("uio.lvm.models"), "model row" end,
+	},
+	{
+		name = "gallery_models_all_lines",
+		act = function(ctx)
+			if ctx.models_line then api.gui.fireReactEvent("uio.debug.lvm_models", { action = "pull", index = 1 }) end
+		end,
+		wait = 90,
+		shot = "gallery_models_all_lines",
+		-- every vehicle of the model is listed now, so the row has nothing left to pull and hides
+		check = function() return visible("menu.management"), "pulled from all lines" end,
+	},
+	{
+		name = "gallery_models_replace",
+		act = function(ctx)
+			local first = ctx.models_line and line_vehicles(ctx.models_line)[1]
+			local key = first and model_key(first)
+			local same = {} ---@type Engine.Entity[]
+			for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+				for _j, v in ipairs(line_vehicles(line)) do
+					if key and model_key(v) == key then same[#same + 1] = v end
+				end
+			end
+			-- asks only (the Line Manager's question): nothing is replaced
+			if #same >= 2 then api.gui.fireReactEvent("uio.debug.replace", same) end
+		end,
+		wait = 60,
+		shot = "gallery_models_replace",
+		check = function() return visible("menu.management"), "replace question" end,
+	},
+	{
+		name = "gallery_statistics",
+		pair = true,
+		act = function()
+			clear()
+			api.gui.fireReactEvent("openStatisticsWindow", "Line")
+		end,
+		wait = 120,
+		shot = "gallery_statistics",
+		check = function() return visible("menu.statistics.window"), "statistics" end,
+	},
+	{
+		-- the quick filter once the window is there
+		name = "gallery_statistics_losing",
+		act = function() api.gui.fireReactEvent("uio.statistics.filter", "losing") end,
+		wait = 90,
+		shot = "gallery_statistics_losing",
+		check = function() return visible("menu.statistics.window"), "statistics" end,
+	},
+	{
+		name = "gallery_station",
+		pair = true,
+		act = function(ctx)
+			api.gui.fireReactEvent("uio.statistics.filter", "all")
+			clear()
+			if ctx.terminal_station then
+				api.gui.camera.focusEntity(ctx.terminal_station)
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.terminal_station, stack = false })
+			end
+		end,
+		wait = 180,
+		shot = "gallery_station",
+		check = function(ctx) return ctx.terminal_station ~= nil, "station " .. tostring(ctx.terminal_station) end,
+	},
+	{
+		name = "gallery_terminals",
+		act = function(ctx)
+			-- left of the station window, beside its rows (a click opens it at the button)
+			if ctx.terminal_line then
+				api.gui.fireReactEvent("uio.debug.terminal_button", { line = ctx.terminal_line, x = 0.25, y = 0.15 })
+			end
+		end,
+		wait = 90,
+		shot = "gallery_terminals",
+		check = function() return visible("uio.terminals.usage.1"), "terminal popover" end,
+	},
+	{
+		name = "gallery_industry",
+		pair = true,
+		act = function(ctx)
+			api.gui.fireReactEvent("uio.debug.terminal_button", nil)
+			clear()
+			if ctx.industry then
+				api.gui.camera.focusEntity(ctx.industry)
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.industry, stack = false })
+			end
+		end,
+		wait = 240,
+		shot = "gallery_industry",
+		check = function(ctx) return ctx.industry ~= nil, "industry " .. tostring(ctx.industry) end,
+	},
+	{
+		name = "gallery_finances",
+		pair = true,
+		act = function()
+			clear()
+			api.gui.fireReactEvent("openFinanceWindow", "Finances")
+			api.gui.fireReactEvent("uio.finances.view", "income")
+		end,
+		wait = 150,
+		shot = "gallery_finances",
+		check = function() return visible("menu.finance.window"), "finances" end,
+	},
+	{
+		-- the statements next to the income statement
+		name = "gallery_finances_cashflow",
+		act = function() api.gui.fireReactEvent("uio.finances.view", "cashflow") end,
+		wait = 90,
+		shot = "gallery_finances_cashflow",
+		check = function() return visible("menu.finance.window"), "cash flow" end,
+	},
+	{
+		name = "gallery_finances_balance",
+		act = function() api.gui.fireReactEvent("uio.finances.view", "balance") end,
+		wait = 90,
+		shot = "gallery_finances_balance",
+		check = function() return visible("menu.finance.window"), "balance sheet" end,
+	},
+	{
+		-- the line window: Vehicles card with Add/Remove Vehicle, the Stops card
+		name = "gallery_line_window",
+		pair = true,
+		act = function(ctx)
+			clear()
+			if ctx.card_line then
+				api.gui.camera.focusEntity(ctx.card_line)
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.card_line, stack = false })
+			end
+		end,
+		wait = 180,
+		shot = "gallery_line_window",
+		check = function(ctx) return stops_card(ctx.card_line) or false, "line window" end,
+	},
+	{
+		-- minimize: the line window and a vehicle window side by side, then both folded
+		name = "gallery_minimize_open",
+		act = function(ctx)
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = true }) end
+		end,
+		wait = 150,
+		shot = "gallery_minimize_open",
+		check = function() return true, "open" end,
+	},
+	{
+		name = "gallery_minimize_folded",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 60,
+		shot = "gallery_minimize_folded",
+		check = function() return true, "folded" end,
+	},
+	{
+		name = "gallery_minimize_restored",
+		act = function()
+			api.gui.fireReactEvent("uio.debug.minimize_all", nil)
+			clear()
+		end,
+		wait = 30,
+		check = function() return true, "restored" end,
+	},
+	{
+		-- the map hover of a vehicle: the camera on it, the cursor on it
+		name = "gallery_vehicle_hover",
+		pair = true,
+		act = function(ctx)
+			clear()
+			if ctx.card_vehicle then api.gui.camera.focusEntity(ctx.card_vehicle) end
+		end,
+		wait = 180,
+		check = function(ctx) return ctx.card_vehicle ~= nil, "camera on " .. tostring(ctx.card_vehicle) end,
+	},
+	{
+		name = "gallery_vehicle_hover_shot",
+		pair = true,
+		act = function()
+			local data = api.gui.camera.getCameraData()
+			local x, y = screen_of(data.x, data.y, 1.5)
+			debugPrint(string.format("[testbench] gallery: vehicle at screen %.0f %.0f", x, y))
+			mouse(x, y)
+		end,
+		wait = 300,
+		shot = "gallery_vehicle_hover",
+		check = function() return true, "hover" end,
+	},
+	{
+		-- subsidy offers, made with the game's own debug event in the savegame copy; the simulation runs a
+		-- moment so they reach the ridge, where they join the save's own offer (the third icon)
+		name = "gallery_subsidy_spawn",
+		act = function()
+			clear()
+			api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(1))
+			for _i = 1, 2 do
+				api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "Subvention", "_debugSpawn", {}))
+			end
+		end,
+		wait = 240,
+		check = function() return true, "spawned" end,
+	},
+	{
+		name = "gallery_subsidy_ridge",
+		act = function() api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(0)) end,
+		wait = 120,
+		shot = "gallery_subsidy_ridge",
+		check = function() return true, "the ridge" end,
+	},
+	{
+		name = "gallery_subsidy_hover_3",
+		act = function() mouse(1301, 47) end,
+		wait = 240,
+		shot = "gallery_subsidy_hover_3",
+		check = function() return true, "hover on icon 3" end,
+	},
+	{
+		name = "gallery_subsidy_hover_4",
+		act = function() mouse(1364, 47) end,
+		wait = 240,
+		shot = "gallery_subsidy_hover_4",
+		check = function() return true, "hover on icon 4" end,
+	},
+	{
+		-- catchment areas of all stations, passengers and cargo, over the station's town
+		name = "gallery_catchment",
+		act = function(ctx)
+			clear()
+			if ctx.terminal_station then api.gui.camera.focusEntity(ctx.terminal_station) end
+			api.gui.fireReactEvent("uio.catchment", { person = true, cargo = true })
+		end,
+		wait = 120,
+		check = function() return visible("uio.catchment.person"), "catchment" end,
+	},
+	{
+		-- far enough out to see the areas of several stations
+		name = "gallery_catchment_far",
+		act = function()
+			local data = api.gui.camera.getCameraData()
+			local h = api.engine.terrain.getHeightAt(api.type.Vec2f.new(data.x, data.y))
+			api.gui.camera.focusPosition(api.type.Vec3f.new(data.x, data.y, h), 1600)
+		end,
+		wait = 240,
+		shot = "gallery_catchment",
+		check = function() return true, "zoomed out" end,
+	},
+	{
+		name = "gallery_warehouses",
+		pair = true,
+		act = function()
+			api.gui.fireReactEvent("uio.catchment", { person = false, cargo = false })
+			clear()
+			api.gui.fireReactEvent("openStatisticsWindow", "Warehouse")
+		end,
+		wait = 150,
+		shot = "gallery_warehouses",
+		check = function() return visible("menu.statistics.window"), "warehouses" end,
+	},
+	{
+		-- the build tooltip: the track tool over free land, its first point clicked, the cursor at the second
+		name = "gallery_build_tool",
+		act = function(ctx)
+			clear()
+			local spot = free_spot(200)
+			ctx.spot_x, ctx.spot_y = spot and spot.x, spot and spot.y
+			debugPrint("[testbench] gallery: free spot ", tostring(spot and spot.x), " ", tostring(spot and spot.y))
+			if spot then
+				local h = api.engine.terrain.getHeightAt(api.type.Vec2f.new(spot.x, spot.y))
+				api.gui.camera.focusPosition(api.type.Vec3f.new(spot.x, spot.y, h), 320)
+				api.gui.fireReactEvent("constructionMenuSetTab", { tabIndex = 17 })
+			end
+		end,
+		wait = 240,
+		check = function(ctx) return ctx.spot_x ~= nil, "free spot" end,
+	},
+	{
+		name = "gallery_build_start",
+		act = function(ctx)
+			if ctx.spot_x then mouse(screen_of(ctx.spot_x - 110, ctx.spot_y - 40)) end
+		end,
+		wait = 120,
+		check = function() return true, "moved to the start" end,
+	},
+	{
+		name = "gallery_build_click",
+		act = function(ctx)
+			if ctx.spot_x then
+				local x, y = screen_of(ctx.spot_x - 110, ctx.spot_y - 40)
+				mouse(x, y, true)
+			end
+		end,
+		wait = 120,
+		check = function() return true, "first point" end,
+	},
+	{
+		name = "gallery_build_tooltip",
+		act = function(ctx)
+			if ctx.spot_x then mouse(screen_of(ctx.spot_x + 120, ctx.spot_y + 50)) end
+		end,
+		wait = 300,
+		shot = "gallery_build_tooltip",
+		check = function() return true, "drawing" end,
+	},
+	{
+		name = "gallery_build_cancel",
+		act = function()
+			mouse(1720, 700, false)
+			api.gui.fireReactEvent("constructionMenuQuit", nil)
+			clear()
+		end,
+		wait = 60,
+		check = function() return true, "cancelled" end,
+	},
+	{
+		-- the windows side by side: Line Manager, Statistics with its quick filters, a vehicle window
+		name = "gallery_overview",
+		act = function(ctx)
+			clear()
+			api.gui.fireReactEvent("openStatisticsWindow", "Line")
+			if ctx.models_line then api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.models_line }) end
+			if ctx.card_line then api.gui.camera.focusEntity(ctx.card_line) end
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = false }) end
+		end,
+		wait = 240,
+		shot = "gallery_overview",
+		check = function() return true, "overview" end,
+	},
+	{
+		name = "gallery_done",
+		act = clear,
+		wait = 10,
+		check = function() return true, "done" end,
+	},
+}
+if fixture.gallery then
+	local selected = {} ---@type uo.testbench.GuiCheck[]
+	-- run.sh --only: just those scenes, after the two that set the scene up
+	local wanted = nil ---@type table<string, true>?
+	if fixture.only and #fixture.only > 0 then
+		wanted = { gallery_warm_up = true, gallery_start = true }
+		for _i, name in ipairs(fixture.only) do wanted[name] = true end
+	end
+	for _i, scene in ipairs(scenes) do
+		if (scene.pair or not fixture.vanilla) and (not wanted or wanted[scene.name]) then
+			selected[#selected + 1] = scene
+		end
+	end
+	return selected
 end
 
 -- Crash probe (gui/probe.script.lua): set PROBE = true to open its window variants first.

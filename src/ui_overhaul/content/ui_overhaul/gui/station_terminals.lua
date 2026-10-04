@@ -179,7 +179,8 @@ function station_terminals.wrap_spacer(previous, in_list, button)
 				problem = problem_ok and problem or nil,
 			}
 			return builtin.Component{
-				meta = { class = "horizontal-spacer, uio-station-terminal" },
+				meta = { class = "horizontal-spacer, uio-station-terminal"
+					.. (problem_ok and problem and ", uio-station-terminal-alert" or "") },
 				layout = builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children },
 			}
 		end)

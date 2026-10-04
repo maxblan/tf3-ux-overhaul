@@ -272,10 +272,20 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	end)
 
 	-- The popover of the mod's terminal buttons (station and line window), as a click opens it.
-	react.onEvent("uio.debug.terminal_button", function(_e, line)
+	-- `p`: the line, or { line, x, y } to open it there (the gallery)
+	---@param _e string
+	---@param p Engine.Entity|{ line: Engine.Entity, x: number, y: number }|nil
+	react.onEvent("uio.debug.terminal_button", function(_e, p)
 		local windows = game_react_globals.getDefaultWindowApi()
 		windows.removeAllWindows(popover_react_util.PopoverWindow)
-		if line then mod_terminals().open(line, 0, { x = 1000, y = 250 }, "Select Terminals") end
+		local line, position ---@type Engine.Entity?, Vec2f|{ x: number, y: number }
+		if type(p) == "table" then
+			line, position = p.line, { x = p.x, y = p.y }
+		else
+			line, position = p, { x = 1000, y = 250 }
+		end
+		-- open() reads only x and y, as of the Vec2f a button's getPosition returns
+		if line then mod_terminals().open(line, 0, position --[[@as Vec2f]], "Select Terminals") end
 	end)
 
 	-- A terminal change through the parameters of those buttons: { line, add } adds (add = true) or

@@ -37,8 +37,17 @@
 ---@field isVisibleRecursive fun(id: string): boolean
 ---@field setVisible fun(id: string, visible: boolean)
 
+---Camera data {center x, center y, distance, angle, pitch} (Vec5f).
+---@class Gui.CameraData
+---@field x number
+---@field y number
+
 ---@class Gui.Camera
 ---@field focusEntity fun(entity: Engine.Entity)
+---@field focusPosition fun(position: Vec3f, distance: number)
+---@field getCameraData fun(): Gui.CameraData
+---Screen pixel of a world position.
+---@field world2Screen fun(position: Vec3f): { x: integer, y: integer }
 
 ---@class Gui.Sound
 ---@field playRandomSoundEffect fun(paths: FilePath[])

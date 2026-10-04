@@ -31,6 +31,16 @@
 
 ---@class Engine.Component.Construction
 ---@field stations Engine.Entity[]
+---The world transformation of the construction.
+---@field transf Mat4f
+
+---A 4 x 4 matrix (apidef/api/type.d.tl).
+---@class Mat4f
+local Mat4f = {}
+
+---The translation part.
+---@return Vec3f
+function Mat4f:getTransl() end
 
 ---The internal state of a single game script.
 ---@class Engine.Component.GameScript
