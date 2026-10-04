@@ -71,6 +71,8 @@ describe("notifications", function()
 		assert.are.equal("uio-subsidy-active", notifications.subsidy_class(subsidy, 2))
 		assert.are.equal("uio-subsidy-complete", notifications.subsidy_class(subsidy, 3))
 		assert.are.equal("uio-subsidy-missed", notifications.subsidy_class(missed, nil))
+		assert.are.equal("uio-subsidy-failed",
+			notifications.subsidy_class("::/game_mechanics/notifications/types/subvention.script", nil))
 		assert.is_nil(notifications.subsidy_class("::/other.script", 1))
 		assert.is_nil(notifications.subsidy_class(subsidy, 7))
 	end)

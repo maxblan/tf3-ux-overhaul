@@ -5,9 +5,9 @@
 --   * right-click (gamepad: IA_OPTION2) dismisses the whole group
 --   * the hover card is the base card of the shown notification, with "2 of 3" next to the title
 -- A group of one looks and behaves like the base icon.
--- Subsidy icons show their state: offers and active subsidies keep the base purple shades, a
--- subsidy whose effect is active turns green and a missed one grey; the timer ring is drawn in
--- plain white (notifications.css.lua).
+-- Subsidy icons show their state in colours with at least 7:1 contrast to the white symbol (WCAG
+-- AAA): available blue, in progress orange, effect active green, failed red, a missed offer grey;
+-- the timer ring is drawn in plain white (notifications.css.lua). The hover card's icon matches.
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
 -- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown.
@@ -78,7 +78,14 @@ local click_handlers = {}
 
 -- Hover card (1:1 from the base, plus the position in the group) ---------------------------------
 
-local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent", function(params, guiType, position)
+-- `node` inside a layout with the subsidy state class `class` (notifications.css.lua), or `node`.
+local function with_state(node, class)
+	if not (class and node) then return node end
+	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
+end
+
+local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent", function(params, guiType, position,
+		subsidyClass)
 	local mainContent = builtin.Button {
 		content = builtin.BoxLayout{
 			orientation = builtin.type.Orientation.Horizontal,
@@ -87,11 +94,11 @@ local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent"
 					meta = { class = "preview-image" },
 					path = params.previewImage,
 					scaling = builtin.type.ImageViewScaling.AutoFit,
-				} or notification_react_util.NotificationSimpleIcon{
+				} or with_state(notification_react_util.NotificationSimpleIcon{
 					icon = params.icon,
 					status = params.status,
 					type = guiType,
-				} or nil,
+				}, subsidyClass) or nil,
 				notification_react_util.NotificationProgressContent{
 					meta = { class = params.previewImage and "beside-preview-image" or nil },
 					progress = params.progress,
@@ -130,6 +137,9 @@ local NotificationPopup = react.RegisterRecipe("NotificationPopup", function(par
 	local dataStateFn = util.useFn(params.notification.type .. "@useDataState")
 	local dataState = dataStateFn and dataStateFn(params.notification.params, params.notification.simParams) or nil
 	local guiType = notification_util.getGuiTypeFromNotificationType(params.notification.type)
+	local notification = params.notification
+	local subsidyClass = notifications.subsidy_class(notification.type,
+		type(notification.params) == "table" and notification.params.status or nil)
 	local position = params.count > 1
 		and lang_util.format(_("{index} of {count}"), { index = tostring(params.index), count = tostring(params.count) })
 		or nil
@@ -143,7 +153,7 @@ local NotificationPopup = react.RegisterRecipe("NotificationPopup", function(par
 			layout = builtin.BoxLayout{
 				orientation = builtin.type.Orientation.Vertical,
 				children = {
-					dataState and NotificationPopupContent(dataState, guiType, position) or nil
+					dataState and NotificationPopupContent(dataState, guiType, position, subsidyClass) or nil
 				},
 			},
 		},
@@ -207,11 +217,14 @@ end)
 
 local SUBSIDY = "::/game_mechanics/notifications/types/subvention_notification.script"
 local SUBSIDY_MISSED = "::/game_mechanics/notifications/types/subvention_missed.script"
+local SUBSIDY_FAILED = "::/game_mechanics/notifications/types/subvention.script"
 local SUBSIDY_STATUS = { "uio-subsidy-offer", "uio-subsidy-active", "uio-subsidy-complete" }
 
---- css class of a subsidy icon: its state (offer, active, effect active, missed); nil for other icons.
+--- css class of a subsidy icon: its state (offer, active, effect active, failed, missed); nil for
+-- other icons.
 function notifications.subsidy_class(notification_type, status)
 	if notification_type == SUBSIDY_MISSED then return "uio-subsidy-missed" end
+	if notification_type == SUBSIDY_FAILED then return "uio-subsidy-failed" end
 	if notification_type ~= SUBSIDY then return nil end
 	return SUBSIDY_STATUS[status]
 end
@@ -237,9 +250,7 @@ local function icon(dataState, guiType, notification)
 		}
 	end
 	local status = notification and type(notification.params) == "table" and notification.params.status or nil
-	local class = notifications.subsidy_class(notification and notification.type, status)
-	if not class then return node end
-	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
+	return with_state(node, notifications.subsidy_class(notification and notification.type, status))
 end
 
 local function on_member_mount(notificationId, dataState)

@@ -96,7 +96,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 ### Subsidies
 
-- Subsidy icons in the notification row show their state: offers and active subsidies keep their purple, a subsidy whose effect is active is green and a missed one grey. Their timer ring is drawn in plain white.
+- Subsidy icons in the notification row and their hover card show their state: available blue, in progress orange, effect active green, failed red, a missed offer grey. Every colour keeps at least 7:1 contrast to the white symbol (WCAG AAA), also on hover. Their timer ring is drawn in plain white.
 - Offers have a ring and a bar for the time until the offer ends, and the card says "Time limit: 2 years - Offer ends in 3 months". Active subsidies say "Time limit" and "1 year 3 months left"; completed ones show how long their effect lasts.
 
 ### Game bar and vehicle store
