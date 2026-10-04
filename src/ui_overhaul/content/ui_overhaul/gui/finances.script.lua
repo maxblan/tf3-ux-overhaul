@@ -4,6 +4,7 @@ local guard = require("/ui_overhaul/gui/guard.lua")
 
 local stub = {}
 
+---@param replacement_api react.ReplacementApi
 function stub.doReplaceFn(replacement_api)
 	local module = guard.module("ui_overhaul_1::/ui_overhaul/gui/finances.lua")
 	if not module then return end
@@ -12,6 +13,7 @@ function stub.doReplaceFn(replacement_api)
 end
 
 -- The engine loads *.script.lua resources by calling data().
+---@return table
 function data()
 	return stub
 end

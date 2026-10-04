@@ -10,6 +10,7 @@ local stub = {}
 
 stub.UioVehiclePerformanceCard = react.RegisterRecipe("UioVehiclePerformanceCard", guard.plugin(PERFORMANCE, "card"))
 
+---@param replacement_api react.ReplacementApi
 function stub.doReplaceFn(replacement_api)
 	local module = guard.module(PERFORMANCE)
 	if not module then return end
@@ -18,6 +19,7 @@ function stub.doReplaceFn(replacement_api)
 end
 
 -- The engine loads *.script.lua resources by calling data().
+---@return table
 function data()
 	return stub
 end

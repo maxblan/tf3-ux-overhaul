@@ -7,10 +7,13 @@
 -- @module ui_overhaul.gui.guard
 local builtin = require("::/gui/main/builtin.lua")
 
+---@class uo.gui.guard
 local guard = {}
 
-local reported = {}
+local reported = {} ---@type table<string, true>
 
+---@param key string
+---@param err any what pcall caught: an error can be any Lua value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
@@ -18,6 +21,7 @@ local function report(key, err)
 end
 
 --- An empty layout: the safe result of a failed plugin recipe.
+---@return react.TreeNodeId
 function guard.empty()
 	return builtin.BoxLayout{}
 end
@@ -25,6 +29,8 @@ end
 --- Loads a module with pcall; nil (and one log line) if it fails. `path` must be fully qualified
 -- ("ui_overhaul_1::/..."): a mod-relative "/..." path only resolves to the owning mod while a module
 -- is being loaded; at render time it resolves to the base game (observed in-game).
+---@param path string
+---@return table? module the module's own table, its shape depends on `path`
 function guard.module(path)
 	local ok, module = pcall(require, path)
 	if ok then return module end
@@ -34,6 +40,11 @@ end
 
 --- Calls module[field](...) safely. Returns its result, or `fallback()` (default: an empty layout)
 -- if the module or the call fails.
+---@param path string
+---@param field string
+---@param fallback? fun(): any
+---@param ... any passed on to module[field] unchanged
+---@return any result what module[field] (looked up by name at run time) or `fallback` returns
 function guard.call(path, field, fallback, ...)
 	fallback = fallback or guard.empty
 	local module = guard.module(path)
@@ -49,6 +60,9 @@ function guard.call(path, field, fallback, ...)
 end
 
 --- Recipe function for a plugin of an ordinary extension point: renders module[field](params).
+---@param path string
+---@param field string
+---@return fun(...: any): react.TreeNodeId recipe its params are the plugin's, passed on unchanged
 function guard.plugin(path, field)
 	return function(...) return guard.call(path, field, nil, ...) end
 end

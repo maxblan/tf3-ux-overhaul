@@ -12,7 +12,13 @@ _G.debugPrint = _G.debugPrint or function() end
 
 local station_terminals = require("/ui_overhaul/gui/station_terminals.lua")
 
+-- A stand-in for orderedPairs, which walks any table (hence any).
+---@param t table<any, any>
+---@return fun(): any, any
+---@return table<any, any>
+---@return nil
 local function sorted_pairs(t)
+	---@type any[]
 	local keys = {}
 	for k in pairs(t) do keys[#keys + 1] = k end
 	table.sort(keys)
@@ -23,11 +29,21 @@ local function sorted_pairs(t)
 	end, t, nil
 end
 
+-- Stand-ins for the button recipe and the spacer: plain records instead of nodes.
+---@param p uo.gui.terminals.TerminalButtonParams
+---@return react.TreeNodeId
 local function button(p) return { button = p } end
+---@return string a string stands in for the spacer node
 local function spacer() return "spacer" end
 
 -- Renders a list the way TerminalStops does: one spacer per line with one stop, else one per stop.
+-- The rows are the stand-ins' records (the spacer string or Component's table), so any.
+---@param ordered_pairs uo.gui.station_terminals.OrderedPairs
+---@param make_spacer fun(): react.TreeNodeId
+---@param list table<integer, uo.gui.station_terminals.StopEntry[]>
+---@return any[]
 local function render_list(ordered_pairs, make_spacer, list)
+	---@type any[]
 	local rows = {}
 	for _line, stops in ordered_pairs(list) do
 		if #stops == 1 then
@@ -39,7 +55,10 @@ local function render_list(ordered_pairs, make_spacer, list)
 	return rows
 end
 
+---@param ... integer
+---@return uo.gui.station_terminals.StopEntry[]
 local function stops(...)
+	---@type uo.gui.station_terminals.StopEntry[]
 	local result = {}
 	for i, index in ipairs({ ... }) do result[i] = { stopIndex0 = index } end
 	return result
@@ -51,8 +70,10 @@ describe("station terminals", function()
 		local pairs_ = station_terminals.wrap_ordered_pairs(sorted_pairs, active)
 		local spacer_ = station_terminals.wrap_spacer(spacer, active, button)
 		local rows = render_list(pairs_, spacer_, { [10] = stops(3), [20] = stops(0, 4) })
+		---@type [integer, integer][]
 		local found = {}
 		for i, row in ipairs(rows) do
+			---@type any[] the stand-in records (see render_list)
 			local children = row.component.layout.children
 			assert.are.equal("spacer", children[1])
 			found[i] = { children[2].button.line, children[2].button.stopIndex0 }
@@ -85,6 +106,7 @@ describe("station terminals", function()
 
 	it("iterates like the wrapped function", function()
 		local pairs_ = station_terminals.wrap_ordered_pairs(sorted_pairs, function() return true end)
+		---@type string[]
 		local keys = {}
 		for k, v in pairs_({ b = 2, a = 1 }) do keys[#keys + 1] = k .. v end
 		assert.are.same({ "a1", "b2" }, keys)

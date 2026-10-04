@@ -1,5 +1,6 @@
 -- statistics_warehouses.lua: the pure parts (cargo order, filters). The base modules it requires are
 -- stand-ins, restored after loading so other specs keep theirs.
+---@type table<string, table|function>
 local stand_ins = {
 	["::/gui/main/builtin.lua"] = {},
 	["::/gui/main/cargo_react_util.tl"] = {},
@@ -9,18 +10,27 @@ local stand_ins = {
 	["::/scripts/lang_util.tl"] = {},
 	["::/gui/line_vehicle_mgmt/line_react_util.tl"] = {},
 	["::/game_mechanics/notifications/notification_util.tl"] = {},
-	["::/gui/main/react.lua"] = { RegisterRecipe = function(_name, fn) return fn end },
+	["::/gui/main/react.lua"] = {
+		---@param _name string
+		---@param fn function
+		---@return function
+		RegisterRecipe = function(_name, fn) return fn end,
+	},
 	["::/gui/statistics/statistics_react_util.tl"] = {},
 	["::/scripts/table_util.tl"] = {},
 	["::/gui/statistics/statistic_warehouses.tl"] = function() end,
 }
+-- the loaded modules, of the paths above: tables and functions
+---@type table<string, table|function|nil>
+local loaded = package.loaded
+---@type table<string, table|function|nil>
 local saved = {}
 for path, module in pairs(stand_ins) do
-	saved[path] = package.loaded[path]
-	package.loaded[path] = module
+	saved[path] = loaded[path]
+	loaded[path] = module
 end
 local warehouses = require("/ui_overhaul/gui/statistics_warehouses.lua")
-for path in pairs(stand_ins) do package.loaded[path] = saved[path] end
+for path in pairs(stand_ins) do loaded[path] = saved[path] end
 
 describe("statistics warehouses", function()
 	it("lists cargo by quantity, largest first", function()
@@ -29,8 +39,8 @@ describe("statistics warehouses", function()
 	end)
 
 	it("filters by fill level and cargo", function()
-		local full = { stored = 95, capacity = 100, cargos = { { 4, 95 } }, takes = { [4] = true } }
-		local empty = { stored = 0, capacity = 100, cargos = {}, takes = { [7] = true } }
+		local full = { stored = 95, capacity = 100, cargos = { { 4, 95 } }, takes = { [4] = true }, all = false }
+		local empty = { stored = 0, capacity = 100, cargos = {}, takes = { [7] = true }, all = false }
 		local any = { stored = 0, capacity = 50, cargos = {}, takes = {}, all = true }
 		assert.is_true(warehouses.passes(full, "full", -1))
 		assert.is_false(warehouses.passes(empty, "full", -1))

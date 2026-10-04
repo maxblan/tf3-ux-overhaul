@@ -1,18 +1,31 @@
 -- sliders.lua: which builtin.Slider calls get the additions, and a call outside a recipe render stays
 -- the base call, and a failed render declares the same hooks. The base modules it requires are
 -- stand-ins, restored after loading so other specs keep theirs.
+---@type string?
 local current_recipe -- nil: no recipe is rendering
-local wrapped -- the replacement installed for builtin.Slider
+-- the replacement installed for builtin.Slider: builtin call arguments in, a node or the base's result out
+---@type fun(...: any): any
+local wrapped
+---@type any[][] the arguments of each base slider call, as the caller passed them
 local base_calls = {}
+---@param ... any whatever the caller passed
+---@return string
 local function base_slider(...)
 	base_calls[#base_calls + 1] = { ... }
 	return "base"
 end
+-- debugPrint while the specs run: the install line stays out of the output
+local function quiet() end
+---@type table<string, table|function>
 local stand_ins = {
 	["::/gui/main/builtin.lua"] = {},
 	["::/gui/main/react.lua"] = {
+		---@param _name string
+		---@param fn function
+		---@return fun(p: any): { recipe: function, param: any } the recipe's node keeps its params, of any shape
 		RegisterRecipe = function(_name, fn) return function(p) return { recipe = fn, param = p } end end,
 		-- as react.lua: asserts when no recipe is rendering
+		---@return string
 		getCurrentRecipeName = function()
 			assert(current_recipe ~= nil)
 			return current_recipe
@@ -21,25 +34,32 @@ local stand_ins = {
 	["::/gui/main/script_param_util.tl"] = {},
 	["::/scripts/lang_util.tl"] = {},
 	["ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua"] = {
+		---@param _name string
+		---@param make fun(base: function): fun(...: any): any
 		wrap = function(_name, make) wrapped = make(base_slider) end,
 	},
 }
+-- the loaded modules, of the paths above: tables and functions
+---@type table<string, table|function|nil>
+local loaded = package.loaded
+---@type table<string, table|function|nil>
 local saved = {}
 for path, module in pairs(stand_ins) do
-	saved[path] = package.loaded[path]
-	package.loaded[path] = module
+	saved[path] = loaded[path]
+	loaded[path] = module
 end
 local sliders = require("/ui_overhaul/gui/sliders.lua")
-for path in pairs(stand_ins) do package.loaded[path] = saved[path] end
+for path in pairs(stand_ins) do loaded[path] = saved[path] end
 
 describe("sliders", function()
+	---@type fun(...: any)
 	local saved_print
 	before_each(function()
-		saved_print = debugPrint
-		debugPrint = function() end -- luacheck: ignore 121
+		saved_print = _G.debugPrint
+		_G.debugPrint = quiet
 		sliders.install({})
 	end)
-	after_each(function() debugPrint = saved_print end) -- luacheck: ignore 121
+	after_each(function() _G.debugPrint = saved_print end)
 
 	it("enhances plain sliders outside the settings menu", function()
 		local p = { onValueChange = function() end }
@@ -69,6 +89,7 @@ end)
 describe("sliders hooks", function()
 	local fake_react = require("fake_react")
 	local fake = fake_react.new()
+	---@type uo.sliders.SliderParam the params of the last base slider call
 	local base
 	local builtin = fake_react.any()
 	builtin.BoxLayout = function(t) return { layout = t } end
@@ -76,16 +97,19 @@ describe("sliders hooks", function()
 		["::/gui/main/react.lua"] = fake.react,
 		["::/gui/main/builtin.lua"] = builtin,
 		["ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua"] = {
+			---@param _name string
+			---@param make fun(base: fun(p: uo.sliders.SliderParam): table)
 			wrap = function(_name, make) make(function(p) base = p return { slider = p } end) end,
 		},
 	})
+	---@type fun(...: any)
 	local saved_print
 	before_each(function()
-		saved_print = debugPrint
-		debugPrint = function() end -- luacheck: ignore 121
+		saved_print = _G.debugPrint
+		_G.debugPrint = quiet
 		module.install({})
 	end)
-	after_each(function() debugPrint = saved_print end) -- luacheck: ignore 121
+	after_each(function() _G.debugPrint = saved_print end)
 
 	it("declares the same hooks when a render fails and the base slider shows", function()
 		-- onMouseEvent sets a component internal; kept with the hooks all the same
@@ -103,6 +127,7 @@ describe("sliders hooks", function()
 
 	it("falls back to a plain slider without raising on odd value lists", function()
 		local row = fake.mount(fake.recipe("ScriptParamSliderAndText"))
+		---@type string? the value list holds strings here, on purpose
 		local sent
 		local param = { scriptParam = { numbers = { "a", "b" } }, currentValue = 0,
 			onValueChange = function(v) sent = v end }

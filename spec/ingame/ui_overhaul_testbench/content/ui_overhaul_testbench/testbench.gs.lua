@@ -1,4 +1,5 @@
 -- Game script registration (TF3 resource file; the engine reads the table returned by data()).
+---@return table
 function data()
 	return {
 		updateScript = {

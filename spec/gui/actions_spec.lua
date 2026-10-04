@@ -1,27 +1,53 @@
 -- actions.lua: the line window's buttons and the uio.action event. The base react module is a
 -- stand-in that records fired events (restored after loading, so other specs keep theirs).
+---@class spec.actions.Fired
+---@field name string
+---@field param table
+
+---@type spec.actions.Fired[]
 local fired = {}
 
 local saved_react = package.loaded["::/gui/main/react.lua"]
 package.loaded["::/gui/main/react.lua"] = {
+	---@param _src react.RefWrap?
+	---@param name string
+	---@param param table
 	fireEvent = function(_src, name, param) fired[#fired + 1] = { name = name, param = param } end,
 }
-package.loaded["/ui_overhaul/gui/actions.lua"] = nil
+package.loaded["/ui_overhaul/gui/actions.lua"] = nil ---@type nil
 local actions = require("/ui_overhaul/gui/actions.lua")
 package.loaded["::/gui/main/react.lua"] = saved_react
 
 local LINE = 100
 local OLD, NEW = 1, 2
 
+-- What the specs' stand-in for `api` provides: only what actions.lua reads.
+---@class spec.actions.Api
+---@field type { ComponentType: { TRANSPORT_VEHICLE: string } }
+---@field engine spec.actions.Engine
+---@field cmd spec.actions.Cmd
+
+---@class spec.actions.Engine
+---@field entityExists fun(e: integer): boolean
+---@field getComponent fun(e: integer): { transportVehicleConfig: { vehicles: { purchaseTime: integer }[] } }
+---@field system { transportVehicleSystem: { getLineVehicles: fun(): integer[] } }
+
+---@class spec.actions.Cmd
+---@field makeVehicleSendToDepotCmd fun(v: integer, sell: boolean): { vehicle: integer, sell: boolean }
+---@field sendCommand fun(cmd: table, callback: fun(res: nil, success: boolean))
+
 describe("actions", function()
+	---@type { api: api, tr: fun(id: string): string, debug_print: fun(...: any) }
 	local saved = {}
+	---@type table[], string[], boolean
 	local commands, log, send_ok
 
 	before_each(function()
 		saved.api, saved.tr, saved.debug_print = _G.api, _G._, _G.debugPrint
 		fired, commands, log, send_ok = {}, {}, {}, true
 		local purchased = { [OLD] = 10, [NEW] = 20 }
-		_G.api = {
+		---@type spec.actions.Api
+		local mock = {
 			type = { ComponentType = { TRANSPORT_VEHICLE = "tv" } },
 			engine = {
 				entityExists = function(e) return purchased[e] ~= nil end,
@@ -38,8 +64,15 @@ describe("actions", function()
 				end,
 			},
 		}
-		_G._ = function(text) return text end
-		_G.debugPrint = function(...) log[#log + 1] = table.concat({ ... }) end
+		-- A partial stand-in (spec.actions.Api). The cast keeps LuaLS from merging the mock's types into
+		-- the global `api` everywhere else; a plain assignment would.
+		_G.api = mock --[[@as api]]
+		---@param text string
+		---@return string
+		local function tr(text) return text end
+		---@param ... any
+		local function record(...) log[#log + 1] = table.concat({ ... }) end
+		_G._, _G.debugPrint = tr, record
 		actions.set_protected_entities(nil)
 	end)
 
@@ -48,8 +81,10 @@ describe("actions", function()
 		actions.set_protected_entities(nil)
 	end)
 
+	---@return string[] messages
+	---@return uo.actions.Feedback add_feedback
 	local function collect()
-		local messages = {}
+		local messages = {} ---@type string[]
 		return messages, function(message) messages[#messages + 1] = message end
 	end
 

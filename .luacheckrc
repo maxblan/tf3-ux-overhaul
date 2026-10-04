@@ -1,6 +1,10 @@
 -- The game embeds Lua 5.2.2 (TransportFever3.exe strings); specs run on fengari (Lua 5.3).
 std = "lua52"
 
+-- No globals defined by assignment. Unused arguments and values are reported by default (see ignore below).
+allow_defined = false
+allow_defined_top = false
+
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
 read_globals = { "api", "app", "debugPrint", "_", "pGetText", "nGetText" }

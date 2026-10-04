@@ -3,6 +3,7 @@
 -- flat button that looks like the base label (construction.css.lua: R::ScriptParamSliderText).
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

@@ -11,6 +11,7 @@ local ssu = require("::/gui/main/stylesheetutil.lua")
 
 local BOTTOM_PARAMS = "R::ConstructionParamsContent#menu.construction.bottomparams.react"
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

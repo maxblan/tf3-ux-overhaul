@@ -3,6 +3,7 @@
 -- base statistics stylesheet is, so a tab that adds the bar needs no entry here.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

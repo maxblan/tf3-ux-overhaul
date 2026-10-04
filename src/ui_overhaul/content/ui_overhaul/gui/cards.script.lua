@@ -10,6 +10,7 @@ local stub = {}
 stub.UioLineCard = react.RegisterRecipe("UioLineCard", guard.plugin(CARDS, "line"))
 
 -- The engine loads *.script.lua resources by calling data().
+---@return table
 function data()
 	return stub
 end

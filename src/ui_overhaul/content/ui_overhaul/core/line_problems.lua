@@ -59,7 +59,7 @@ local line_problems = {}
 
 --- What a terminal serves or a line's vehicles carry (see line_problems.incompatibility).
 ---@class uo.core.line_problems.Needs
----@field carriers table<string, boolean> carrier -> true
+---@field carriers table<Carrier, boolean> carrier -> true
 ---@field passengers? boolean
 ---@field cargo? boolean
 

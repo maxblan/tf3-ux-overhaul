@@ -25,6 +25,7 @@ local lang_util = require("::/scripts/lang_util.tl")
 local town_util = require("::/game_mechanics/towns/town_util.tl")
 local town_cargo_util = require("::/game_mechanics/towns/town_cargo_util.tl")
 
+---@class uo.gui.window_tweaks
 local window_tweaks = {}
 
 -- Sections ----------------------------------------------------------------------------------------
@@ -87,6 +88,9 @@ end
 local SELL_TAG = "entityWindow.vehicle.sell"
 local ARMED_SECONDS = 4
 
+---@param icon? string
+---@param text? string
+---@return react.TreeNodeId
 local function button_content(icon, text)
 	return builtin.Component{
 		layout = builtin.BoxLayout{
@@ -101,6 +105,11 @@ end
 
 -- The vanilla secondary (icon) button; armed, it shows "Sell?" like a primary button and the sell
 -- sound plays on the confirming click.
+---@class uo.window_tweaks.ConfirmSellParams: react.Param
+---@field entry game.gui.entity_window.entity_window_util.ActionBarButton
+
+---@param params uo.window_tweaks.ConfirmSellParams
+---@return react.TreeNodeId
 local ConfirmSellButton = react.RegisterRecipe("UioConfirmSellButton", function(params)
 	local entry = params.entry
 	local armed = react.useState(false)
@@ -130,14 +139,27 @@ local ConfirmSellButton = react.RegisterRecipe("UioConfirmSellButton", function(
 	} } }
 end)
 
+--- A copy of `t` with the same fields and values.
+---@generic T: table
+---@param t T
+---@return T
+local function shallow_copy(t)
+	local copy = {}
+	-- LuaLS cannot infer pairs()'s key and value types for a generic table
+	---@diagnostic disable-next-line: no-unknown
+	for k, v in pairs(t) do copy[k] = v end
+	return copy
+end
+
+---@param buttons? game.gui.entity_window.entity_window_util.ActionBarButton[]
+---@return game.gui.entity_window.entity_window_util.ActionBarButton[]?
 local function with_confirmation(buttons)
 	if not buttons then return buttons end
-	local result = {}
+	local result = {} ---@type game.gui.entity_window.entity_window_util.ActionBarButton[]
 	for i, entry in ipairs(buttons) do
 		if entry.tag == SELL_TAG and not entry.customItem and not entry.toggleButton and entry.sound then
 			-- `sound` is only set when selling is allowed; otherwise the base click shows the reason
-			local copy = {}
-			for k, v in pairs(entry) do copy[k] = v end
+			local copy = shallow_copy(entry)
 			copy.customItem = ConfirmSellButton{ entry = entry }
 			result[i] = copy
 		else
@@ -147,10 +169,11 @@ local function with_confirmation(buttons)
 	return result
 end
 
+---@param params game.gui.entity_window.entity_window_util.ActionButtonBarParams
+---@return react.TreeNodeId
 local ActionButtonBar = react.RegisterRecipe("ActionButtonBar", function(params)
 	local ok, changed = pcall(function()
-		local copy = {}
-		for k, v in pairs(params) do copy[k] = v end
+		local copy = shallow_copy(params)
 		copy.primaryButtons = with_confirmation(params.primaryButtons)
 		copy.secondaryButtons = with_confirmation(params.secondaryButtons)
 		return copy
@@ -164,9 +187,16 @@ end)
 local PARALLEL = "::/game_mechanics/towns/town_util_parallel.script@town_util_parallel."
 local LEVEL_RANK = { VeryPoor = 0, Poor = 1, Mediocre = 2, Good = 3, VeryGood = 4, Excellent = 5 }
 
+---A growth factor: a town rating, or the supplies.
+---@class uo.window_tweaks.GrowthFactor
+---@field name string
+---@field fn ResName parallel function computing the factor's RatingLevel
+---@field extra? any the rating's getRatingFnExtraParam, whatever that rating needs
+
 -- Growth = (lowest of these ratings) x supplies (town_util.calcAuthorityScore, getGrowthLevelMult).
+---@return uo.window_tweaks.GrowthFactor[]
 local function growth_factors()
-	local factors = {}
+	local factors = {} ---@type uo.window_tweaks.GrowthFactor[]
 	for _i, rating in ipairs(town_util.GetRatings()) do
 		factors[#factors + 1] = { name = rating.name, fn = rating.getRatingFnName, extra = rating.getRatingFnExtraParam }
 	end
@@ -177,7 +207,7 @@ end
 --- True once the bottleneck text failed; from then on the base card is shown alone.
 window_tweaks.town_level_failed = false
 
----@param err any
+---@param err any what pcall caught: an error can be any Lua value
 local function town_level_failed(err)
 	if window_tweaks.town_level_failed then return end
 	window_tweaks.town_level_failed = true
@@ -185,31 +215,32 @@ local function town_level_failed(err)
 end
 
 ---@class uo.town.States
----@field factors react.State<string|nil>[] growth level of each factor, in the order of the factor list
----@field level_widget react.State<table|nil> town_util_parallel.getTownLevelWidgetState
+---@field factors react.State<RatingLevel|nil>[] growth level of each factor, in the order of the factor list
+---@field level_widget react.State<game.game_mechanics.towns.town_util_parallel.TownLevelWidgetState|nil>
 ---@field development react.State<boolean|nil>
 
 --- The hooks of the bottleneck text, one parallel state per factor, then the level and development
 -- states.
----@param town integer town entity
----@param factors table[] growth_factors()
+---@param town Engine.Entity
+---@param factors uo.window_tweaks.GrowthFactor[] growth_factors()
 ---@return uo.town.States
 local function use_town_states(town, factors)
-	local states = { factors = {} }
+	local factor_states = {} ---@type react.State<RatingLevel|nil>[]
 	for i, factor in ipairs(factors) do
-		states.factors[i] = engine_react_util.useStepStateParallelSimple(factor.fn,
-			{ townEntity = town, extraParam = factor.extra })
+		---@type game.game_mechanics.towns.town_util_parallel.GetRatingParam
+		local param = { townEntity = town, extraParam = factor.extra }
+		factor_states[i] = engine_react_util.useStepStateParallelSimple(factor.fn, param)
 	end
-	states.level_widget = engine_react_util.useStepStateParallelSimple(PARALLEL .. "getTownLevelWidgetState", town)
-	states.development = engine_react_util.useStepState(function()
+	local level_widget = engine_react_util.useStepStateParallelSimple(PARALLEL .. "getTownLevelWidgetState", town)
+	local development = engine_react_util.useStepState(function()
 		local component = api.engine.getComponent(town, api.type.ComponentType.TOWN)
 		return component and component.developmentActive
 	end)
-	return states
+	return { factors = factor_states, level_widget = level_widget, development = development }
 end
 
 --- The text under the base level widget, or nil.
----@param factors table[] growth_factors()
+---@param factors uo.window_tweaks.GrowthFactor[] growth_factors()
 ---@param states uo.town.States
 ---@return react.TreeNodeId|nil
 local function bottleneck_text(factors, states)
@@ -219,7 +250,7 @@ local function bottleneck_text(factors, states)
 		local rank = LEVEL_RANK[states.factors[i]:old()] or math.huge
 		if rank < worst_rank then worst, worst_rank = factor, rank end
 	end
-	local parts = {}
+	local parts = {} ---@type string[]
 	if worst and worst_rank < LEVEL_RANK.Excellent then
 		parts[#parts + 1] = lang_util.format(_("Limited by {factor}"), { factor = worst.name })
 	end
@@ -240,6 +271,11 @@ end
 -- declares the same hooks in the same order: the factor list is fixed on its first render, and a
 -- failure does not skip hooks on later renders. After a failure it renders an empty layout until
 -- the parent, which checks town_level_failed, unmounts it.
+---@class uo.window_tweaks.TownBottleneckParams: react.Param
+---@field town Engine.Entity
+
+---@param params uo.window_tweaks.TownBottleneckParams
+---@return react.TreeNodeId
 local TownBottleneck = react.RegisterRecipe("UioTownBottleneck", function(params)
 	local factors_ref = react.useRef(nil)
 	if factors_ref:get() == nil then
@@ -250,7 +286,7 @@ local TownBottleneck = react.RegisterRecipe("UioTownBottleneck", function(params
 	local factors = factors_ref:get() or {}
 	local ok, states = pcall(use_town_states, params.town, factors)
 	if not ok then town_level_failed(states) end
-	local node
+	local node ---@type react.TreeNodeId?
 	if not window_tweaks.town_level_failed then
 		local text_ok, text = pcall(bottleneck_text, factors, states)
 		if text_ok then node = text else town_level_failed(text) end
@@ -261,8 +297,18 @@ end)
 
 -- Declares no hooks: the base widget, and the text below it while it works. The text is a child
 -- recipe, so dropping it after a failure unmounts it instead of changing this recipe's hooks.
+---The param the base passes to the town level card's content recipe.
+---@class uo.window_tweaks.TownLevelParam
+---@field entityId Engine.Entity
+
+---@class uo.window_tweaks.TownLevelWithBottleneckParams: react.Param
+---@field inner react.Recipe<uo.window_tweaks.TownLevelParam> the base content recipe
+---@field innerParam uo.window_tweaks.TownLevelParam
+
+---@param params uo.window_tweaks.TownLevelWithBottleneckParams
+---@return react.TreeNodeId
 local TownLevelWithBottleneck = react.RegisterRecipe("UioTownLevel", function(params)
-	local children = { params.inner(params.innerParam) }
+	local children = { params.inner(params.innerParam) } ---@type react.TreeNodeId[]
 	if not window_tweaks.town_level_failed then
 		local ok, node = pcall(TownBottleneck, { meta = { localKey = "uio.town.bottleneck" },
 			town = params.innerParam.entityId })
@@ -275,6 +321,10 @@ end)
 -- TownLevelPlugin renders, with the parameter { entityId } (the other card part uses { entity }).
 local function patch_town_level()
 	local original = content_card.makeRecipeAndParam
+	---@generic T
+	---@param recipe react.Recipe<T>
+	---@param param T
+	---@return game.gui.main.content_card.RecipeAndParamErased
 	content_card.makeRecipeAndParam = function(recipe, param)
 		local ok, is_level = pcall(function()
 			return type(param) == "table" and param.entityId ~= nil and param.entity == nil
@@ -291,6 +341,10 @@ end
 
 local function patch_disable_reason()
 	local original = company_util.getConstructionDisableReason
+	---@param res ResName
+	---@param metadata ConstructionDescMetadata
+	---@param cache game.game_mechanics.company.company_util.ConstructionDisableCacheData
+	---@return game.game_mechanics.company.company_util.ItemDisableReason?
 	company_util.getConstructionDisableReason = function(res, metadata, cache)
 		local result = original(res, metadata, cache)
 		if not result or result.category ~= "company-rank" then return result end
@@ -309,6 +363,7 @@ local function patch_disable_reason()
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function window_tweaks.install(replacement_api)
 	patch_sections()
 	patch_disable_reason()

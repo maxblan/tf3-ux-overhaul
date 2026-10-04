@@ -4,6 +4,7 @@ local fake_react = require("fake_react")
 
 local fake = fake_react.new()
 local builtin = { BoxLayout = function(t) return { layout = t } end }
+---@type uo.gui.fallback
 local fallback = fake_react.load("/ui_overhaul/gui/fallback.lua", {
 	["::/gui/main/react.lua"] = fake.react,
 	["::/gui/main/builtin.lua"] = builtin,
@@ -14,17 +15,26 @@ local PARENT_HOOKS = { "useState", "onStep", "useRef", "useRef" }
 
 describe("fallback", function()
 	local saved_debug_print = _G.debugPrint
+	---@type string[]
 	local logged
+	---@param ... any
+	local function record(...) logged[#logged + 1] = table.concat({ ... }) end
 	before_each(function()
 		logged = {}
-		_G.debugPrint = function(...) logged[#logged + 1] = table.concat({ ... }) end
+		_G.debugPrint = record
 	end)
 	after_each(function() _G.debugPrint = saved_debug_print end)
 
 	-- A render with two hooks, then work that fails while `broken` is set.
+	---@param label string
+	---@return uo.gui.fallback.Switch switch
+	---@return { broken: boolean } control
+	---@return function parent
 	local function make(label)
 		local switch = fallback.switch(label)
 		local control = { broken = false }
+		---@param params string
+		---@return react.TreeNodeId
 		local parent = fallback.replacement(switch, "Thing", function(params)
 			fake.react.useState(0)
 			fake.react.onStep(function() end)
@@ -39,7 +49,8 @@ describe("fallback", function()
 		local p = fake.mount(parent)
 		local node = p.render("x")
 		assert.are.same(PARENT_HOOKS, p.hooks)
-		local child_node = node.layout.children[1]
+		assert.are.same({ class = "uio-fallback" }, node.layout.meta) -- unspaced (fallback.css.lua)
+		local child_node = node.layout.children[1] ---@type spec.FakeNode
 		assert.are.equal("Thing", child_node.name)
 		local child, content = fake.render_node(child_node)
 		assert.are.same({ content = "x" }, content)
@@ -54,12 +65,12 @@ describe("fallback", function()
 
 		control.broken = true
 		local empty = child.render("x")
-		assert.are.same({ layout = {} }, empty)
+		assert.are.same({ layout = { meta = { class = "uio-fallback" } } }, empty)
 		assert.are.same(hooks, child.hooks)
 		assert.is_true(switch.failed)
 		assert.are.equal(1, #logged)
 		control.broken = false
-		assert.are.same({ layout = {} }, child.render("x")) -- no switching back
+		assert.are.same({ layout = { meta = { class = "uio-fallback" } } }, child.render("x")) -- no switching back
 		assert.are.same(hooks, child.hooks)
 
 		-- the parent renders again on its next step, now with the base, and the same hooks
@@ -92,17 +103,46 @@ describe("fallback", function()
 		p.step()
 		node = p.render()
 		assert.are.same(PARENT_HOOKS, p.hooks)
-		local base_node = node.layout.children[1]
+		local base_node = node.layout.children[1] ---@type spec.FakeNode
 		assert.are.equal(BASE, base_node.original)
 		assert.are.equal(base_node.ref, p.internals.setPreferredFocusChild[1])
 		base_node.ref:set({ getApi = function() return { push = function(x) return "base " .. x end } end })
 		assert.are.equal("base 3", p.api.push(3))
 	end)
 
-	it("renders an empty layout for a render that returns nothing", function()
+	it("renders an unspaced empty layout for a render that returns nothing", function()
 		local switch = fallback.switch("nothing")
 		local parent = fallback.replacement(switch, "Nothing", function() return nil end, BASE)
 		local _child, node = fake.render_node(fake.mount(parent).render().layout.children[1])
-		assert.are.same({ layout = {} }, node)
+		assert.are.same({ layout = { meta = { class = "uio-fallback" } } }, node)
+	end)
+
+	it("renders nothing where the base renders nothing, with the same hooks", function()
+		local switch = fallback.switch("editor")
+		local editor = true
+		local parent = fallback.replacement(switch, "Editor", function() return {} end, BASE,
+			{ nothing = function() return editor end })
+		local p = fake.mount(parent)
+		assert.is_nil(p.render())
+		assert.are.same(PARENT_HOOKS, p.hooks)
+		editor = false
+		assert.are.equal("table", type(p.render()))
+		assert.are.same(PARENT_HOOKS, p.hooks)
+	end)
+
+	it("forwards the input actions the game sends to the replaced node on to the shown node", function()
+		local switch = fallback.switch("keys")
+		local parent = fallback.replacement(switch, "Keys", function() return {} end, BASE,
+			{ input_actions = { "IA_NOTIFICATIONS_OPEN" } })
+		local p = fake.mount(parent)
+		local node = p.render()
+		local hooks = p.hooks
+		assert.are.equal(node.layout.children[1].ref, p.input_actions.IA_NOTIFICATIONS_OPEN.forward)
+		fallback.fail(switch, "boom")
+		p.step()
+		node = p.render()
+		assert.are.same(hooks, p.hooks)
+		assert.are.equal(BASE, node.layout.children[1].original)
+		assert.are.equal(node.layout.children[1].ref, p.input_actions.IA_NOTIFICATIONS_OPEN.forward)
 	end)
 end)

@@ -22,6 +22,7 @@ local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
+---@class uo.gui.minimize
 local minimize = {}
 
 local EVENT = "uio.minimize"
@@ -30,9 +31,11 @@ local ICON_RESTORE = "gui/builtin/window/icons/symbol_maximize_18.tga"
 local SKIPPED_CLASSES = { "popover", "dialog", "no-close-button", "construct-" }
 local SKIPPED_TOOLS = { pause = true }
 
-local minimized = {} -- window key -> true while minimized
+local minimized = {} ---@type table<string, true?> window key -> true while minimized
 
-local reported = {}
+local reported = {} ---@type table<string, true>
+---@param key string
+---@param err any what pcall caught: an error can be any Lua value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
@@ -40,11 +43,13 @@ local function report(key, err)
 end
 
 --- Whether a window's parameters get the minimize button.
+---@param p any what the window builtin got first: its params, or a ref, or anything a mod passes
+---@return boolean
 function minimize.eligible(p)
 	if type(p) ~= "table" or p.content == nil or p.header ~= nil or p.compact then return false end
 	if p.closable ~= true or SKIPPED_TOOLS[p.tool or ""] then return false end
 	if type(p.title) ~= "string" or p.title == "" then return false end
-	local class = p.meta and p.meta.class
+	local class = p.meta and p.meta.class ---@type any whatever a mod passes; checked below
 	if type(class) == "string" then
 		for _i, skipped in ipairs(SKIPPED_CLASSES) do
 			if class:find(skipped, 1, true) then return false end
@@ -54,6 +59,8 @@ function minimize.eligible(p)
 end
 
 --- A key that tells the window apart from the others open at the same time.
+---@param p builtin.WindowParam
+---@return string
 function minimize.key(p)
 	if type(p.id) == "string" and p.id ~= "" then return "id:" .. p.id end
 	if type(p.tool) == "string" and p.tool ~= "" and p.tool ~= "entityWindow" then return "tool:" .. p.tool end
@@ -61,12 +68,15 @@ function minimize.key(p)
 end
 
 --- Minimizes or restores the window `key`.
+---@param key string
 function minimize.toggle(key)
 	minimized[key] = not minimized[key] or nil
 	react.fireEvent(nil, EVENT, key)
 end
 
 -- Re-renders the caller when window `key` folds or unfolds; returns whether it is folded.
+---@param key string
+---@return boolean
 local function use_folded(key)
 	local state = react.useState(minimized[key] == true)
 	react.onEvent(EVENT, function(_e, changed)
@@ -75,6 +85,12 @@ local function use_folded(key)
 	return state:old()
 end
 
+---@class uo.minimize.MinimizableParams: react.Param
+---@field key string
+---@field content? react.TreeNodeId
+
+---@param params uo.minimize.MinimizableParams
+---@return react.TreeNodeId
 local Minimizable = react.RegisterRecipe("UioMinimizable", function(params)
 	local key = params.key
 	local folded = use_folded(key)
@@ -88,6 +104,11 @@ local Minimizable = react.RegisterRecipe("UioMinimizable", function(params)
 	}
 end)
 
+---@class uo.minimize.MinimizeButtonParams: react.Param
+---@field key string
+
+---@param params uo.minimize.MinimizeButtonParams
+---@return react.TreeNodeId
 local MinimizeButton = react.RegisterRecipe("UioMinimizeButton", function(params)
 	local folded = use_folded(params.key)
 	return builtin.BoxLayout{
@@ -107,15 +128,31 @@ local MinimizeButton = react.RegisterRecipe("UioMinimizeButton", function(params
 	}
 end)
 
+--- A copy of `t` with the same fields and values.
+---@generic T: table
+---@param t T
+---@return T
+local function shallow_copy(t)
+	local copy = {}
+	-- LuaLS cannot infer pairs()'s key and value types for a generic table
+	---@diagnostic disable-next-line: no-unknown
+	for k, v in pairs(t) do copy[k] = v end
+	return copy
+end
+
+---@param base function builtin.Window, or another mod's wrap of it
+---@return function
 local function wrap_window(base)
+	---@param p any what the window builtin gets first: its params, or a ref
+	---@param ... any the rest, passed on unchanged
+	---@return react.TreeNodeId
 	return function(p, ...)
 		if select("#", ...) == 0 then
 			local ok, eligible = pcall(minimize.eligible, p)
 			if ok and eligible then
 				local key = minimize.key(p)
-				local copy = {}
-				for k, v in pairs(p) do copy[k] = v end
-				copy.content = Minimizable{ key = key, content = p.content }
+				local copy = shallow_copy(p) ---@type builtin.WindowParam eligible() checked the table
+				copy.content = Minimizable{ key = key, content = copy.content }
 				copy.header = MinimizeButton{ key = key }
 				return base(copy)
 			elseif not ok then
@@ -127,6 +164,7 @@ local function wrap_window(base)
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param _replacement_api react.ReplacementApi
 function minimize.install(_replacement_api)
 	-- builtin_wraps also keeps window recipes registered later on the base builtin
 	builtin_wraps.wrap("Window", wrap_window)

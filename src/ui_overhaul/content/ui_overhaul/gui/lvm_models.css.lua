@@ -3,6 +3,7 @@
 -- base "vehicle-button" style, "In all lines" the "primary" style of buttons like "Assign Line".
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

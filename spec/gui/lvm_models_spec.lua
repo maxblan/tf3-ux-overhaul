@@ -1,8 +1,32 @@
 -- Line Manager model row: grouping, the cached view and the selection it writes.
 
+---@class spec.lvm_models.Vehicle a vehicle of the stand-in engine
+---@field ids integer[] model ids of its parts
+---@field line? integer
+---@field rev integer revision number
+---@field carrier integer
+---@field foreign? boolean
+---@field state integer
+
+---@class spec.lvm_models.World
+---@field vehicles table<integer, spec.lvm_models.Vehicle>
+---@field lines table<integer, integer[]> line -> its vehicles
+---@field log string[]
+---@field shift boolean whether Shift is held
+
+---@class spec.lvm_models.Timer the row's useStepStateTimer
+---@field fn fun(old?: integer): integer
+---@field interval number
+---@field value integer
+
+---@class spec.lvm_models.Ear the stand-in entity_util's entity and revision
+---@field entity integer
+---@field revision { num: integer[] }
+
 local EN_ROUTE, IN_DEPOT = 1, 0
-local world, calls
-local timer -- the row's useStepStateTimer: { fn, interval, value }
+local world ---@type spec.lvm_models.World
+local calls ---@type { components: integer, closed: integer }
+local timer ---@type spec.lvm_models.Timer?
 
 -- Stand-ins for the base modules lvm_models.lua loads.
 package.loaded["::/gui/main/react.lua"] = {
@@ -12,12 +36,19 @@ package.loaded["::/gui/main/builtin.lua"] = setmetatable({
 	type = { Orientation = {}, ScrollBarPolicy = {} },
 }, { __index = function(_t, kind) return function(p) return { kind = kind, params = p } end end })
 package.loaded["::/gui/main/engine_react_util.tl"] = {
+	---@param fn fun(old?: integer): integer
+	---@param interval number
+	---@return { old: fun(): integer }
 	useStepStateTimer = function(fn, interval)
-		if not timer then timer = { fn = fn, interval = interval, value = fn(nil) } end
-		timer.fn = fn
-		return { old = function() return timer.value end }
+		local t = timer or { fn = fn, interval = interval, value = fn(nil) }
+		timer = t
+		t.fn = fn
+		return { old = function() return t.value end }
 	end,
 }
+---@param a table<any, any>|string|number|boolean|nil a fleet or a part of one
+---@param b table<any, any>|string|number|boolean|nil
+---@return boolean
 local function deep_equals(a, b)
 	if type(a) ~= "table" or type(b) ~= "table" then return a == b end
 	for k, v in pairs(a) do if not deep_equals(v, b[k]) then return false end end
@@ -26,33 +57,67 @@ local function deep_equals(a, b)
 end
 package.loaded["::/scripts/table_util.tl"] = { deepEquals = deep_equals }
 package.loaded["::/scripts/lang_util.tl"] = {
+	---@param text string
+	---@param values table<string, string|number>
+	---@return string
 	format = function(text, values) return (text:gsub("{(%w+)}", function(k) return tostring(values[k]) end)) end,
 	formatInt = tostring,
 }
 package.loaded["::/scripts/entity_util.tl"] = {
+	---@param v integer
+	---@return spec.lvm_models.Ear?
 	makeEntityAndRevision = function(v)
 		if not world.vehicles[v] then return nil end
 		return { entity = v, revision = { num = { world.vehicles[v].rev, 0, 0 } } }
 	end,
+	---@param ear spec.lvm_models.Ear
+	---@return boolean
 	entityChanged0 = function(ear)
 		local v = world.vehicles[ear.entity]
 		return not v or ear.revision.num[1] < v.rev
 	end,
+	---@param e integer
+	---@return boolean
 	isOwnedByPlayer = function(e) return world.vehicles[e] ~= nil and not world.vehicles[e].foreign end,
 }
 package.loaded["::/gui/line_vehicle_mgmt/vehicle_react_util.tl"] = {
+	---@param p game.gui.line_vehicle_mgmt.vehicle_react_util.VehicleWidgetParams
+	---@return { widget: game.gui.line_vehicle_mgmt.vehicle_react_util.VehicleWidgetParams }
 	VehicleWidget = function(p) return { widget = p } end,
 }
-_G._ = function(text) return text end
-_G.debugPrint = function(...)
-	local parts = {}
-	for i = 1, select("#", ...) do parts[#parts + 1] = tostring(select(i, ...)) end
+---@param text string
+---@return string
+local function tr(text) return text end
+---@param ... any
+local function record(...)
+	local parts = {} ---@type string[]
+	for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
 	world.log[#world.log + 1] = table.concat(parts)
 end
+_G._, _G.debugPrint = tr, record
+
+-- What the specs' stand-in for `api` provides: only what lvm_models.lua reads.
+---@class spec.lvm_models.Api
+---@field type { ComponentType: { TRANSPORT_VEHICLE: string }, enum: { TransportVehicleState: table<string, integer> } }
+---@field engine spec.lvm_models.Engine
+---@field res { modelRep: { get: fun(id: integer): { metadata: { description: { name: string? } } } } }
+---@field gui { inputAction: { modifierOnlyActionIsActive: fun(ia: string): boolean } }
+
+---@class spec.lvm_models.Engine
+---@field entityExists fun(e: integer): boolean
+---@field getComponent fun(e: integer, kind: string): table?
+---@field util { getPlayer: fun(): integer }
+---@field system spec.lvm_models.System
+
+---@class spec.lvm_models.System
+---@field lineSystem { getLinesForPlayer: fun(): integer[] }
+---@field transportVehicleSystem { getLineVehicles: fun(line: integer): integer[] }
 
 local NAMES = { [1] = "Isuzu", [2] = "Volvo", [3] = "Loco", [4] = "Coach" }
 
 --- vehicles: id -> { ids = {model ids}, line = line or nil }
+---@param vehicles table<integer, { ids: integer[], line?: integer, carrier?: integer, foreign?: boolean }>
+---@param lines? table<integer, integer[]>
 local function install(vehicles, lines)
 	world = { vehicles = {}, lines = lines or {}, log = {}, shift = false }
 	calls = { components = 0, closed = 0 }
@@ -60,7 +125,8 @@ local function install(vehicles, lines)
 		world.vehicles[id] = { ids = v.ids, line = v.line, rev = 1, carrier = v.carrier or 0, foreign = v.foreign,
 			state = v.line and EN_ROUTE or IN_DEPOT }
 	end
-	_G.api = {
+	---@type spec.lvm_models.Api
+	local mock = {
 		type = {
 			ComponentType = { TRANSPORT_VEHICLE = "tv" },
 			enum = { TransportVehicleState = { EN_ROUTE = EN_ROUTE, AT_TERMINAL = 2, IN_DEPOT = IN_DEPOT } },
@@ -72,7 +138,7 @@ local function install(vehicles, lines)
 				calls.components = calls.components + 1
 				local v = world.vehicles[e]
 				if not v then return nil end
-				local parts = {}
+				local parts = {} ---@type { part: { modelId: integer } }[]
 				for i, id in ipairs(v.ids) do parts[i] = { part = { modelId = id } } end
 				return { transportVehicleConfig = { vehicles = parts }, line = v.line or -1, state = v.state,
 					carrier = v.carrier }
@@ -80,7 +146,7 @@ local function install(vehicles, lines)
 			util = { getPlayer = function() return 7 end },
 			system = {
 				lineSystem = { getLinesForPlayer = function()
-					local result = {}
+					local result = {} ---@type integer[]
 					for line in pairs(world.lines) do result[#result + 1] = line end
 					table.sort(result)
 					return result
@@ -93,53 +159,90 @@ local function install(vehicles, lines)
 			return ia == "IA_PRECISION_MODE" and world.shift
 		end } },
 	}
+	-- A partial stand-in (spec.lvm_models.Api). The cast keeps LuaLS from merging the mock's types into
+	-- the global `api` everywhere else; a plain assignment would.
+	_G.api = mock --[[@as api]]
 end
 
+---@class spec.lvm_models.Ref<T> a stand-in ref
+---@field value T
+---@field get fun(self: spec.lvm_models.Ref<T>): T
+---@field set fun(self: spec.lvm_models.Ref<T>, v: T)
+
+---@generic T
+---@param value T
+---@return spec.lvm_models.Ref<T>
 local function ref(value)
 	return { value = value, get = function(self) return self.value end, set = function(self, v) self.value = v end }
 end
 
+---@param v integer
+---@return game.scripts.entity_util.EntityAndRevision
 local function ear(v) return { entity = v, revision = { num = { 1, 0, 0 } } } end
 
 --- One step of the row's timer, as useStepStateTimer runs it.
+---@return integer
 local function tick()
-	timer.value = timer.fn(timer.value)
-	return timer.value
+	local t = assert(timer, "the row is not mounted")
+	t.value = t.fn(t.value)
+	return t.value
 end
 
 --- Replaces vehicle `v` in place (makeVehicleReplaceCmd keeps the id) with model ids `ids`.
+---@param v integer
+---@param ids integer[]
 local function replace(v, ids) world.vehicles[v].ids = ids end
 
+--- A node as the stand-in react and builtin modules above build it: plain tables of several shapes
+--- (recipe calls { recipe, params, fn }, builtins { kind, params }, widgets { widget }) where the game
+--- builds opaque nodes, so the specs read them untyped.
+---@param node_id react.TreeNodeId
+---@return any node
+local function stand_in(node_id) return node_id end
+
 --- Renders the row node that update() returned; returns the layout and the chips' buttons.
-local function render(row)
-	local node = row.fn(row.params)
-	local inner = node.params.children and node.params.children[1].params.layout.params.children
+---@param node_id react.TreeNodeId
+---@return any node the rendered layout (see stand_in)
+---@return any chips the model buttons, nil while the row is hidden
+---@return any pull the "In all lines" button's params
+local function render(node_id)
+	local row = stand_in(node_id)
+	local node = row.fn(row.params) ---@type any see stand_in
+	local inner = node.params.children and node.params.children[1].params.layout.params.children ---@type any
 	return node, inner and inner[1].params.content.params.layout.params.children, inner and inner[2].params
 end
 
 --- VehicleList parameters for a list with `selected` and `unselected` vehicles.
+---@param selected integer[]
+---@param unselected integer[]
+---@return uo.gui.lvm_models.ListParams
 local function list(selected, unselected)
+	---@type game.scripts.entity_util.EntityAndRevision[], game.scripts.entity_util.EntityAndRevision[], integer[]
 	local s, u, vehicles = {}, {}, {}
 	for _i, v in ipairs(selected) do s[#s + 1] = ear(v); vehicles[#vehicles + 1] = v end
 	for _i, v in ipairs(unselected) do u[#u + 1] = ear(v); vehicles[#vehicles + 1] = v end
 	local vm_api = { closeVehicleStore = function() calls.closed = calls.closed + 1 end }
 	local manager = { getApi = function() return vm_api end }
-	return {
+	local params = {
 		vehicles = vehicles,
 		managerRef = ref(manager),
 		commonParams = { vehicleManagerStateRef = ref({ vehicleListEntitiesSelected = s, vehicleListEntitiesUnselected = u,
 			carriers = {} }) },
 	}
+	-- partial: the vehicles, the manager's closeVehicleStore and the state ref are what lvm_models uses
+	return params --[[@as uo.gui.lvm_models.ListParams]]
 end
 
+---@param entries game.scripts.entity_util.EntityAndRevision[]
+---@return integer[]
 local function entities(entries)
-	local result = {}
+	local result = {} ---@type integer[]
 	for i, e in ipairs(entries) do result[i] = e.entity end
 	table.sort(result)
 	return result
 end
 
-local lvm_models
+local lvm_models ---@type uo.gui.lvm_models
 
 -- Line 100: three Isuzu buses and one Volvo; line 200: two Isuzu and a Volvo; 300: a train.
 local FLEET = {
@@ -154,7 +257,7 @@ describe("lvm_models", function()
 	before_each(function()
 		install(FLEET, LINES)
 		timer = nil
-		package.loaded["/ui_overhaul/gui/lvm_models.lua"] = nil
+		package.loaded["/ui_overhaul/gui/lvm_models.lua"] = nil ---@type nil
 		lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
 	end)
 
@@ -189,12 +292,22 @@ describe("lvm_models", function()
 		assert.truthy(view ~= lvm_models.view({ 11, 12, 13 }))
 	end)
 
+	it("reads the fleet again after a failed read of the same list", function()
+		local engine = _G.api.engine --[[@as spec.lvm_models.Engine]] -- the stand-in installed above
+		local get = engine.getComponent
+		engine.getComponent = function() error("engine read failed") end
+		assert.is_false((pcall(lvm_models.view, { 11, 12, 13, 14 })))
+		engine.getComponent = get
+		local view = lvm_models.view({ 11, 12, 13, 14 })
+		assert.are.equal(2, view.by_key["1"].more)
+	end)
+
 	it("shows the row for two models, or for one model other lines use too", function()
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 14 }).groups))
 		assert.is_true(lvm_models.row_visible(lvm_models.view({ 11, 12 }).groups))
 		assert.is_false(lvm_models.row_visible(lvm_models.view({ 31, 32 }).groups))
 		local row = lvm_models.update(list({ 31, 32 }, {}))
-		assert.are.equal("UioLvmModels", row.recipe) -- stays mounted, so its refresh can show it later
+		assert.are.equal("UioLvmModels", stand_in(row).recipe) -- stays mounted, so its refresh can show it later
 		local node, chips = render(row)
 		assert.are.equal("BoxLayout", node.kind)
 		assert.is_nil(chips)
@@ -294,6 +407,8 @@ describe("lvm_models", function()
 
 	it("selects exactly the listed vehicles of a model, after closing the vehicle store", function()
 		local params = list({ 11, 12, 13, 14 }, { 21 })
+		---@param self spec.lvm_models.Ref<game.gui.line_vehicle_mgmt.manager_window.VehicleManagerState> see list()
+		---@param value game.gui.line_vehicle_mgmt.manager_window.VehicleManagerState
 		params.commonParams.vehicleManagerStateRef.set = function(self, value)
 			assert.are.equal(1, calls.closed) -- an open Replace window would keep the old selection
 			self.value = value

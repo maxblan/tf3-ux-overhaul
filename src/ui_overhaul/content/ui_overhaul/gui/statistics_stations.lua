@@ -27,9 +27,31 @@ local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_stations = {}
 
+---@class uo.statistics_stations.Totals
+---@field stations integer
+---@field upkeep integer
+
+-- TableState of the base tab, plus the filters it was built with.
+---@class uo.statistics_stations.TableState
+---@field keys Engine.Entity[]
+---@field notificationsState table<Engine.Entity, integer[]>
+---@field signature string
+---@field filteredKeysMap table<Engine.Entity, boolean>
+
+-- Recipe2ColumnParam of the base tab.
+---@class uo.statistics_stations.ColumnParam
+---@field name? string
+---@field path? string
+---@field tooltip? string
+---@field headerStyleClass? string
+---@field recipe react.Recipe<builtin.TableCellParam>
+---@field getCompareValue fun(stationGroupEntity: Engine.Entity): any sort key: number, string or a table of them
+---@field weight number
+
 local styleClassRightAligned = "right-aligned"
 
 -- Quick filter of the tab; kept for the session so reopening the window shows the same rows.
+---@type table<string, boolean>
 local QUICK_FILTERS = { all = true, problems = true, crowded = true, nolines = true }
 local quick_filter = "all"
 
@@ -38,6 +60,8 @@ local REFRESH_STEPS = 30
 
 -- Cells (1:1 from the base tab) -------------------------------------------------------------------
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationLocationAndNameCell = react.RegisterRecipe("StationLocationAndNameCell", function(params)
 	local entity = params.rowKey
 	return builtin.BoxLayout{
@@ -48,9 +72,12 @@ local StationLocationAndNameCell = react.RegisterRecipe("StationLocationAndNameC
 	}
 end)
 
+-- The town of all the group's stations, -1 if they are in different towns or none, or the group is gone.
+---@param entity Engine.Entity station group
+---@return Engine.Entity
 local function GetTownOfStationGroup(entity)
 	local stationGroup = api.engine.getComponent(entity, api.type.ComponentType.STATION_GROUP)
-	if #stationGroup.stations == 0 then return -1 end
+	if not stationGroup or #stationGroup.stations == 0 then return -1 end
 	local town = api.engine.system.stationSystem.getTown(stationGroup.stations[1])
 	for _i, station in ipairs(stationGroup.stations) do
 		if api.engine.system.stationSystem.getTown(station) ~= town then return -1 end
@@ -58,6 +85,8 @@ local function GetTownOfStationGroup(entity)
 	return town
 end
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationTownCell = react.RegisterRecipe("StationTownCell", function(params)
 	local entity = params.rowKey
 	local townState = engine_react_util.useStepState(function()
@@ -72,6 +101,8 @@ local StationTownCell = react.RegisterRecipe("StationTownCell", function(params)
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationLinesCell = react.RegisterRecipe("StationLinesCell", function(params)
 	local entity = params.rowKey
 	local linesState = engine_react_util.useStepStateTimer(function()
@@ -86,12 +117,17 @@ local StationLinesCell = react.RegisterRecipe("StationLinesCell", function(param
 	}
 end)
 
+---@param groupType game.gui.statistics.statistics_react_util.StationGroupType?
+---@return string
 local function getStationGroupTypeLabel(groupType)
+	---@type table<game.gui.statistics.statistics_react_util.StationGroupType, string>
 	local labels = { Cargo = _("Cargo"), Passenger = _("Passenger"), Mixed = _("Mixed") }
 	if groupType == nil then return _("--") end
 	return labels[groupType]
 end
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationTypeCell = react.RegisterRecipe("StationTypeCell", function(params)
 	local entity = params.rowKey
 	local cargoState = engine_react_util.useStepStateTimer(function()
@@ -108,6 +144,8 @@ local StationTypeCell = react.RegisterRecipe("StationTypeCell", function(params)
 	}
 end)
 
+---@param stationGroupEntity Engine.Entity
+---@return UtilStation.StationGroupCapacityUsage
 local function getStationUsage(stationGroupEntity)
 	local usage = api.engine.util.station.calculateStationGroupCargo(stationGroupEntity, -1)
 	if usage.capacity == 0 then -- ports and heliports do not have people waiting on the terminals, so look at stops via qualityData instead
@@ -118,6 +156,8 @@ local function getStationUsage(stationGroupEntity)
 	return usage
 end
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationCargoCell = react.RegisterRecipe("StationCargoCell", function(params)
 	local entity = params.rowKey
 	local cargoState = engine_react_util.useStepStateTimer(function()
@@ -128,6 +168,7 @@ local StationCargoCell = react.RegisterRecipe("StationCargoCell", function(param
 	react.setStyleClasses(styleClassRightAligned)
 	local usage = cargoState:old()
 	local totalCapacity = usage.capacity + usage.waitingHallCapacity
+	---@type react.TreeNodeId
 	local child
 	if usage.used > 0 and totalCapacity > 0 then
 		child = builtin.TextView{
@@ -143,16 +184,21 @@ local StationCargoCell = react.RegisterRecipe("StationCargoCell", function(param
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = { child } }
 end)
 
+---@param entity Engine.Entity station group
+---@return UtilCargo.CargoQualityData
 local function calculateQualityInfo(entity)
 	return api.engine.util.cargo.getCargoQualityDataAtStationGroup(entity, cargo_util.getPassengerCargoTypeId())
 end
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationQualityCell = react.RegisterRecipe("StationQualityCell", function(params)
 	local entity = params.rowKey
 	local style = engine_react_util.useStepStateTimer(function()
 		return calculateQualityInfo(entity)
 	end)
 	react.setStyleClasses(styleClassRightAligned)
+	---@type react.TreeNodeId[]
 	local children = { gui_react_util.makeHorizontalSpacer() }
 	if style:old().countBad > 0 then
 		children[#children + 1] = gui_react_util.EmoteIcon{ satisfaction = "Aloof", forceFocusable = true }
@@ -166,6 +212,8 @@ local StationQualityCell = react.RegisterRecipe("StationQualityCell", function(p
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local StationMaintenanceCell = react.RegisterRecipe("StationMaintenanceCell", function(params)
 	local entity = params.rowKey
 	local maintenanceState = engine_react_util.useStepStateTimer(function()
@@ -185,39 +233,58 @@ end)
 
 -- Sort values -----------------------------------------------------------------------------------
 
+---@param stationGroupEntity Engine.Entity
+---@return string?
 local function getNameCompareValue(stationGroupEntity)
 	return api.engine.util.getEntityName(stationGroupEntity)
 end
+---@param stationGroupEntity Engine.Entity
+---@return string
 local function getTownCompareValue(stationGroupEntity)
 	local town = GetTownOfStationGroup(stationGroupEntity)
 	return town and api.engine.util.getEntityName(town) or ""
 end
+---@type table<game.gui.statistics.statistics_react_util.StationGroupType, integer>
 local stationGroupTypeOrder = { Cargo = 1, Passenger = 2, Mixed = 3 }
+---@param stationGroupEntity Engine.Entity
+---@return integer
 local function getTypeCompareValue(stationGroupEntity)
 	local groupType = statistics_react_util.getStationGroupType(stationGroupEntity)
 	if not groupType then return 0 end
 	return stationGroupTypeOrder[groupType]
 end
+---@param stationGroupEntity Engine.Entity
+---@return integer
 local function getLinesCompareValue(stationGroupEntity)
 	return #api.engine.system.lineSystem.getLinesForStationGroup(stationGroupEntity)
 end
 -- the ratio the cell displays (base: { used, capacity }, which ignored the waiting hall and the ratio)
+---@param stationGroupEntity Engine.Entity
+---@return [number, integer]
 local function getUtilizationCompareValue(stationGroupEntity)
 	local usage = getStationUsage(stationGroupEntity)
 	local totalCapacity = usage.capacity + usage.waitingHallCapacity
 	if usage.used > 0 and totalCapacity > 0 then return { usage.used / totalCapacity, usage.used } end
 	return { 0, 0 }
 end
+---@param stationGroupEntity Engine.Entity
+---@return [boolean, integer]
 local function getQualityCompareValue(stationGroupEntity)
 	local quality = calculateQualityInfo(stationGroupEntity)
 	return { quality.isVeryBad, quality.countBad }
 end
+---@param stationGroupEntity Engine.Entity
+---@return integer
 local function getUpkeepCompareValue(stationGroupEntity)
 	return api.engine.util.maintenance.calcMaintenanceForStationGroup(stationGroupEntity)
 end
 
 -- Quick filters ---------------------------------------------------------------------------------
 
+---@param filter string
+---@param notificationsState table<Engine.Entity, integer[]>
+---@param stationGroupEntity Engine.Entity
+---@return boolean
 local function passesQuickFilter(filter, notificationsState, stationGroupEntity)
 	if filter == "problems" then return statistics_common.hasProblems(notificationsState, stationGroupEntity) end
 	if filter == "crowded" then
@@ -228,7 +295,10 @@ end
 
 -- The tab -------------------------------------------------------------------------------------------
 
+---@param params game.gui.statistics.statistics.StatisticsRecipeParams
+---@return react.TreeNodeId
 local function render(params)
+	---@type game.gui.statistics.statistics.StatisticsRecipeParams.Category[]
 	local categories = {
 		{ imageFile = "::/gui/statistics/icons/vehicle_bus_18.tga", tooltip = _("Show Road Stations"), carrier = api.type.enum.Carrier.ROAD },
 		{ imageFile = "::/gui/statistics/icons/vehicle_tram_18.tga", tooltip = _("Show Tram Stations"), carrier = api.type.enum.Carrier.TRAM },
@@ -239,6 +309,7 @@ local function render(params)
 	}
 	local quickFilterState = react.useState(quick_filter)
 	local filter = quickFilterState:old()
+	---@param key string
 	local function setQuickFilter(key)
 		if not QUICK_FILTERS[key] then return end
 		quick_filter = key
@@ -248,6 +319,9 @@ local function render(params)
 	react.onEvent("uio.statistics.stations.filter", function(_e, key) setQuickFilter(key) end)
 
 	-- base filter (visibility, carrier, search; statistic_stations.tl fnUserFilter) plus the quick filter
+	---@param key Engine.Entity
+	---@param notificationsState table<Engine.Entity, integer[]>
+	---@return boolean
 	local function filterFn(key, notificationsState)
 		if not api.engine.entityExists(key) then return false end
 		if params.filterShowOnlyVisible and not api.gui.byEntity.isVisible(key) then return false end
@@ -265,8 +339,9 @@ local function render(params)
 		end
 		if not passesQuickFilter(filter, notificationsState, key) then return false end
 		if params.searchString == "" then return true end
-		if lang_util.stringContains(api.engine.util.getEntityName(key), params.searchString) then return true end
-		if lang_util.stringContains(api.engine.util.getEntityName(GetTownOfStationGroup(key)), params.searchString) then
+		if lang_util.stringContains(api.engine.util.getEntityName(key) or "", params.searchString) then return true end
+		if lang_util.stringContains(api.engine.util.getEntityName(GetTownOfStationGroup(key)) or "",
+			params.searchString) then
 			return true
 		end
 		return lang_util.stringContains(getStationGroupTypeLabel(statistics_react_util.getStationGroupType(key)),
@@ -275,9 +350,12 @@ local function render(params)
 
 	local stepsRef = react.useRef(0)
 	local signature = filter .. "|" .. statistics_common.filterSignature(params)
+	---@param cur uo.statistics_stations.TableState?
+	---@return uo.statistics_stations.TableState
 	local tableState = engine_react_util.useStepState(function(cur)
 		-- vanilla set: station groups with lines; "No lines": the player's station groups without lines
 		local wantLines = filter ~= "nolines"
+		---@type Engine.Entity[]
 		local keys = {}
 		api.engine.forEachEntityWithComponent(function(entity)
 			local lines = api.engine.system.lineSystem.getLinesForStationGroup(entity)
@@ -291,12 +369,14 @@ local function render(params)
 			notification_util.externalGetNotificationsStateNative())
 		local same = cur ~= nil and statistics_common.sameArray(cur.keys, keys)
 			and table_util.deepEquals(cur.notificationsState, notificationsState)
+		---@cast cur -nil -- read below only where same is true, which needs a cur
 		local steps = stepsRef:get() + 1
 		if same and cur.signature == signature and steps < REFRESH_STEPS then
 			stepsRef:set(steps)
 			return cur
 		end
 		stepsRef:set(0)
+		---@type table<Engine.Entity, boolean>
 		local filteredKeysMap = {}
 		for _i, key in ipairs(keys) do
 			if filterFn(key, notificationsState) then filteredKeysMap[key] = true end
@@ -313,6 +393,7 @@ local function render(params)
 	end, nil, function(a, b) return a == b end)
 
 	local totalsState = engine_react_util.useStepStateTimer(function()
+		---@type uo.statistics_stations.Totals
 		local totals = { stations = 0, upkeep = 0 }
 		local map = tableState:hasExpired() and {} or tableState:old().filteredKeysMap or {}
 		for stationGroup in pairs(map) do
@@ -324,10 +405,13 @@ local function render(params)
 		return totals
 	end, 1.0)
 
+	---@param stationGroupEntity Engine.Entity
+	---@return [integer, integer[]]
 	local function getProblemsCompareValue(stationGroupEntity)
 		return statistics_react_util.getProblemsCompareValue(tableState:old().notificationsState or {}, stationGroupEntity)
 	end
 
+	---@type uo.statistics_stations.ColumnParam[]
 	local columnsDesc = {
 		{ name = _("Name"), recipe = StationLocationAndNameCell, getCompareValue = getNameCompareValue, weight = 4.9 },
 		{ path = "::/gui/statistics/icons/alert.tga", tooltip = _("Problems"), recipe = statistics_react_util.ProblemsCell,
@@ -343,6 +427,7 @@ local function render(params)
 		{ name = _("Upkeep"), recipe = StationMaintenanceCell, getCompareValue = getUpkeepCompareValue, weight = 3,
 			headerStyleClass = styleClassRightAligned },
 	}
+	---@type react.TreeNodeId[]
 	local columns = {}
 	for i, col in ipairs(columnsDesc) do
 		columns[i] = builtin.ColumnDesc{ name = col.name, path = col.path, tooltip = col.tooltip, recipe = col.recipe,
@@ -395,6 +480,8 @@ local function render(params)
 								notificationState = tableState:old().notificationsState },
 							initialSortColumn = params.initialSortColumn,
 							onSortColumnChange = params.onSortColumnChange,
+							---@param key Engine.Entity
+							---@return boolean
 							fnUserFilter = function(key) return tableState:old().filteredKeysMap[key] or false end,
 						}),
 					},
@@ -410,6 +497,7 @@ local Replacement = fallback.replacement(statistics_stations.switch, "StationsSt
 	base_stations_statistic, { focus = true })
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function statistics_stations.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_stations_statistic, Replacement)
 end

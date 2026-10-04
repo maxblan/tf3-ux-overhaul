@@ -20,12 +20,18 @@ local romberg = require("::/scripts/util/romberg.tl")
 local vehicle_slopes = require("/ui_overhaul/core/vehicle_slopes.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
+---@class uo.gui.performance
 local performance = {}
 
+---@param value string
+---@param class? string
+---@param tooltip? string
+---@return react.TreeNodeId
 local function text(value, class, tooltip)
 	return builtin.TextView{ meta = { class = class or "font-scale-body", tooltip = tooltip }, text = value }
 end
 
+---@type uo.core.vehicle_slopes.Integrator
 local function integrate(a, h, tolerance, fn)
 	return romberg.rombergIntegration(a, h, tolerance, 9, fn)
 end
@@ -33,30 +39,48 @@ end
 local RATING_NAMES = { "Poor", "Mediocre", "Good", "Excellent" } -- vehicle_util.tl's words
 
 -- Slope figures per consist: they depend only on the models and their maintenance modifiers.
-local cache, cached = {}, 0
+---Slope figures of a consist; `false` for one the game does not rate.
+---@class uo.performance.Computed
+---@field rating integer? vehicle_slopes.compute's rating, 1 (Poor) to 4 (Excellent)
+---@field loaded uo.core.vehicle_slopes.Row[]
+---@field empty uo.core.vehicle_slopes.Row[]?
+
+local cache, cached = {}, 0 ---@type table<string, uo.performance.Computed|false>, integer
 local CACHE_LIMIT = 64
+---@type ("topSpeedScale"|"noiseScale"|"pollutionScale"|"comfortScale")[]
 local MODIFIER_FIELDS = { "topSpeedScale", "noiseScale", "pollutionScale", "comfortScale" }
 
+---@param model_ids? integer[]
+---@param modifiers? Engine.Component.TransportVehicle.Modifiers
+---@return string
 local function cache_key(model_ids, modifiers)
-	local parts = {}
+	local parts = {} ---@type string[]
 	for i, id in ipairs(model_ids or {}) do parts[i] = tostring(id) end
 	-- an engine object (TransportVehicle.Modifiers, userdata): read its fields by name
-	local mods = {}
+	local mods = {} ---@type string[]
 	for i, field in ipairs(MODIFIER_FIELDS) do
-		local ok, value = pcall(function() return modifiers[field] end)
+		---@return number?
+		local function read() return modifiers and modifiers[field] end
+		local ok, value = pcall(read)
 		mods[i] = tostring(ok and value or "")
 	end
 	return table.concat(parts, ",") .. "|" .. (modifiers and table.concat(mods, ",") or "")
 end
 
+---@param model_ids? integer[]
+---@param modifiers? Engine.Component.TransportVehicle.Modifiers
+---@return uo.performance.Computed|false
 local function compute(model_ids, modifiers)
-	local vehicles = {}
+	local vehicles = {} ---@type game.gui.line_vehicle_mgmt.vehicle_store_util.Vehicle[]
 	for i, model_id in ipairs(model_ids or {}) do
 		vehicles[i] = vehicle_store_util.makeSingleVehicle(api.res.modelRep.get(model_id))
 	end
 	if #vehicles == 0 then return false end
 	local data = vehicle_store_util.collectVehicleData(vehicles, modifiers)
 	if not data or not (data.power > 0 and data.tractiveEffort > 0) then return false end
+	---@param weight number
+	---@return uo.core.vehicle_slopes.Row[]? rows
+	---@return integer? rating
 	local function rows(weight)
 		return vehicle_slopes.compute({ weight = weight, power = data.power, tractiveEffort = data.tractiveEffort,
 			speed = data.speed, rollingFriction = data.rollingFriction }, integrate)
@@ -70,6 +94,14 @@ end
 --- The rating word and the slope rows fully loaded and without load: { rating, loaded, empty }, or
 -- nil for vehicles the game does not rate (no power or tractive effort: ships, aircraft, wagons).
 -- Computed once per consist and kept; the rating word is translated here (GUI thread).
+---@class uo.performance.Ratings
+---@field rating string translated
+---@field loaded uo.core.vehicle_slopes.Row[]
+---@field empty uo.core.vehicle_slopes.Row[]?
+
+---@param model_ids? integer[]
+---@param modifiers? Engine.Component.TransportVehicle.Modifiers
+---@return uo.performance.Ratings?
 function performance.ratings(model_ids, modifiers)
 	local key = cache_key(model_ids, modifiers)
 	local entry = cache[key]
@@ -88,7 +120,10 @@ end
 
 local SLOPE_NAMES = { "Flat", "Medium", "High" }
 
+---@param rows uo.core.vehicle_slopes.Row[]
+---@return react.TreeNodeId[] rows builtin.Row nodes
 local function slope_rows(rows)
+	---@type react.TreeNodeId[]
 	local result = {
 		builtin.Row{ cells = {
 			text(_("Slope"), "font-scale-annotation, uio-performance-header"),
@@ -100,7 +135,7 @@ local function slope_rows(rows)
 	for i, row in ipairs(rows) do
 		local name = string.format("%s (%s)", pGetText("terrain-slope", SLOPE_NAMES[i]),
 			api.util.toStringPercentPrecision(row.slope, 1))
-		local cells = { text(name) }
+		local cells = { text(name) } ---@type react.TreeNodeId[]
 		if row.enough then
 			cells[2] = text(api.util.formatSpeed(row.speed))
 			cells[3] = text(api.util.formatSeconds(math.floor(row.time + 0.5)))
@@ -118,6 +153,13 @@ end
 local card_failed = false -- logged once
 
 -- The card's content; `emptyState` is the recipe's state of the load switch.
+---@class uo.performance.CardParams: react.Param
+---@field ratings uo.performance.Ratings
+---@field entityId Engine.Entity
+
+---@param params uo.performance.CardParams
+---@param emptyState react.State<boolean>
+---@return react.TreeNodeId
 local function render_card(params, emptyState)
 	local r = params.ratings
 	local show_empty = emptyState:old() and r.empty ~= nil
@@ -151,6 +193,8 @@ local function render_card(params, emptyState)
 	}
 end
 
+---@param params uo.performance.CardParams
+---@return react.TreeNodeId
 local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
 	local emptyState = react.useState(false)
 	local ok, node = pcall(render_card, params, emptyState)
@@ -163,6 +207,8 @@ local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
 end)
 
 --- Plugin recipe body of the vehicle window (guarded by performance.script.lua).
+---@param params game.gui.entity_window.vehicle.vehicle_eow.VehicleWidgetPluginParams
+---@return react.TreeNodeId
 function performance.card(params)
 	if params.ownershipState ~= "Player" then return builtin.BoxLayout{} end
 	local info = params.state and params.state.staticVehicleInfo
@@ -185,9 +231,17 @@ end
 -- Cart tooltip --------------------------------------------------------------------------------------
 
 -- The rating the cart computed last and has not shown yet: { text, tooltip }.
-local pending
+local pending ---@type [string, string, number]?
 
+---vehicle_util.getPowerRatingTextAndToolTip: weight, power, tractive effort, top speed, rolling friction.
+---@alias uo.performance.RatingFn
+---| fun(weight: number, power: number, effort: number, speed: number, friction: number): [string, string, number]?
+
+---@param original uo.performance.RatingFn
+---@return uo.performance.RatingFn
 local function wrap_rating(original)
+	---@param ... number
+	---@return [string, string, number]?
 	return function(...)
 		local result = original(...)
 		-- outside a render (a timer, another mod) there is no current recipe: nothing to do
@@ -197,7 +251,23 @@ local function wrap_rating(original)
 	end
 end
 
+--- A copy of `t` with the same fields and values.
+---@generic T: table
+---@param t T
+---@return T
+local function shallow_copy(t)
+	local copy = {}
+	-- LuaLS cannot infer pairs()'s key and value types for a generic table
+	---@diagnostic disable-next-line: no-unknown
+	for k, v in pairs(t) do copy[k] = v end
+	return copy
+end
+
+---@param original function builtin.TextView, or another mod's wrap of it
+---@return function
 local function wrap_text_view(original)
+	---@param ... any what the TextView gets: its params, or a ref and its params
+	---@return react.TreeNodeId
 	return function(...)
 		if pending then
 			local ok, recipe = pcall(react.getCurrentRecipeName)
@@ -208,11 +278,9 @@ local function wrap_text_view(original)
 			if type(p) == "table" and p.text == pending[1] then
 				local tooltip = pending[2]
 				pending = nil
-				local meta = {}
-				for k, v in pairs(p.meta or {}) do meta[k] = v end
+				local meta = shallow_copy(p.meta or {})
 				if meta.tooltip == nil then meta.tooltip = tooltip end
-				local copy = {}
-				for k, v in pairs(p) do copy[k] = v end
+				local copy = shallow_copy(p)
 				copy.meta = meta
 				return original(copy)
 			end
@@ -222,6 +290,7 @@ local function wrap_text_view(original)
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param _replacement_api react.ReplacementApi
 function performance.install(_replacement_api)
 	if type(vehicle_util.getPowerRatingTextAndToolTip) ~= "function" then error("rating function not found") end
 	vehicle_util.getPowerRatingTextAndToolTip = wrap_rating(vehicle_util.getPowerRatingTextAndToolTip)

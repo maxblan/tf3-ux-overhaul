@@ -2,6 +2,7 @@
 -- Stocks column, and the cargo picker's icons at the size of the vanilla cargo icons.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

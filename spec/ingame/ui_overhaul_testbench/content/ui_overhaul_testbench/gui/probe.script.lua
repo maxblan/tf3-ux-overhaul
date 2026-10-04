@@ -23,7 +23,10 @@ local function ticker()
 end
 
 -- Content recipe (normal recipe inside the window) that re-renders on every tick.
-local TickingContent = react.RegisterRecipe("UioProbeTickingContent", function(params)
+local TickingContent = react.RegisterRecipe("UioProbeTickingContent",
+	---@param params { rich: boolean? }
+	---@return react.TreeNodeId
+	function(params)
 	local tick = engine_react_util.useStepStateTimer(ticker, 0.25)
 	local n = tick:old()
 	if params.rich then
@@ -36,7 +39,12 @@ local TickingContent = react.RegisterRecipe("UioProbeTickingContent", function(p
 	return col{ text("ticking " .. n) }
 end)
 
+---@class uo.testbench.ProbeVariant
+---@field wrapper? "constant_timer"|"state"|"ticking_timer" the hooks in the window wrapper
+---@field content fun(n: integer): react.TreeNodeId
+
 -- variant -> { hooks in the window wrapper, content builder }
+---@type uo.testbench.ProbeVariant[]
 local VARIANTS = {
 	{ wrapper = "constant_timer", content = function() return col{ text("variant 1: constant timer in wrapper") } end },
 	{ wrapper = "state", content = function() return col{ text("variant 2: useState in wrapper") } end },
@@ -47,7 +55,10 @@ local VARIANTS = {
 }
 
 local ProbeWindow
-ProbeWindow = react.RegisterWrapperRecipe("UioProbeWindow", builtin.Window, function(params)
+ProbeWindow = react.RegisterWrapperRecipe("UioProbeWindow", builtin.Window,
+	---@param params { variant: integer }
+	---@return react.TreeNodeId
+	function(params)
 	local variant = VARIANTS[params.variant]
 	local n = 0
 	if variant.wrapper == "constant_timer" then
@@ -82,7 +93,7 @@ SliderWindow = react.RegisterWrapperRecipe("UioProbeSliderWindow", builtin.Windo
 			state:set(v)
 		end
 	end
-	local numbers = {}
+	local numbers = {} ---@type number[]
 	for i = -8, 8 do numbers[#numbers + 1] = i * 1.25 end
 	return builtin.Window{
 		id = "probe.sliders",
@@ -112,7 +123,10 @@ end)
 -- The block the map tooltip adds for a vehicle (vehicle_tooltip.lua), in a window, and its lines
 -- logged: a hover cannot be automated.
 local VehicleTooltipWindow
-VehicleTooltipWindow = react.RegisterWrapperRecipe("UioProbeVehicleTooltipWindow", builtin.Window, function(params)
+VehicleTooltipWindow = react.RegisterWrapperRecipe("UioProbeVehicleTooltipWindow", builtin.Window,
+	---@param params { vehicle: Engine.Entity }
+	---@return react.TreeNodeId
+	function(params)
 	local vehicle_tooltip = require("ui_overhaul_1::/ui_overhaul/gui/vehicle_tooltip.lua")
 	return builtin.Window{
 		id = "probe.vehicle_tooltip",
@@ -142,11 +156,19 @@ end
 
 -- A terminal of the stop's station group that is neither preferred nor alternative: station and
 -- terminal (1-based), or nil.
+---@param line Engine.Entity
+---@param stop_index0 integer
+---@return integer? station
+---@return integer? terminal
 local function free_terminal(line, stop_index0)
-	local stop = api.engine.getComponent(line, api.type.ComponentType.LINE).stops[stop_index0 + 1]
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	local stop = component and component.stops[stop_index0 + 1]
+	if not stop then return nil end -- not a line (any more), or no such stop
 	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	---@cast group -nil -- a line stop's station group always has this component
 	for s, station_entity in ipairs(group.stations) do
 		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		---@cast station -nil -- the stations of a station group have this component
 		for t = 1, #station.terminals do
 			local used = stop.station == s - 1 and stop.terminal == t - 1
 			for _i, alternative in ipairs(stop.alternativeTerminals) do
@@ -184,7 +206,7 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	react.onEvent("uio.debug.industry", function(_e, entity)
 		local cards = require("ui_overhaul_1::/ui_overhaul/gui/industry_cards.lua")
 		local ok, facts = pcall(cards.read, entity)
-		if not ok then
+		if not ok or not facts then -- facts: nil if the entity is not an industry
 			debugPrint("[testbench] industry read failed: ", tostring(facts))
 			return
 		end
@@ -192,7 +214,7 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			" rating ", facts.productionRating, " shipped ", facts.shipped, "/", facts.output,
 			" blockers ", table.concat(facts.blockers, ","), " recipes ", #facts.recipes)
 		for i, recipe in ipairs(facts.recipes) do
-			local parts = {}
+			local parts = {} ---@type string[]
 			for _j, input in ipairs(recipe.inputs) do parts[#parts + 1] = input[1] .. "x" .. input[2] end
 			parts[#parts + 1] = "->"
 			for _j, output in ipairs(recipe.outputs) do
@@ -221,6 +243,9 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			VEHICLE = J.Maintenance.VEHICLE, INFRASTRUCTURE = J.Maintenance.INFRASTRUCTURE,
 			VEHICLE_MAINTENANCE = J.Maintenance.VEHICLE_MAINTENANCE,
 		})
+		---@param rows uo.core.statements.Row[]
+		---@param key string
+		---@return integer[]
 		local function find(rows, key)
 			for _i, r in ipairs(rows) do if r.key == key then return r.values end end
 			return {}
@@ -257,9 +282,13 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 	-- removes a free terminal of the line's first stop as an alternative. Logs the terminal.
 	react.onEvent("uio.debug.terminal_change", function(_e, p)
 		local params = mod_terminals().popover_params(p.line, 0)
-		local s, t = p.station, p.terminal
+		if not params then
+			debugPrint("[testbench] terminal change: no such stop")
+			return
+		end
+		local s, t = p.station, p.terminal ---@type integer?, integer?
 		if not s then s, t = free_terminal(p.line, 0) end
-		if not s then
+		if not s or not t then -- they come as a pair
 			debugPrint("[testbench] terminal change: no free terminal")
 			return
 		end
@@ -320,13 +349,17 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			" segments=", ok and data and #data.segments or -1, ok and "" or (" " .. tostring(data)))
 		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 		if not component or #component.stops < 2 then return end
+		---@param stop Engine.Component.Line.Stop
+		---@return NodeId[]
 		local function nodes(stop)
 			local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+			---@cast group -nil -- a line stop's station group always has this component
 			local station = api.engine.getComponent(group.stations[stop.station + 1], api.type.ComponentType.STATION)
+			---@cast station -nil -- the stop's station is one of its group's stations
 			return { station.terminals[stop.terminal + 1].vehicleNodeId }
 		end
-		local modes = {}
-		for mode, on in pairs(api.engine.util.line.getLineTransportModesUnion(line)) do
+		local modes = {} ---@type TransportMode[]
+		for mode, on in pairs(api.engine.util.line.getLineTransportModesUnion(line) or {}) do
 			if on then modes[#modes + 1] = mode end
 		end
 		local found, result = pcall(api.engine.util.pathfinding.findPathNodeToNode,
@@ -377,6 +410,7 @@ function probe.preload()
 	debugPrint("[testbench] probe recipes registered before UI start")
 end
 
+---@return table
 function data()
 	return probe
 end

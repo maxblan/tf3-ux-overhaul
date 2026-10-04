@@ -28,9 +28,36 @@ local fallback = require("/ui_overhaul/gui/fallback.lua")
 
 local statistics_vehicles = {}
 
+---@class uo.statistics_vehicles.Totals
+---@field vehicles integer
+---@field balance integer
+
+-- TableState of the base tab, plus the filters it was built with.
+---@class uo.statistics_vehicles.TableState
+---@field keys Engine.Entity[]
+---@field notificationsState table<Engine.Entity, integer[]>
+---@field signature string
+---@field filteredKeysMap table<Engine.Entity, boolean>
+
+---@class uo.statistics_vehicles.AgeState
+---@field age string
+---@field agePercent number
+---@field timeRemaining string? nil once the lifetime is reached
+
+-- Recipe2ColumnParam of the base tab.
+---@class uo.statistics_vehicles.ColumnParam
+---@field name? string
+---@field path? string
+---@field tooltip? string
+---@field headerStyleClass? string
+---@field recipe react.Recipe<builtin.TableCellParam>
+---@field getCompareValue fun(vehicleEntity: Engine.Entity): any sort key: number, string or a table of them
+---@field weight number
+
 local styleClassRightAligned = "right-aligned"
 
 -- Quick filter of the tab; kept for the session so reopening the window shows the same rows.
+---@type table<string, boolean>
 local QUICK_FILTERS = { all = true, losing = true, problems = true, old = true }
 local quick_filter = "all"
 
@@ -40,6 +67,8 @@ local REFRESH_STEPS = 30
 -- Balances for the "Losing money" filter, the totals and the sort, reused for a second of game time.
 local cached_balance = statistics_common.makeBalanceCache()
 
+---@param text string
+---@return react.TreeNodeId
 local function rightAlignedText(text)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
@@ -57,6 +86,8 @@ end
 
 -- Cells (1:1 from the base tab, except Age) -------------------------------------------------------
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleLocationAndNameCell = react.RegisterRecipe("VehicleLocationAndNameCell", function(params)
 	local entity = params.rowKey
 	return builtin.BoxLayout{
@@ -67,6 +98,8 @@ local VehicleLocationAndNameCell = react.RegisterRecipe("VehicleLocationAndNameC
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleImageCell = react.RegisterRecipe("VehicleImageCell", function(params)
 	local entity = params.rowKey
 	return builtin.BoxLayout{
@@ -82,6 +115,8 @@ local VehicleImageCell = react.RegisterRecipe("VehicleImageCell", function(param
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleLineCell = react.RegisterRecipe("VehicleLineCell", function(params)
 	local entity = params.rowKey
 	return builtin.BoxLayout{
@@ -101,10 +136,13 @@ local VehicleLineCell = react.RegisterRecipe("VehicleLineCell", function(params)
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleCargoTypesCell = react.RegisterRecipe("VehicleCargoTypesCell", function(params)
 	local entity = params.rowKey
 	local unsetCapacities = cargo_util.getVehicleUnsetCapacities(entity)
 	local cargoTypeIdsState = engine_react_util.useStepStateTimer(function()
+		---@type game.gui.main.cargo_util.CargoLocationParams
 		local locationParams = {
 			vehicleEntity = entity,
 			getTendency = true,
@@ -113,11 +151,13 @@ local VehicleCargoTypesCell = react.RegisterRecipe("VehicleCargoTypesCell", func
 		}
 		return cargo_util.getSortedProducedCargoTypes(locationParams, "CAPACITY")
 	end)
+	---@type react.TreeNodeId[]
 	local children = {}
 	for _i, cargoTypeId in ipairs(cargoTypeIdsState:old()) do
 		children[#children + 1] = cargo_react_util.makeCargoIcon(cargoTypeId,
 			"text-icon-size-hack, cargo-icon-only" .. ((#children == 0) and ", first" or ""))
 	end
+	---@type react.TreeNodeId
 	local content
 	if #children == 0 then
 		content = statistics_react_util.createFocusDummyForGamepad()
@@ -130,7 +170,13 @@ local VehicleCargoTypesCell = react.RegisterRecipe("VehicleCargoTypesCell", func
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = { content } }
 end)
 
+---@param name string
+---@param field "supply"|"demand"|"coverage"|"averageQuality"
+---@param formatFn fun(value: number): string
+---@return react.Recipe<builtin.TableCellParam>
 local function cargoColumnCell(name, field, formatFn)
+	---@param params builtin.TableCellParam
+	---@return react.TreeNodeId
 	return react.RegisterRecipe(name, function(params)
 		local entity = params.rowKey
 		local state = engine_react_util.useStepStateTimer(function()
@@ -141,9 +187,13 @@ local function cargoColumnCell(name, field, formatFn)
 	end)
 end
 
+---@param value integer
+---@return string
 local function formatCount(value)
 	return lang_util.format(_("{count}"), { count = lang_util.formatInt(value) })
 end
+---@param value number
+---@return string
 local function formatPercent(value)
 	return api.util.toStringPercentPrecision(value, 0)
 end
@@ -153,6 +203,8 @@ local VehicleCargoDemandCell = cargoColumnCell("VehicleCargoDemandCell", "demand
 local VehicleCargoCoverageCell = cargoColumnCell("VehicleCargoCoverageCell", "coverage", formatPercent)
 local VehicleCargoDeliveryCell = cargoColumnCell("VehicleCargoDeliveryCell", "averageQuality", formatPercent)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleConditionCell = react.RegisterRecipe("VehicleConditionCell", function(params)
 	local entity = params.rowKey
 	local maintenanceState = engine_react_util.useStepStateTimer(function()
@@ -170,8 +222,11 @@ local VehicleConditionCell = react.RegisterRecipe("VehicleConditionCell", functi
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleAgeCell = react.RegisterRecipe("VehicleAgeCell", function(params)
 	local entity = params.rowKey
+	---@return uo.statistics_vehicles.AgeState
 	local ageState = engine_react_util.useStepStateTimer(function()
 		local info = vehicle_util.getAge(entity)
 		return { age = info.age, agePercent = info.agePercent, timeRemaining = info.timeRemaining }
@@ -200,6 +255,8 @@ local VehicleAgeCell = react.RegisterRecipe("VehicleAgeCell", function(params)
 	}
 end)
 
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local VehicleBalanceCell = react.RegisterRecipe("VehicleBalanceCell", function(params)
 	local entity = params.rowKey
 	react.setStyleClasses(styleClassRightAligned)
@@ -211,35 +268,55 @@ end)
 
 -- Sort values -----------------------------------------------------------------------------------
 
+---@param vehicleEntity Engine.Entity
+---@return string?
 local function getLineCompareValue(vehicleEntity)
 	local tv = api.engine.getComponent(vehicleEntity, api.type.ComponentType.TRANSPORT_VEHICLE)
+	if not tv then return "" end -- sold since the rows were read: sorts first
 	if tv.state == api.type.enum.TransportVehicleState.EN_ROUTE or tv.state == api.type.enum.TransportVehicleState.AT_TERMINAL then
 		return api.engine.util.getEntityName(tv.line)
 	end
 	return (tv.state == api.type.enum.TransportVehicleState.GOING_TO_DEPOT) and _("Going to Depot") or _("In Depot")
 end
+---@param vehicleEntity Engine.Entity
+---@return string?
 local function getNameCompareValue(vehicleEntity)
 	return api.engine.util.getEntityName(vehicleEntity)
 end
+---@param field "supply"|"demand"|"coverage"|"averageQuality"
+---@return fun(vehicleEntity: Engine.Entity): number
 local function getCargoField(field)
 	return function(vehicleEntity) return statistics_react_util.calculateCargoColumnDataForVehicle(vehicleEntity)[field] end
 end
+---@param vehicleEntity Engine.Entity
+---@return number
 local function getConditionCompareValue(vehicleEntity)
 	local condition = vehicle_util.getAvgMaintenanceState(vehicleEntity)
 	return condition
 end
 -- the base sorts by purchase time, so ascending showed the oldest first; ascending now means youngest first
+---@param vehicleEntity Engine.Entity
+---@return integer
 local function getAgeCompareValue(vehicleEntity)
 	return -vehicle_util.getAge(vehicleEntity).purchaseTime
 end
 
 -- Quick filters ---------------------------------------------------------------------------------
 
+---@param transportVehicle Engine.Component.TransportVehicle
+---@param gameTime integer
+---@return boolean
 local function lifetimeReached(transportVehicle, gameTime)
 	local purchaseTimeAndLifespan = vehicle_util.getMinPurchaseTimeAndLifespan(transportVehicle)
 	return gameTime >= purchaseTimeAndLifespan[1] + purchaseTimeAndLifespan[2]
 end
 
+---@param filter string
+---@param notificationsState table<Engine.Entity, integer[]>
+---@param vehicleEntity Engine.Entity
+---@param transportVehicle Engine.Component.TransportVehicle
+---@param gameTime integer
+---@return boolean
 local function passesQuickFilter(filter, notificationsState, vehicleEntity, transportVehicle, gameTime)
 	if filter == "losing" then return cached_balance(vehicleEntity) < 0 end
 	if filter == "problems" then return statistics_common.hasProblems(notificationsState, vehicleEntity) end
@@ -249,7 +326,10 @@ end
 
 -- The tab -------------------------------------------------------------------------------------------
 
+---@param params game.gui.statistics.statistics.StatisticsRecipeParams
+---@return react.TreeNodeId
 local function render(params)
+	---@type game.gui.statistics.statistics.StatisticsRecipeParams.Category[]
 	local categories = {
 		{ imageFile = "::/gui/statistics/icons/vehicle_bus_18.tga", tooltip = _("Show Road Vehicles"), carrier = api.type.enum.Carrier.ROAD },
 		{ imageFile = "::/gui/statistics/icons/vehicle_tram_18.tga", tooltip = _("Show Trams"), carrier = api.type.enum.Carrier.TRAM },
@@ -259,6 +339,7 @@ local function render(params)
 	}
 	local quickFilterState = react.useState(quick_filter)
 	local filter = quickFilterState:old()
+	---@param key string
 	local function setQuickFilter(key)
 		if not QUICK_FILTERS[key] then return end
 		quick_filter = key
@@ -268,6 +349,10 @@ local function render(params)
 	react.onEvent("uio.statistics.vehicles.filter", function(_e, key) setQuickFilter(key) end)
 
 	-- base filter (visibility, carrier, search; statistic_vehicles.tl fnUserFilter) plus the quick filter
+	---@param key Engine.Entity
+	---@param notificationsState table<Engine.Entity, integer[]>
+	---@param gameTime integer
+	---@return boolean
 	local function filterFn(key, notificationsState, gameTime)
 		if not api.engine.entityExists(key) then return false end
 		local transportVehicle = api.engine.getComponent(key, api.type.ComponentType.TRANSPORT_VEHICLE)
@@ -277,7 +362,7 @@ local function render(params)
 		if allowedCarriers ~= nil and not table_util.arrayContains(allowedCarriers, transportVehicle.carrier) then return false end
 		if not passesQuickFilter(filter, notificationsState, key, transportVehicle, gameTime) then return false end
 		if params.searchString == "" then return true end
-		if lang_util.stringContains(api.engine.util.getEntityName(key), params.searchString) then return true end
+		if lang_util.stringContains(api.engine.util.getEntityName(key) or "", params.searchString) then return true end
 		if lang_util.stringContains(line_util.getVehicleInstructionName(key), params.searchString) then return true end
 		for _i, info in ipairs(cargo_util.calculateSortedVehicleCargoInfo(key)) do
 			if lang_util.stringContains(cargo_util.getCargoNameById(info.cargoType), params.searchString) then return true end
@@ -288,6 +373,8 @@ local function render(params)
 
 	local stepsRef = react.useRef(0)
 	local signature = filter .. "|" .. statistics_common.filterSignature(params)
+	---@param cur uo.statistics_vehicles.TableState?
+	---@return uo.statistics_vehicles.TableState
 	local tableState = engine_react_util.useStepState(function(cur)
 		local keys = api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE,
 			{ requireOwnedByPlayer = api.engine.util.getPlayer() })
@@ -295,6 +382,7 @@ local function render(params)
 			notification_util.externalGetNotificationsStateNative())
 		local same = cur ~= nil and statistics_common.sameArray(cur.keys, keys)
 			and table_util.deepEquals(cur.notificationsState, notificationsState)
+		---@cast cur -nil -- read below only where same is true, which needs a cur
 		local steps = stepsRef:get() + 1
 		if same and cur.signature == signature and steps < REFRESH_STEPS then
 			stepsRef:set(steps)
@@ -302,6 +390,7 @@ local function render(params)
 		end
 		stepsRef:set(0)
 		local gameTime = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
+		---@type table<Engine.Entity, boolean>
 		local filteredKeysMap = {}
 		for _i, key in ipairs(keys) do
 			if filterFn(key, notificationsState, gameTime) then filteredKeysMap[key] = true end
@@ -318,6 +407,7 @@ local function render(params)
 	end, nil, function(a, b) return a == b end)
 
 	local totalsState = engine_react_util.useStepStateTimer(function()
+		---@type uo.statistics_vehicles.Totals
 		local totals = { vehicles = 0, balance = 0 }
 		local map = tableState:hasExpired() and {} or tableState:old().filteredKeysMap or {}
 		for vehicle in pairs(map) do
@@ -329,10 +419,13 @@ local function render(params)
 		return totals
 	end, 1.0)
 
+	---@param vehicleEntity Engine.Entity
+	---@return [integer, integer[]]
 	local function getProblemsCompareValue(vehicleEntity)
 		return statistics_react_util.getProblemsCompareValue(tableState:old().notificationsState or {}, vehicleEntity)
 	end
 
+	---@type uo.statistics_vehicles.ColumnParam[]
 	local columnsDesc = {
 		{ name = _("Name"), recipe = VehicleLocationAndNameCell, getCompareValue = getNameCompareValue, weight = 6.7 },
 		{ path = "::/gui/statistics/icons/alert.tga", tooltip = _("Problems"), recipe = statistics_react_util.ProblemsCell,
@@ -355,6 +448,7 @@ local function render(params)
 		{ name = _("Balance"), recipe = VehicleBalanceCell, getCompareValue = cached_balance, weight = 2.25,
 			headerStyleClass = styleClassRightAligned },
 	}
+	---@type react.TreeNodeId[]
 	local columns = {}
 	for i, col in ipairs(columnsDesc) do
 		columns[i] = builtin.ColumnDesc{ name = col.name, path = col.path, tooltip = col.tooltip, recipe = col.recipe,
@@ -408,6 +502,8 @@ local function render(params)
 								notificationState = tableState:old().notificationsState },
 							initialSortColumn = params.initialSortColumn,
 							onSortColumnChange = params.onSortColumnChange,
+							---@param key Engine.Entity
+							---@return boolean
 							fnUserFilter = function(key) return tableState:old().filteredKeysMap[key] or false end,
 						}),
 					},
@@ -423,6 +519,7 @@ local Replacement = fallback.replacement(statistics_vehicles.switch, "VehiclesSt
 	base_vehicles_statistic, { focus = true })
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function statistics_vehicles.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_vehicles_statistic, Replacement)
 end

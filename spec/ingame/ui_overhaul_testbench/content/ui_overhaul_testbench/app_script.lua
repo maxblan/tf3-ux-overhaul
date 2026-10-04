@@ -16,10 +16,15 @@ local fixture = require("/ui_overhaul_testbench/fixture.lua")
 for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
 
 local frames, started = 0, false
-local pending_load -- { id = SavegameId, info = Async<SaveGameData> } while the savegame metadata loads
+---@class uo.testbench.PendingLoad
+---@field id SaveGameId
+---@field info Async<SaveGameData>
 
+local pending_load ---@type uo.testbench.PendingLoad? while the savegame metadata loads
+
+---@param ... any logged with tostring
 local function log(...)
-	local parts = { TAG, "app:" }
+	local parts = { TAG, "app:" } ---@type string[]
 	for i = 1, select("#", ...) do parts[#parts + 1] = tostring(select(i, ...)) end
 	debugPrint(table.concat(parts, " "))
 end
@@ -39,6 +44,7 @@ local function start_test_game()
 end
 
 --- Starts reading the metadata (mod list) of the fixture savegame; load_fixture_game() continues.
+---@param name string
 local function request_fixture(name)
 	local namespace = app.SaveGameNamespace.getSavegame()
 	for _, info in ipairs(app.findAllSavegames(namespace)) do
@@ -54,9 +60,10 @@ end
 
 --- Loads the fixture savegame with the savegame's own mods plus the mod and the testbench.
 local function load_fixture_game()
-	local data = pending_load.info:get()
+	local load = assert(pending_load) -- update() calls this only while a load is pending
+	local data = load.info:get()
 	local details = api.type.SaveGameDetails.new(data.info)
-	local mods, names, listed = {}, {}, {}
+	local mods, names, listed = {}, {}, {} ---@type Mod.ModId[], string[], table<string, true>
 	for _, mod in ipairs(details.mods) do
 		mods[#mods + 1], names[#names + 1] = mod, mod.name
 		listed[mod.name] = true
@@ -75,7 +82,7 @@ local function load_fixture_game()
 	end
 	details.mods = mods
 	log("loading savegame", fixture.save, "with mods", table.concat(names, ", "))
-	app.loadGame(pending_load.id, false, details)
+	app.loadGame(load.id, false, details)
 end
 
 function app_script.update()
@@ -90,7 +97,7 @@ function app_script.update()
 	end
 	if started or frames < START_AFTER_FRAMES then return end
 	started = true
-	local ok, err
+	local ok, err ---@type boolean, any pcall's error value
 	if fixture.save then
 		log("reading savegame", fixture.save)
 		ok, err = pcall(request_fixture, fixture.save)
@@ -106,6 +113,7 @@ end
 
 -- The engine loads resource files (unlike modules loaded with require) by calling the global
 -- data(); see base/init.lua.
+---@return table
 function data()
 	return app_script
 end

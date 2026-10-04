@@ -6,14 +6,26 @@ local track_builder = {}
 local TRACK_TEMPLATE = "::/infrastructure/track/standard/standard.street_template"
 local TRACK = 1 -- SegmentAndEntity.type
 
+---@param x number
+---@param y number
+---@param z number
+---@return Vec3f
 local function vec3(x, y, z)
 	return api.type.Vec3f.new(x, y, z)
 end
 
 --- A new, empty build command.
+---@return uo.testbench.Build
 function track_builder.new()
+	---@class uo.testbench.Build
+	---@field proposal SimpleProposal
+	---@field nodes Proposal.NodeAndEntity[]
+	---@field edges Proposal.SegmentAndEntity[]
+	---@field to_remove Engine.Entity[]
+	---@field next_id integer the next new entity's id, negative
 	local build = { proposal = api.type.SimpleProposal.new(), nodes = {}, edges = {}, to_remove = {}, next_id = -1 }
 
+	---@return integer
 	function build.id()
 		local id = build.next_id
 		build.next_id = build.next_id - 1
@@ -21,6 +33,11 @@ function track_builder.new()
 	end
 
 	--- Adds a node; returns its (negative) entity id and position.
+	---@param x number
+	---@param y number
+	---@param z number
+	---@return Engine.Entity entity
+	---@return Vec3f position
 	function build.node(x, y, z)
 		local node = api.type.NodeAndEntity.new()
 		node.entity = build.id()
@@ -30,6 +47,14 @@ function track_builder.new()
 	end
 
 	--- Adds a track edge; straight unless tangents are given (tangent length = edge length).
+	---@param node0 Engine.Entity
+	---@param p0 Vec3f
+	---@param node1 Engine.Entity
+	---@param p1 Vec3f
+	---@param edge_type? BaseEdgeType
+	---@param type_index? integer
+	---@param tangent0? Vec3f
+	---@param tangent1? Vec3f
 	function build.edge(node0, p0, node1, p1, edge_type, type_index, tangent0, tangent1)
 		local template = api.res.streetTemplateRep.get(api.res.streetTemplateRep.find(TRACK_TEMPLATE))
 		local chord = vec3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z)
@@ -64,6 +89,11 @@ function track_builder.new()
 end
 
 --- Adds a straight track along +x at lateral position y, from x0 to x1, on the terrain at height z.
+---@param build uo.testbench.Build
+---@param y number
+---@param x0 number
+---@param x1 number
+---@param z number
 function track_builder.add_straight_track(build, y, x0, x1, z)
 	local start, start_pos = build.node(x0, y, z)
 	local finish, finish_pos = build.node(x1, y, z)
@@ -71,8 +101,12 @@ function track_builder.add_straight_track(build, y, x0, x1, z)
 end
 
 --- Track edges whose both ends lie within `radius` of x, y.
+---@param x number
+---@param y number
+---@param radius number
+---@return Engine.Entity[]
 function track_builder.edges_near(x, y, radius)
-	local result = {}
+	local result = {} ---@type Engine.Entity[]
 	local candidates = api.engine.util.octree.findEntitiesInCircle(api.type.Vec2f.new(x, y), radius,
 		api.type.ComponentType.BASE_EDGE)
 	for _, edge_entity in ipairs(candidates) do

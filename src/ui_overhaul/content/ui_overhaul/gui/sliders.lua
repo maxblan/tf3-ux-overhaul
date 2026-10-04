@@ -30,31 +30,72 @@ local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua
 
 local sliders = {}
 
+---A builtin.Slider call's params as this module reads and writes them. Lua 5.2 has one number type:
+---the base's integer fields (builtin.SliderParam) are numbers here, and what this module sets is on
+---the slider's grid.
+---@class uo.sliders.SliderParam: react.Param
+---@field min? number
+---@field max? number
+---@field step? number
+---@field pageStep? number
+---@field horizontal? boolean
+---@field disableGamepadNavigation? boolean
+---@field withTicks? boolean
+---@field initialValue? number
+---@field value? number
+---@field onValueChange? fun(value: number)
+---@field uioPlain? boolean keeps the plain base slider
+
+---@class uo.sliders.UioSliderParams
+---@field p uo.sliders.SliderParam
+
+-- ScriptParamSliderAndTextParam of script_param_util.tl.
+---@class uo.sliders.ParamSliderParams: react.Param
+---@field scriptParam game.gui.main.script_param_util.ParamForUi
+---@field currentValue number
+---@field onValueChange fun(value: number)
+---@field disableGamepadNavigation? boolean
+---@field allowCoalesce? boolean
+
+
 -- Recipes whose sliders stay vanilla: the in-game settings menu.
+---@type table<string, boolean>
 local VANILLA_IN = { SettingsPage = true }
 
+---@type table<string, boolean>
 local reported = {}
+---@param key string
+---@param err any the pcall error, any value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
 	debugPrint("[ui_overhaul] sliders: ", key, ": ", tostring(err))
 end
 
+---@return boolean
 local function precise()
 	local ok, active = pcall(api.gui.inputAction.modifierOnlyActionIsActive, "IA_PRECISION_MODE")
 	return ok and active or false
 end
 
+---@param evt Gui.Mouse.Event
+---@return integer
 local function wheel_dir(evt)
 	return evt.yrel > 0 and 1 or -1
 end
 
+---@generic T: table
+---@param t T
+---@return T
 local function copy(t)
-	local result = {}
-	for k, v in pairs(t) do result[k] = v end
+	-- keys and values of any type are copied as they are
+	---@type table<any, any>, table<any, any>
+	local result, source = {}, t
+	for k, v in pairs(source) do result[k] = v end
 	return result
 end
 
+---@return number?
 local function clock()
 	local ok, t = pcall(os.clock)
 	return ok and t or nil
@@ -65,11 +106,17 @@ end
 -- resting cursor keeps scrolling instead of changing the slider.
 local HOVER_SECONDS, WHEEL_SECONDS = 1.5, 0.5
 
+---@return uo.sliders.WheelIntent
 local function use_wheel_intent()
+	---@type react.Ref<number?>
 	local last_move = react.useRef(nil)
+	---@type react.Ref<number?>
 	local last_wheel = react.useRef(nil)
+	---@class uo.sliders.WheelIntent
 	local intent = {}
+	-- the mouse moved over the slider
 	function intent.moved() last_move:set(clock()) end
+	---@return boolean
 	function intent.allows_wheel()
 		local now = clock()
 		if not now then return true end
@@ -84,10 +131,15 @@ end
 -- After a drag that ended next to a snap point, the base slider's thumb rests where the mouse let go
 -- while the value is the snap point (its value did not change, so nothing re-rendered it). The
 -- slider is then mounted anew on release, which puts the thumb on the value.
+---@return uo.sliders.ThumbSync
 local function use_thumb_sync()
 	local key = react.useState(0)
 	local pending = react.useRef(false)
+	---@class uo.sliders.ThumbSync
 	local sync = {}
+	-- a dragged value `raw` was set to `snapped`
+	---@param raw number
+	---@param snapped number
 	function sync.after(raw, snapped) pending:set(raw ~= snapped) end
 	function sync.released()
 		if pending:get() then
@@ -95,15 +147,20 @@ local function use_thumb_sync()
 			key:set(key:old() + 1)
 		end
 	end
+	-- the slider's localKey
+	---@return string
 	function sync.key() return "uio-slider-" .. tostring(key:old()) end
 	return sync
 end
 
 -- The base Slider (set by install), and the wrapper that replaces it.
+---@type fun(p: uo.sliders.SliderParam, ...: any): react.TreeNodeId
 local base_slider
 
 -- Any slider ------------------------------------------------------------------------------------
 
+---@param params uo.sliders.UioSliderParams
+---@return react.TreeNodeId
 local function render_slider(params)
 	local p = params.p
 	-- The hooks come first, before anything that can fail: UioSlider shows the base slider after a
@@ -115,6 +172,7 @@ local function render_slider(params)
 	local intent = use_wheel_intent()
 	local sync = use_thumb_sync()
 	-- set below; the mouse listener is set with the hooks and reads them when an event comes
+	---@type number, number, number, number?, number, number, fun(v: number)
 	local min, max, step, detent, anchor, value, commit
 
 	react.onMouseEvent(function(evt)
@@ -184,6 +242,8 @@ local function render_slider(params)
 	return builtin.BoxLayout{ children = { base_slider(q) } }
 end
 
+---@param params uo.sliders.UioSliderParams
+---@return react.TreeNodeId
 local UioSlider = react.RegisterRecipe("UioSlider", function(params)
 	local ok, node = pcall(render_slider, params)
 	if ok then return node end
@@ -193,6 +253,9 @@ end)
 
 --- Whether a builtin.Slider call can get the additions: a plain parameter table with a callback,
 -- outside the settings menu. `recipe` is the name of the recipe that is rendering.
+---@param args any[] the call's arguments, as base recipes and other mods pass them
+---@param recipe string?
+---@return boolean
 function sliders.enhance(args, recipe)
 	if #args ~= 1 or type(args[1]) ~= "table" then return false end
 	local p = args[1]
@@ -200,6 +263,8 @@ function sliders.enhance(args, recipe)
 	return not VANILLA_IN[recipe or ""]
 end
 
+---@param ... any the builtin.Slider call's arguments
+---@return react.TreeNodeId
 local function wrapped_slider(...)
 	local args = { ... }
 	-- outside a render (a callback, another mod) getCurrentRecipeName asserts: the call stays the base one
@@ -210,14 +275,22 @@ end
 
 -- Script parameters (construction tools and built stations) ----------------------------------------
 
+---@param scriptParam game.gui.main.script_param_util.ParamForUi
+---@return integer
 local function choices(scriptParam)
 	return scriptParam.numbers ~= nil and #scriptParam.numbers or #scriptParam.values
 end
 
+---@param scriptParam game.gui.main.script_param_util.ParamForUi
+---@param index number a position, 1 to choices(scriptParam)
+---@return number
 local function value_of(scriptParam, index)
 	return scriptParam.numbers ~= nil and scriptParam.numbers[index] or index
 end
 
+---@param scriptParam game.gui.main.script_param_util.ParamForUi
+---@param value number
+---@return integer
 local function index_of(scriptParam, value)
 	if scriptParam.numbers ~= nil then
 		local best, best_distance = 1, math.abs(scriptParam.numbers[1] - value)
@@ -231,6 +304,9 @@ local function index_of(scriptParam, value)
 end
 
 -- The label of a value, as the base slider shows it.
+---@param scriptParam game.gui.main.script_param_util.ParamForUi
+---@param value number
+---@return string
 local function label(scriptParam, value)
 	if scriptParam.formatValueFn ~= nil then return scriptParam.formatValueFn(value) end
 	if scriptParam.values ~= nil then return scriptParam.values[index_of(scriptParam, value)] end
@@ -238,6 +314,9 @@ local function label(scriptParam, value)
 end
 
 -- Snap points of a value-list slider: detent interval (positions) and anchor position, or nil.
+---@param scriptParam game.gui.main.script_param_util.ParamForUi
+---@return integer? detent
+---@return integer? anchor
 local function param_detents(scriptParam)
 	local numbers = scriptParam.numbers
 	if not numbers or not slider_snap.evenly_spaced(numbers) then return nil end
@@ -247,18 +326,24 @@ local function param_detents(scriptParam)
 	return detent, anchor
 end
 
+---@param param uo.sliders.ParamSliderParams
+---@return react.TreeNodeId
 local function render_param_slider(param)
 	local scriptParam = param.scriptParam
 	-- the hooks first, as in render_slider
+	---@type react.State<number?>
 	local pending = react.useState(nil) -- value while dragging (coalesced: sent on release)
+	---@type react.State<number?>
 	local shown = react.useState(nil) -- value the label shows while dragging
 	local mouse_pressed = react.useRef(false)
 	local editing = react.useState(false)
 	local intent = use_wheel_intent()
 	local sync = use_thumb_sync()
+	---@type integer?, integer?
 	local detent, anchor -- set below, after the mouse listener
 	local current = pending:old() or param.currentValue
 
+	---@param value number
 	local function send(value)
 		param.onValueChange(value)
 		pending:set(nil)
@@ -272,8 +357,9 @@ local function render_param_slider(param)
 				if evt.type == api.gui.mouse.Event.Type.Released then
 					mouse_pressed:set(false)
 					sync.released()
-					if pending:old() ~= nil then
-						send(pending:old())
+					local held = pending:old()
+					if held ~= nil then
+						send(held)
 						return true
 					end
 				elseif evt.type == api.gui.mouse.Event.Type.Pressed then
@@ -285,6 +371,7 @@ local function render_param_slider(param)
 			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
 				if not intent.allows_wheel() then return false end
 				local dir = wheel_dir(evt)
+				---@type number?
 				local value
 				if detent and not precise() then
 					local index = slider_snap.wheel(index_of(scriptParam, param.currentValue), 1, choices(scriptParam), 1,
@@ -312,6 +399,7 @@ local function render_param_slider(param)
 	detent, anchor = param_detents(scriptParam)
 
 	local value_text = label(scriptParam, shown:old() or current)
+	---@type react.TreeNodeId
 	local value_node
 	if editing:old() then
 		-- the number the label shows (in its unit); the typed number picks the nearest label
@@ -321,6 +409,7 @@ local function render_param_slider(param)
 			step = 0.5,
 			startInEditMode = true,
 			onValueChange = function(typed)
+				---@type string[]
 				local labels = {}
 				for i = 1, choices(scriptParam) do labels[i] = label(scriptParam, value_of(scriptParam, i)) end
 				local index = slider_snap.nearest_label(labels, tostring(typed))
@@ -369,6 +458,8 @@ end
 -- Registered under the base name: the base stylesheet sizes it (R::ScriptParamSliderAndText).
 -- The plain base slider over the positions of the value list, for a row whose render failed. The data
 -- that made it fail may be odd, so nothing here may raise: an unreadable list is a slider of one.
+---@param param uo.sliders.ParamSliderParams
+---@return react.TreeNodeId
 local function plain_param_slider(param)
 	local scriptParam = param.scriptParam
 	local ok_count, count = pcall(choices, scriptParam)
@@ -385,6 +476,8 @@ local function plain_param_slider(param)
 	}
 end
 
+---@param param uo.sliders.ParamSliderParams
+---@return react.TreeNodeId
 local ScriptParamSliderAndText = react.RegisterRecipe("ScriptParamSliderAndText", function(param)
 	local ok, node = pcall(render_param_slider, param)
 	if ok then return node end
@@ -394,6 +487,8 @@ end)
 
 -- The slider branch of the base buildScriptParamCompSimple (script_param_util.tl), with this
 -- module's slider row; everything else goes to the base function.
+---@param original fun(param: game.gui.main.script_param_util.CompSimpleParam, ...: any): react.TreeNodeId
+---@return fun(param: game.gui.main.script_param_util.CompSimpleParam, ...: any): react.TreeNodeId
 local function wrap_build(original)
 	return function(param, ...)
 		local scriptParam = param and param.scriptParam
@@ -420,6 +515,7 @@ local function wrap_build(original)
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param _replacement_api react.ReplacementApi
 function sliders.install(_replacement_api)
 	local build = script_param_util.buildScriptParamCompSimple
 	builtin_wraps.wrap("Slider", function(base)

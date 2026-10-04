@@ -7,42 +7,54 @@ package.path = "tools/lua/vendor/luacheck/src/?.lua;tools/lua/vendor/luacheck/sr
 
 local luacheck = require("luacheck")
 
+--- .luacheckrc: top-level options and `files` (pattern -> options); any as in luacheck.Options.
+---@alias uo.tools.lint.Config table<string, any>
+
+---@param path string
+---@return uo.tools.lint.Config
 local function load_config(path)
-	local config = { files = {} }
+	local config = { files = {} } ---@type uo.tools.lint.Config
 	local chunk = assert(loadfile(path, "t", setmetatable(config, { __index = _G })))
 	chunk()
 	return config
 end
 
+---@param pattern string
+---@param file string
+---@return boolean
 local function matches(pattern, file)
-	local rest = pattern:match("^%*%*/(.+)$")
+	local rest = pattern:match("^%*%*/(.+)$") ---@type string?
 	if rest then
-		local suffix = rest:match("^%*(.+)$")
+		local suffix = rest:match("^%*(.+)$") ---@type string?
 		if suffix then return file:sub(-#suffix) == suffix end
 		return file == rest or file:sub(-#rest - 1) == "/" .. rest
 	end
 	return file == pattern or file:sub(1, #pattern + 1) == pattern .. "/"
 end
 
+---@param config uo.tools.lint.Config
+---@param file string
+---@return luacheck.Options
 local function options_for(config, file)
-	local options = {}
+	local options = {} ---@type luacheck.Options
 	for key, value in pairs(config) do
 		if key ~= "files" then options[key] = value end
 	end
-	local patterns = {}
-	for pattern in pairs(config.files) do patterns[#patterns + 1] = pattern end
+	local overrides = config.files ---@type table<string, luacheck.Options>
+	local patterns = {} ---@type string[]
+	for pattern in pairs(overrides) do patterns[#patterns + 1] = pattern end
 	table.sort(patterns, function(a, b) return #a < #b end) -- more specific overrides last
 	for _, pattern in ipairs(patterns) do
 		if matches(pattern, file) then
-			for key, value in pairs(config.files[pattern]) do options[key] = value end
+			for key, value in pairs(overrides[pattern]) do options[key] = value end
 		end
 	end
 	return options
 end
 
 local config = load_config(".luacheckrc")
-local files = { table.unpack(arg) }
-local sources, options = {}, {}
+local files = { table.unpack(arg) } ---@type string[]
+local sources, options = {}, {} ---@type string[], luacheck.Options[]
 for i, file in ipairs(files) do
 	sources[i] = read_file(file) -- provided by tools/lua/run.js
 	options[i] = options_for(config, file)

@@ -3,4 +3,9 @@
 -- starting a small new map; --with-mod <id> adds installed mods (`mods`), and the GUI checks expect
 -- what those mods change.
 -- @module ui_overhaul_testbench.fixture
-return { save = nil, mods = {} }
+---@class uo.testbench.Fixture
+---@field save string? the savegame copy to load; nil starts a small new map
+---@field mods string[] installed mods to add
+---@field only string[]? run.sh --only: the GUI checks to run; nil runs all
+local fixture = { save = nil, mods = {} }
+return fixture

@@ -23,27 +23,65 @@ local geometry = require("/ui_overhaul/core/geometry.lua")
 
 local construction = {}
 
+---@alias uo.gui.construction.Menu game.gui.construction.construction_menu.ConstructionMenu
+---@alias uo.gui.construction.Category game.gui.construction.construction_menu.ConstructionMenuCategory
+---@alias uo.gui.construction.Definition game.gui.construction.construction_menu.ConstructionDefinition
+---A tab of a menu and its items, as getMenuCategories lists them.
+---@alias uo.gui.construction.Tab [uo.gui.construction.Category, uo.gui.construction.Definition[]]
+---@alias uo.gui.construction.MenuCategories game.gui.construction.construction_react_util.MenuCategories
+
+---What the bulldozer warning counts per removed station group.
+---@class uo.gui.construction.GroupLines
+---@field lines table<Engine.Entity, true>
+---@field count integer
+
+---A track's sort key.
+---@class uo.gui.construction.TrackKey
+---@field definition uo.gui.construction.Definition
+---@field available boolean
+---@field speed number
+---@field index integer
+
+---Build limits of a street or track type.
+---@class uo.gui.construction.Limits
+---@field max_slope? number
+---@field min_radius? number
+
+---@type [uo.gui.construction.Menu, uo.gui.construction.Menu][]
 local MERGED_MENUS = { { "RAIL", "TRACKS" }, { "ROAD", "ROADS" } }
 local GUEST_ORDER_OFFSET = 100000 -- tabs from the partner menu come after the menu's own tabs
 -- module tabs that should come first, in this order (base: Plots, Decoration, Platforms, ...)
+---@type table<string, integer>
 local PREFERRED_MODULE_TABS = { modules_tracks = 1, modules_platforms = 2, modules_street_access = 3,
 	modules_building = 4 }
 
+---@param a uo.gui.construction.Tab
+---@param b uo.gui.construction.Tab
+---@return boolean
 local function by_order(a, b)
 	local oa, ob = a[1].order or 0, b[1].order or 0
 	if oa ~= ob then return oa < ob end
 	return tostring(a[1].name) < tostring(b[1].name)
 end
 
+---@param t uo.gui.construction.Category
+---@return uo.gui.construction.Category
 local function copy(t)
+	-- a shallow copy of every field, whatever the game sets (hence any)
+	---@type table<string, any>
 	local result = {}
-	for k, v in pairs(t) do result[k] = v end
-	return result
+	for k, v in pairs(t --[[@as table<string, any>]]) do result[k] = v end
+	return result --[[@as uo.gui.construction.Category]] -- t's fields, so the same shape
 end
 
 --- Adds `from`'s tabs (as copies placed after the own tabs) to `to`, from the unmerged lists.
+---@param result uo.gui.construction.MenuCategories
+---@param original uo.gui.construction.MenuCategories
+---@param to uo.gui.construction.Menu
+---@param from uo.gui.construction.Menu
 local function add_guest_tabs(result, original, to, from)
 	if not original[to] or not original[from] then return end
+	---@type uo.gui.construction.Tab[]
 	local merged = {}
 	for _i, entry in ipairs(original[to]) do merged[#merged + 1] = entry end
 	for _i, entry in ipairs(original[from]) do
@@ -56,6 +94,8 @@ local function add_guest_tabs(result, original, to, from)
 	result[to] = merged
 end
 
+---@param definition uo.gui.construction.Definition
+---@return number
 local function track_speed(definition)
 	local id = api.res.streetTemplateRep.find(definition.resName)
 	if id < 0 then return 0 end
@@ -63,16 +103,20 @@ local function track_speed(definition)
 	return template.laneConfigs[1] and template.laneConfigs[1].speed or 0
 end
 
+---@param definition uo.gui.construction.Definition
+---@return boolean
 local function available(definition)
 	local year = api.engine.util.getYear()
 	local a = definition.availability or {}
 	return (a.yearFrom or 0) <= year and ((a.yearTo or 0) == 0 or a.yearTo > year)
 end
 
+---@param result uo.gui.construction.MenuCategories
 local function sort_tracks(result)
 	for _m, menu in pairs(result) do
 		for _i, entry in ipairs(menu) do
 			if entry[1].category == "tracks" then
+				---@type uo.gui.construction.TrackKey[]
 				local keyed = {}
 				for index, definition in ipairs(entry[2]) do
 					keyed[index] = { definition = definition, available = available(definition),
@@ -89,6 +133,7 @@ local function sort_tracks(result)
 	end
 end
 
+---@param result uo.gui.construction.MenuCategories
 local function order_module_tabs(result)
 	local modules = result.MODULES
 	if not modules then return end
@@ -103,7 +148,10 @@ local function order_module_tabs(result)
 	table.sort(modules, by_order)
 end
 
+---@param result uo.gui.construction.MenuCategories
+---@return string
 local function describe(result)
+	---@type string[]
 	local parts = {}
 	for menu, list in pairs(result) do parts[#parts + 1] = menu .. "=" .. #list end
 	table.sort(parts)
@@ -112,8 +160,10 @@ end
 
 local logged = false
 
+---@param result uo.gui.construction.MenuCategories
 local function adjust(result)
 	local before = not logged and describe(result) or nil
+	---@type uo.gui.construction.MenuCategories
 	local original = {}
 	for menu, list in pairs(result) do original[menu] = list end
 	for _i, pair in ipairs(MERGED_MENUS) do
@@ -141,8 +191,12 @@ end
 -- Bulldozer warning ---------------------------------------------------------------------------------
 
 --- Stations among the removed entities: stations themselves, or the stations of removed constructions.
+---@param proposal Proposal
+---@return Engine.Entity[]
 local function removed_stations(proposal)
+	---@type Engine.Entity[], table<Engine.Entity, true>
 	local stations, seen = {}, {}
+	---@param station Engine.Entity
 	local function add(station)
 		if not seen[station] then
 			seen[station] = true
@@ -159,7 +213,10 @@ local function removed_stations(proposal)
 	return stations
 end
 
+---@param proposal Proposal
+---@return string[]
 local function station_warnings(proposal)
+	---@type table<Engine.Entity, uo.gui.construction.GroupLines>, Engine.Entity[]
 	local by_group, order = {}, {}
 	for _i, station in ipairs(removed_stations(proposal)) do
 		local group = api.engine.system.stationGroupSystem.getStationGroup(station)
@@ -176,6 +233,7 @@ local function station_warnings(proposal)
 			end
 		end
 	end
+	---@type string[]
 	local strings = {}
 	for _i, group in ipairs(order) do
 		local count = by_group[group].count
@@ -194,17 +252,24 @@ construction.station_warnings = station_warnings -- for the testbench
 
 -- Measurements while drawing track or road --------------------------------------------------------
 
+---@param v Vec3f
+---@return uo.core.geometry.Vec
 local function vec(v) return { x = v.x, y = v.y, z = v.z } end
 
+---@param comp Engine.Component.BaseEdge
+---@return uo.core.geometry.Edge
 local function edge(comp)
 	return { p0 = vec(comp.position0), p1 = vec(comp.position1), t0 = vec(comp.tangent0), t1 = vec(comp.tangent1),
 		type = comp.type }
 end
 
 -- Items of an engine list: a native vector (size/at) or a Lua list.
+---@param list? Vector<Proposal.SegmentAndEntity>|Proposal.SegmentAndEntity[]
+---@return Proposal.SegmentAndEntity[]
 local function items(list)
 	if list == nil then return {} end
 	local ok, size = pcall(function() return list:size() end)
+	---@type Proposal.SegmentAndEntity[]
 	local result = {}
 	if ok then
 		for i = 1, size do result[i] = list:at(i) end
@@ -215,14 +280,20 @@ local function items(list)
 end
 
 -- Height of the ground under `p`, or nil if the terrain cannot be read here.
+---@param p uo.core.geometry.Vec
+---@return number?
 local function ground(p)
 	local ok, height = pcall(api.engine.terrain.getHeightAt, api.type.Vec2f.new(p.x, p.y))
 	return ok and type(height) == "number" and height or nil
 end
 
 --- Plain measurements of the edges of `kind` (0 street, 1 track) that the proposal adds.
+---@param proposal Proposal
+---@param kind integer
+---@return uo.core.geometry.Summary?
 local function measure(proposal, kind)
 	local street = proposal.proposal
+	---@type uo.core.geometry.Edge[], uo.core.geometry.Edge[]
 	local edges, removed = {}, {}
 	for _i, segment in ipairs(items(street.addedSegments_native or street.addedSegments)) do
 		if segment.type == kind then edges[#edges + 1] = edge(segment.comp) end
@@ -250,6 +321,8 @@ local function measure(proposal, kind)
 	return summary
 end
 
+---@param res_name? ResName
+---@return uo.gui.construction.Limits
 local function template_limits(res_name)
 	local id = res_name and api.res.streetTemplateRep.find(res_name) or -1
 	if id < 0 then return {} end
@@ -257,15 +330,22 @@ local function template_limits(res_name)
 	return { max_slope = template.maxSlopeBuild, min_radius = template.minCurveRadiusBuild }
 end
 
+---@param value number
+---@return string
 local function metres(value)
 	return api.util.formatLength(value)
 end
 
 --- Tooltip lines for a drawn track or road.
+---@param proposal Proposal
+---@param kind integer 0 street, 1 track
+---@param res_name? ResName
+---@return string[]
 local function measurement_strings(proposal, kind, res_name)
 	local m = measure(proposal, kind)
 	if not m then return {} end
 	local limits = template_limits(res_name)
+	---@type string[]
 	local strings = {}
 	local grade = api.util.toStringPercentPrecision(m.max_grade, 1)
 	if limits.max_slope and limits.max_slope > 0 then
@@ -302,8 +382,12 @@ end
 construction.measurement_strings = measurement_strings -- for the testbench
 
 -- Wraps the action's getProposalStringsFn: `extra(proposal)` returns lines; `first` puts them first.
+---@param action builtin.ConstructionActionParam
+---@param extra fun(proposal: Proposal): string[]
+---@param first? boolean
 local function add_strings(action, extra, first)
 	local strings_fn = action.getProposalStringsFn
+	---@cast strings_fn -nil -- the caller (patch_proposal_tooltips) checked it is a function
 	action.getProposalStringsFn = function(proposal, proposal_data)
 		local strings = strings_fn(proposal, proposal_data) or {}
 		local ok, lines = pcall(extra, proposal)
@@ -337,6 +421,7 @@ local function patch_proposal_tooltips()
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param _replacement_api react.ReplacementApi
 function construction.install(_replacement_api)
 	patch_menu_categories()
 	patch_proposal_tooltips()

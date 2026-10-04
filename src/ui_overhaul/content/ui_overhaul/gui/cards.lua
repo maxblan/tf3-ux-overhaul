@@ -20,29 +20,41 @@ local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 local line_problems = require("ui_overhaul_1::/ui_overhaul/core/line_problems.lua")
 local ui = require("ui_overhaul_1::/ui_overhaul/gui/ui.lua")
 -- optional: without it the stops have no terminal button
-local terminals = guard.module("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
+local terminals = guard.module("ui_overhaul_1::/ui_overhaul/gui/terminals.lua") ---@type uo.gui.terminals?
 
+---@class uo.gui.cards
 local cards = {}
 
 local REFRESH = 1.0 -- seconds
 
 -- line -> plain problem data (terminals.read_problems), refreshed by the stops table's timer and read
 -- by its cells, so the engine's problem search runs once per line and refresh, not once per stop.
-local problems_by_line = {}
+local problems_by_line = {} ---@type table<Engine.Entity, uo.gui.terminals.ProblemData>
 -- line -> waiting at each stop by 1-based index ({ passengers, cargo, total }), refreshed by the same
 -- timer: the cells show it and the Waiting column sorts by it, so a stop is read once per refresh,
 -- the sort reads no engine data, and a cell never asks for a stop the line no longer has.
+---@type table<Engine.Entity, table<integer, uo.cards.StopWaiting>>
 local waiting_by_line = {}
 
+---@param children react.TreeNodeId[]
+---@return react.TreeNodeId
 local function horizontal(children)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
 end
 
+---@class uo.cards.CargoWaiting
+---@field name string untranslated cargo type name
+---@field count integer
+
 --- Waiting passengers and cargo at stop `index` (1-based) of `line`; cargo as { {name, count} }.
+---@param line Engine.Entity
+---@param index integer
+---@return integer passengers
+---@return uo.cards.CargoWaiting[] cargo
 local function waiting_at_stop(line, index)
 	local passenger_id = api.res.cargoTypeRep.getPassengerCargoTypeId()
 	local passengers = api.engine.util.cargo.getCargoQualityDataAtStop(line, index - 1, passenger_id).countTotal or 0
-	local cargo = {}
+	local cargo = {} ---@type uo.cards.CargoWaiting[]
 	for _i, cargo_id in ipairs(cargo_util.getConfiguredStopCargoTypes({ lineEntity = line, stopIndex1 = index }, true)) do
 		if cargo_id ~= passenger_id then
 			local count = api.engine.util.cargo.getCargoQualityDataAtStop(line, index - 1, cargo_id).countTotal or 0
@@ -54,7 +66,7 @@ end
 
 ---@class uo.cards.StopWaiting
 ---@field passengers integer
----@field cargo { name: string, count: integer }[]
+---@field cargo uo.cards.CargoWaiting[]
 ---@field total integer passengers plus cargo, as the cell shows it
 
 --- Stop count of `line` and the waiting at each stop (a stop whose read fails has no entry), or nil
@@ -66,7 +78,7 @@ function cards.read_waiting(line)
 	if not api.engine.entityExists(line) then return nil end
 	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 	if not component then return nil end
-	local waiting = {}
+	local waiting = {} ---@type table<integer, uo.cards.StopWaiting>
 	for index = 1, #component.stops do
 		local ok, passengers, cargo = pcall(waiting_at_stop, line, index)
 		if ok then
@@ -90,6 +102,7 @@ end
 
 --- A waiting cell: passengers plus cargo, the split per cargo type in the tooltip.
 ---@param waiting uo.cards.StopWaiting
+---@return react.TreeNodeId
 local function waiting_cell(waiting)
 	local lines = { string.format("%s: %d", _("Passengers"), waiting.passengers) }
 	for _i, entry in ipairs(waiting.cargo) do
@@ -102,6 +115,13 @@ local function waiting_cell(waiting)
 	}
 end
 
+---@generic T
+---@param local_key string
+---@param title string
+---@param recipe react.Recipe<T>
+---@param param T
+---@param params game.gui.entity_window.eow_extension_util.IEowWidgetsExtensionParams
+---@return react.TreeNodeId
 local function card(local_key, title, recipe, param, params)
 	return builtin.BoxLayout{ children = {
 		content_card.ContentCard{
@@ -134,15 +154,20 @@ local function read_stop(line, index)
 	}
 end
 
+---@class uo.cards.StopsUserParam
+---@field line Engine.Entity
+
+---@param params builtin.TableCellParam userParam: uo.cards.StopsUserParam
+---@return react.TreeNodeId
 local UioStopCell = react.RegisterRecipe("UioStopCell", function(params)
-	local line = params.userParam.line
+	local line = params.userParam.line ---@type Engine.Entity the table's uo.cards.StopsUserParam
 	local state = engine_react_util.useStepStateTimer(function()
 		local ok, stop = pcall(read_stop, line, params.rowKey)
 		return ok and stop or nil
 	end, REFRESH)
 	local d = state:old()
 	if not d then return horizontal{} end
-	local reasons = {}
+	local reasons = {} ---@type string[]
 	if terminals then
 		for _i, problem in ipairs(d.problems) do reasons[#reasons + 1] = terminals.problem_text(problem) end
 	end
@@ -176,8 +201,10 @@ local UioStopCell = react.RegisterRecipe("UioStopCell", function(params)
 	}
 end)
 
+---@param params builtin.TableCellParam userParam: uo.cards.StopsUserParam
+---@return react.TreeNodeId
 local UioStopWaitingCell = react.RegisterRecipe("UioStopWaitingCell", function(params)
-	local line = params.userParam.line
+	local line = params.userParam.line ---@type Engine.Entity the table's uo.cards.StopsUserParam
 	-- the table's refresh read it; a removed stop leaves it in that refresh, while its row may still show
 	local state = engine_react_util.useStepStateTimer(function()
 		local waiting = waiting_by_line[line]
@@ -188,6 +215,11 @@ local UioStopWaitingCell = react.RegisterRecipe("UioStopWaitingCell", function(p
 	return waiting_cell(d)
 end)
 
+---@class uo.cards.StopsTableParams: react.Param
+---@field line Engine.Entity
+
+---@param params uo.cards.StopsTableParams
+---@return react.TreeNodeId
 local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 	local line = params.line
 	-- the line's problems are kept only while its window shows them
@@ -199,7 +231,7 @@ local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 		local ok, count, waiting = pcall(cards.read_waiting, line)
 		if not ok then count, waiting = nil, nil end
 		waiting_by_line[line] = waiting
-		local keys = {}
+		local keys = {} ---@type integer[]
 		for index = 1, count or 0 do keys[index] = index end
 		if terminals and count then
 			local ok_problems, data = pcall(terminals.read_problems, line)
@@ -224,6 +256,8 @@ local UioStopsTable = react.RegisterRecipe("UioStopsTable", function(params)
 	}
 end)
 
+---@param params game.gui.entity_window.line.line_eow.script.LineWidgetPluginParams
+---@return react.TreeNodeId
 function cards.line(params)
 	if params.ownershipState ~= "Player" then return horizontal{} end
 	return card("uioLineStops", _("Stops"), UioStopsTable, { line = params.entityId }, params)

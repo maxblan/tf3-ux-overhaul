@@ -2,6 +2,7 @@
 -- tables, a dimmed header row, and a compact load switch beside the headline.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

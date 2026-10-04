@@ -10,12 +10,18 @@
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
 
+---@class uo.gui.builtin_wraps
 local builtin_wraps = {}
 
-local base_of = {} -- replacement function -> the function it replaced
+-- builtins differ in their params, so they are plain functions here
+local base_of = {} ---@type table<function, function> replacement function -> the function it replaced
 local registration_wrapped = false
+-- the builtin module looked up by a field name only known at run time
+local builtin_by_name = builtin --[[@as table<string, function?>]]
 
 --- The base builtin behind `fn` (following chained replacements), or `fn` itself.
+---@param fn function
+---@return function
 function builtin_wraps.base(fn)
 	local seen = 0
 	while base_of[fn] ~= nil and seen < 32 do
@@ -28,6 +34,10 @@ local function wrap_registration()
 	if registration_wrapped then return end
 	local register = react.RegisterWrapperRecipe
 	if type(register) ~= "function" then error("react.RegisterWrapperRecipe not found") end
+	---@param name string
+	---@param wrapped function
+	---@param ... any the rest of RegisterWrapperRecipe's arguments, passed on unchanged
+	---@return react.RecipeN<any, any, any, any, any> recipe its params are those of the wrapping function
 	react.RegisterWrapperRecipe = function(name, wrapped, ...)
 		return register(name, builtin_wraps.base(wrapped), ...)
 	end
@@ -35,13 +45,16 @@ local function wrap_registration()
 end
 
 --- Replaces builtin[`name`] by make(base), where base is the current function. Returns base.
+---@param name string the builtin's field, e.g. "Window"
+---@param make fun(base: function): function
+---@return function base
 function builtin_wraps.wrap(name, make)
-	local base = builtin[name]
+	local base = builtin_by_name[name]
 	if type(base) ~= "function" then error("builtin." .. tostring(name) .. " not found") end
 	wrap_registration()
 	local replacement = make(base)
 	base_of[replacement] = base
-	builtin[name] = replacement
+	builtin_by_name[name] = replacement
 	return base
 end
 

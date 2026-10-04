@@ -1,3 +1,4 @@
+---@return table
 function data()
 	return {
 		type = "react-plugin ::IndustryEowExtensionPoint",

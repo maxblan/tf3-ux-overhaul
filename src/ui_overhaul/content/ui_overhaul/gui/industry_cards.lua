@@ -30,6 +30,7 @@ local base_industry_window = require("::/gui/entity_window/industry/industry.tl"
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 
+---@class uo.gui.industry_cards
 local industry_cards = {}
 
 local REFRESH = 2.0 -- seconds
@@ -38,7 +39,9 @@ local MAX_LINES = 8
 local BLOCKED_AREA_EVENT = "uio.industry.blocked_area"
 
 -- A card whose content fails shows nothing and logs once; its recipe declared its hooks before.
-local reported = {}
+local reported = {} ---@type table<string, true>
+---@param key string
+---@param err any what pcall caught: an error can be any Lua value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
@@ -50,15 +53,23 @@ local show_blocked_area = true
 -- True while the industry window's map action renders with the area switched off.
 local strip_plots = false
 
+---@param children react.TreeNodeId[]
+---@param class? string
+---@return react.TreeNodeId
 local function vertical(children, class)
 	return builtin.BoxLayout{ meta = { class = class }, orientation = builtin.type.Orientation.Vertical,
 		children = children }
 end
 
+---@param value string
+---@param class? string
+---@param tooltip? string
+---@return react.TreeNodeId
 local function text(value, class, tooltip)
 	return builtin.TextView{ meta = { class = class or "font-scale-body", tooltip = tooltip }, text = value }
 end
 
+---@return integer
 local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
@@ -66,26 +77,42 @@ end
 -- Data -----------------------------------------------------------------------------------------------
 
 -- Whether the industries script found something in the way of this industry's next level.
+---@param entity Engine.Entity
+---@return boolean
 local function failed_expansion(entity)
 	local script = api.engine.system.gameScriptSystem.getEntityForGameScript("::/game_mechanics/industries/industries.gs")
 	local game_script = script and api.engine.getComponent(script, api.type.ComponentType.GAME_SCRIPT)
-	local failed = game_script and game_script.state_native:find("industryFailedExtensions")
+	-- the script keeps a table there (industries.d.tl); the base reads it the same way (industry.tl:62)
+	local failed = game_script and game_script.state_native:find("industryFailedExtensions") --[[@as NativeLuaTable?]]
 	return failed ~= nil and failed:find(entity) ~= nil
 end
 
+---A recipe's cargo: { cargo type, amount } for inputs, { cargo type, amount, perYear } for outputs.
+---@class uo.industry_cards.Amount
+---@field [1] CargoTypeId
+---@field [2] integer
+---@field [3]? integer outputs: the most the industry can make per year
+
+---@class uo.industry_cards.Recipe
+---@field inputs uo.industry_cards.Amount[]
+---@field outputs uo.industry_cards.Amount[]
+
 -- Recipes as { inputs = { {cargo, amount} }, outputs = { {cargo, amount, perYear} } }.
+---@param stock_list_entity Engine.Entity
+---@return uo.industry_cards.Recipe[]
 local function read_recipes(stock_list_entity)
 	local stock_list = api.engine.getComponent(stock_list_entity, api.type.ComponentType.STOCK_LIST)
-	local result = {}
-	for _i, rule in ipairs(stock_list and stock_list.rules or {}) do
+	local result = {} ---@type uo.industry_cards.Recipe[]
+	if not stock_list then return result end
+	for _i, rule in ipairs(stock_list.rules) do
 		if not rule.booster then
 			-- the first alternative, as the game's own widgets show it
-			local inputs = {}
+			local inputs = {} ---@type uo.industry_cards.Amount[]
 			for stock_index, amount in ipairs(rule.input[1] or {}) do
 				local stock = stock_list.stocks[stock_index]
 				if amount > 0 and stock then inputs[#inputs + 1] = { stock.cargoType, amount } end
 			end
-			local outputs = {}
+			local outputs = {} ---@type uo.industry_cards.Amount[]
 			-- outputs are keyed by cargo type id (inputs by stock index), as industry_util.tl reads them
 			for cargo, amount in pairs(rule.output) do
 				if amount > 0 then
@@ -100,7 +127,19 @@ local function read_recipes(stock_list_entity)
 	return result
 end
 
+---@class uo.industry_cards.Facts: uo.core.industry_development.Facts
+---@field output integer per year
+---@field shipped integer per year
+---@field productionRating number
+---@field rating? number the effective rating, nil without output
+---@field chance number
+---@field closesIn? integer milliseconds of game time until the industry closes
+---@field recipes uo.industry_cards.Recipe[]
+---@field blockers uo.core.industry_development.Blocker[]
+
 --- Plain facts about industry `entity`. Engine reads only.
+---@param entity Engine.Entity
+---@return uo.industry_cards.Facts?
 function industry_cards.read(entity)
 	local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
 	if not industry then return nil end
@@ -109,6 +148,7 @@ function industry_cards.read(entity)
 	local shipped = api.engine.util.stock.getCargoShippedPerYear(stock)
 	local rating = api.engine.util.stock.getProductionRating(stock)
 	local chance, effective = development.chance(rating, shipped, output)
+	---@type uo.industry_cards.Facts
 	local facts = {
 		level = industry.level,
 		maxLevel = industry.maxLevel,
@@ -123,17 +163,25 @@ function industry_cards.read(entity)
 		closesIn = industry.closureTimeStamp > 0 and math.max(0, industry.closureTimeStamp - now()) or nil,
 		blocked = failed_expansion(entity),
 		recipes = read_recipes(stock),
+		blockers = {}, -- from the complete facts, below
 	}
 	facts.blockers = development.blockers(facts)
 	return facts
 end
 
+---A line and the 1-based index of its stop that reaches the industry.
+---@alias uo.industry_cards.ServingLine [Engine.Entity, integer]
+
 --- The player's lines with a stop whose catchment reaches the industry: { {line, stopIndex} }.
+---@param entity Engine.Entity
+---@return uo.industry_cards.ServingLine[]
 function industry_cards.read_lines(entity)
 	local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
 	if not industry then return {} end
 	local targets = { [entity] = true, [industry.stockList] = true }
-	local reaches = {} -- station -> boolean, per pass
+	local reaches = {} ---@type table<Engine.Entity, boolean> station -> boolean, per pass
+	---@param station Engine.Entity
+	---@return boolean
 	local function station_reaches(station)
 		if reaches[station] == nil then
 			reaches[station] = false
@@ -143,7 +191,7 @@ function industry_cards.read_lines(entity)
 		end
 		return reaches[station]
 	end
-	local result = {}
+	local result = {} ---@type uo.industry_cards.ServingLine[]
 	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
 		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
 		for stop_index, stop in ipairs(component and component.stops or {}) do
@@ -161,6 +209,9 @@ end
 -- Texts ------------------------------------------------------------------------------------------------
 
 
+---@param key uo.core.industry_development.Blocker
+---@param f uo.industry_cards.Facts
+---@return string?
 local function blocker_text(key, f)
 	if key == "max_level" then return _("Industry is expanded to it's full potential.") end
 	if key == "blocked" then return _("Industry is blocked from further expansion.") end
@@ -171,17 +222,24 @@ local function blocker_text(key, f)
 	if key == "closing" then
 		local util = require("::/scripts/util.tl")
 		local speed = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_SPEED)
+		---@cast speed -nil -- the world always has a game speed
 		return lang_util.format(_("It closes in {duration} unless its cargo is used."),
 			{ duration = util.formatDurationWithCurrentCalenderSpeed(f.closesIn or 0, speed.millisPerDay) })
 	end
 	return nil
 end
 
+---@param v? number
+---@return string
 local function percent(v) return api.util.toStringPercentPrecision(v or 0, 0) end
 
 -- Cards -------------------------------------------------------------------------------------------------
 
 -- One row of the card: a label on the left (fixed width, so the values line up) and its value.
+---@param label string
+---@param value react.TreeNodeId
+---@param tooltip? string
+---@return react.TreeNodeId
 local function row(label, value, tooltip)
 	return builtin.BoxLayout{
 		meta = { class = "uio-industry-row" },
@@ -190,6 +248,10 @@ local function row(label, value, tooltip)
 	}
 end
 
+---@param fraction? number
+---@param label string
+---@param tooltip? string
+---@return react.TreeNodeId
 local function bar(fraction, label, tooltip)
 	return builtin.ProgressBar{
 		meta = { class = "font-scale-annotation, uio-industry-bar", tooltip = tooltip },
@@ -200,11 +262,17 @@ end
 
 -- "[icon] 11 + [icon] 7 -> [icon] 4" with the game's cargo icons; each output icon's tooltip says how
 -- much of it the industry can make per year, and a single output says it in the row as well.
+---@param recipe uo.industry_cards.Recipe
+---@return react.TreeNodeId
 local function recipe_node(recipe)
-	local children = {}
+	local children = {} ---@type react.TreeNodeId[]
+	---@param amount integer
+	---@return string
 	local function per_year_text(amount)
 		return lang_util.format(_("up to {amount} per year"), { amount = lang_util.formatInt(amount) })
 	end
+	---@param list uo.industry_cards.Amount[]
+	---@param outputs boolean
 	local function amounts(list, outputs)
 		for i, entry in ipairs(list) do
 			if i > 1 then children[#children + 1] = text("+", "font-scale-body, uio-industry-op") end
@@ -227,10 +295,14 @@ local function recipe_node(recipe)
 end
 
 -- The Development card's content; `f` from industry_cards.read, or nil.
+---@param params uo.industry_cards.CardParams
+---@param f? uo.industry_cards.Facts
+---@param show boolean
+---@return react.TreeNodeId
 local function render_development(params, f, show)
 	if not f then return vertical{} end
 	local growing = f.level < f.maxLevel
-	local children = {}
+	local children = {} ---@type react.TreeNodeId[]
 	for i, recipe in ipairs(f.recipes) do
 		children[#children + 1] = row(i == 1 and _("Production") or "", recipe_node(recipe))
 	end
@@ -253,7 +325,7 @@ local function render_development(params, f, show)
 		local line = blocker_text(key, f)
 		if line then
 			local warn = key ~= "max_level"
-			local parts = {}
+			local parts = {} ---@type react.TreeNodeId[]
 			if warn then
 				parts[1] = builtin.ImageView{ meta = { class = "uio-industry-alert" }, path = "::/gui/statistics/icons/alert.tga",
 					scaling = builtin.type.ImageViewScaling.AutoFit }
@@ -284,6 +356,11 @@ local function render_development(params, f, show)
 	} }
 end
 
+---@class uo.industry_cards.CardParams: react.Param
+---@field entity Engine.Entity
+
+---@param params uo.industry_cards.CardParams
+---@return react.TreeNodeId
 local Development = react.RegisterRecipe("UioIndustryDevelopment", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local ok, facts = pcall(industry_cards.read, params.entity)
@@ -298,11 +375,13 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 end)
 
 -- The Served by card's content: entries of industry_cards.read_lines.
+---@param lines uo.industry_cards.ServingLine[]
+---@return react.TreeNodeId
 local function render_served_by(lines)
 	if #lines == 0 then
 		return vertical{ text(_("No line of yours stops within reach of this industry."), "font-scale-body") }
 	end
-	local children = {}
+	local children = {} ---@type react.TreeNodeId[]
 	for i, entry in ipairs(lines) do
 		if i > MAX_LINES then
 			children[#children + 1] = text(lang_util.format(_("and {count} more"),
@@ -322,6 +401,8 @@ local function render_served_by(lines)
 	return vertical(children, "uio-industry-lines")
 end
 
+---@param params uo.industry_cards.CardParams
+---@return react.TreeNodeId
 local ServedBy = react.RegisterRecipe("UioIndustryServedBy", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local ok, lines = pcall(industry_cards.read_lines, params.entity)
@@ -333,6 +414,13 @@ local ServedBy = react.RegisterRecipe("UioIndustryServedBy", function(params)
 	return vertical{}
 end)
 
+---@generic T
+---@param local_key string
+---@param title string
+---@param recipe react.Recipe<T>
+---@param param T
+---@param params game.gui.entity_window.eow_extension_util.IEowWidgetsExtensionParams
+---@return react.TreeNodeId
 local function card(local_key, title, recipe, param, params)
 	return content_card.ContentCard{
 		meta = { localKey = local_key },
@@ -345,6 +433,8 @@ local function card(local_key, title, recipe, param, params)
 end
 
 --- Plugin recipe body of the industry window.
+---@param params game.gui.entity_window.eow_extension_util.IEowWidgetsExtensionParams
+---@return react.TreeNodeId
 function industry_cards.industry(params)
 	local entity = params.entityId
 	if not entity or not api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY) then
@@ -359,21 +449,40 @@ end
 -- Blocked area on the map --------------------------------------------------------------------------
 
 --- Shows or hides the red area of a blocked expansion (all industry windows, for the session).
+---@param show boolean
 function industry_cards.set_show_blocked_area(show)
 	show_blocked_area = show and true or false
 	react.fireEvent(nil, BLOCKED_AREA_EVENT, show_blocked_area)
 end
 
+--- A copy of `t` with the same fields and values.
+---@generic T: table
+---@param t T
+---@return T
+local function shallow_copy(t)
+	local copy = {}
+	-- LuaLS cannot infer pairs()'s key and value types for a generic table
+	---@diagnostic disable-next-line: no-unknown
+	for k, v in pairs(t) do copy[k] = v end
+	return copy
+end
+
 -- The base window, with its map action rendered without the red area while it is switched off.
+---@param params game.gui.entity_window.view_manager.IEntityWindowParam
+---@return react.TreeNodeId
 local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
 	local showState = react.useState(show_blocked_area)
 	react.onEvent(BLOCKED_AREA_EVENT, function(_e, show) showState:set(show) end)
 	local show = showState:old()
-	local copy = {}
-	for k, v in pairs(params) do copy[k] = v end
+	local copy = shallow_copy(params)
 	if type(params.setActionFn) == "function" then
+		---@param fn? fun(...: any): react.TreeNodeId the map action; its arguments are passed on unchanged
+		---@param ... string key2
+		---@return nil setActionFn returns nothing
 		copy.setActionFn = function(fn, ...)
 			if type(fn) ~= "function" or show then return params.setActionFn(fn, ...) end
+			-- the action is declared without params; the wrapper still passes on whatever it gets
+			---@diagnostic disable-next-line: redundant-parameter
 			return params.setActionFn(function(...)
 				strip_plots = true
 				local ok, node = pcall(fn, ...)
@@ -387,8 +496,12 @@ local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
 end)
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function industry_cards.install(replacement_api)
 	builtin_wraps.wrap("LayerConfig", function(base)
+		---@param p builtin.LayerConfigParam
+		---@param ... any the builtin's other arguments, passed on unchanged
+		---@return react.TreeNodeId
 		return function(p, ...)
 			if strip_plots and select("#", ...) == 0 and type(p) == "table" and p.config ~= nil then
 				pcall(function()

@@ -9,6 +9,7 @@ local stub = {}
 stub.UioIndustryCards = react.RegisterRecipe("UioIndustryCards", guard.plugin(CARDS, "industry"))
 
 -- The switch for the red area of a blocked expansion (industry_window.res.lua).
+---@param replacement_api react.ReplacementApi
 function stub.doReplaceFn(replacement_api)
 	local module = guard.module(CARDS)
 	if not module then return end
@@ -17,6 +18,7 @@ function stub.doReplaceFn(replacement_api)
 end
 
 -- The engine loads *.script.lua resources by calling data().
+---@return table
 function data()
 	return stub
 end

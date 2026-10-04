@@ -23,12 +23,16 @@ local base_finances_table = require("::/game_mechanics/finance/finances_table.tl
 local fallback = require("/ui_overhaul/gui/fallback.lua")
 local statements = require("/ui_overhaul/core/statements.lua")
 
+---@class uo.gui.finances
 local finances = {}
 
 local VIEWS = { "income", "cashflow", "balance", "details" }
 local view = "income" -- kept for the session
 
+---@type table<string, boolean>
 local reported = {}
+---@param key string
+---@param err any a pcall error: any value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
@@ -37,12 +41,19 @@ end
 
 -- Data -------------------------------------------------------------------------------------------------
 
+---@param values? integer[]
+---@return integer[]
+---@overload fun(values: string[]): string[]
 local function list(values)
+	---@type integer[]
 	local result = {}
-	for i, v in ipairs(values or {}) do result[i] = v end
+	if values then
+		for i, v in ipairs(values) do result[i] = v end
+	end
 	return result
 end
 
+---@return uo.core.statements.Enum
 local function journal_enum()
 	local J = api.type.JournalEntry
 	return {
@@ -53,18 +64,27 @@ local function journal_enum()
 	}
 end
 
+---@class uo.gui.finances.Table: uo.core.statements.Data
+---@field header string[] the column titles (years)
+---@field total integer[]
+
 --- Plain copy of the game's finance table (4 years, as the base tab). Engine reads only.
+---@return uo.gui.finances.Table
 function finances.read_table()
 	local config = api.type.ChartConfig.new()
 	config.count = 4
 	local data = api.engine.util.finance.computeFinanceTable(api.engine.util.getPlayer(), config)
+	---@type uo.core.statements.Entry[]
 	local entries = {}
+	---@param key integer
+	---@param values integer[]
 	local function collect(key, values)
 		local unfolded = data:unfoldKey(key)
 		entries[#entries + 1] = { unfolded[1], unfolded[2], list(values) }
 	end
 	data:foreach_carrier(function(carrier) data:foreach_transport(collect, carrier) end)
 	data:foreach_investment(collect)
+	---@type integer[]
 	local other = {}
 	data:foreach_other(function(_key, values)
 		for i, v in ipairs(values) do other[i] = (other[i] or 0) + v end
@@ -85,6 +105,7 @@ function finances.read_table()
 end
 
 --- Today's figures for the balance sheet. Engine reads only.
+---@return uo.core.statements.Values
 function finances.read_balance()
 	local player = api.engine.util.getPlayer()
 	local value = api.engine.util.headquarters.getCompaniesValue()
@@ -94,16 +115,21 @@ function finances.read_balance()
 	for _i, vehicle in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE, own)) do
 		vehicles = vehicles + api.engine.util.vehicle.getDepreciatedValue(vehicle)
 	end
-	return {
+	-- a typed local: LuaLS infers no type for a loop's sum in a returned table literal
+	---@type uo.core.statements.Values
+	local balance = {
 		cash = api.engine.util.finance.getPlayersBalance(player),
 		vehicles = vehicles,
 		assets = value.totalAssets,
 		debt = value.debt,
 	}
+	return balance
 end
 
 -- Texts --------------------------------------------------------------------------------------------------
 
+---@param key string
+---@return string
 local function label(key)
 	if key == "revenue" then return _("Revenue") end
 	if key == "subsidies" then return _("Subsidies") end
@@ -134,7 +160,13 @@ end
 
 -- Table ----------------------------------------------------------------------------------------------------
 
+---@class uo.gui.finances.ViewCellParam: react.Param
+---@field class string
+---@field text string
+
 -- The base table's cell, registered under its name so the finance stylesheet applies (finances_table.tl).
+---@param param uo.gui.finances.ViewCellParam
+---@return react.TreeNodeId
 local ViewCell = react.RegisterRecipe("ViewCell", function(param)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
@@ -143,6 +175,11 @@ local ViewCell = react.RegisterRecipe("ViewCell", function(param)
 end)
 
 -- Row classes of the base table: alternating rows, corner classes on the first and last row.
+---@param index integer
+---@param variant? "First"|"Last"
+---@param first boolean
+---@param last boolean
+---@return string
 local function row_class(index, variant, first, last)
 	local class = (index % 2 == 0) and "even" or "odd"
 	if variant == "First" then
@@ -157,11 +194,24 @@ local function row_class(index, variant, first, last)
 	return class
 end
 
+---@param value? number
+---@return string
 local function money_class(value)
 	return (value ~= nil and value < 0) and "negative" or "positive"
 end
 
+---@class uo.gui.finances.Cell
+---@field text string
+---@field class? string
+
+---@param cells_text uo.gui.finances.Cell[]
+---@param index integer
+---@param variant? "First"|"Last"
+---@param total? boolean
+---@param key string
+---@return react.TreeNodeId
 local function row(cells_text, index, variant, total, key)
+	---@type react.TreeNodeId[]
 	local cells = {}
 	for i, cell in ipairs(cells_text) do
 		local class = "font-scale-body" .. (cell.class and (", " .. cell.class) or "")
@@ -176,14 +226,22 @@ local function row(cells_text, index, variant, total, key)
 	return builtin.Row{ meta = { localKey = key }, cells = cells }
 end
 
+---@param value? number nil: unlimited money
+---@return uo.gui.finances.Cell
 local function money(value)
 	if value == nil then return { text = "\xE2\x88\x9E" } end -- unlimited money
-	return { text = api.util.formatMoney(value), class = money_class(value) }
+	-- the figures are sums of the engine's integer amounts
+	return { text = api.util.formatMoney(value --[[@as integer]]), class = money_class(value) }
 end
 
+---@param header uo.gui.finances.Cell[]
+---@param rows (uo.core.statements.Row|uo.core.statements.BalanceRow)[]
+---@param columns integer
+---@return react.TreeNodeId
 local function statement_table(header, rows, columns)
 	local table_rows = { row(header, 0, "First", false, "header") }
 	for i, r in ipairs(rows) do
+		---@type uo.gui.finances.Cell[]
 		local cells = { { text = label(r.key) } }
 		if r.values then
 			for c = 1, columns do cells[#cells + 1] = money(r.values[c] or 0) end
@@ -192,6 +250,7 @@ local function statement_table(header, rows, columns)
 		end
 		table_rows[#table_rows + 1] = row(cells, i, i == #rows and "Last" or nil, r.total, r.key)
 	end
+	---@type number[]
 	local weights = { 20 }
 	for _c = 1, columns do weights[#weights + 1] = 10 end
 	return builtin.Component{
@@ -206,8 +265,12 @@ end
 
 -- Tab ---------------------------------------------------------------------------------------------------------
 
+---@param selected string
+---@param on_select fun(key: string)
+---@return react.TreeNodeId
 local function view_buttons(selected, on_select)
 	local labels = { _("Income statement"), _("Cash flow"), _("Balance sheet"), _("Details") }
+	---@type builtin.ToggleButtonGroupChildParam[], integer
 	local buttons, index = {}, 1
 	for i, key in ipairs(VIEWS) do
 		buttons[i] = {
@@ -224,8 +287,11 @@ local function view_buttons(selected, on_select)
 	}
 end
 
+---@param params nil the base recipe takes none; passed on unchanged
+---@return react.TreeNodeId
 local function render(params)
 	local viewState = react.useState(view)
+	---@param key string
 	local function select(key)
 		view = key
 		viewState:set(key)
@@ -238,16 +304,24 @@ local function render(params)
 	end)
 	-- each view reads only its own figures (the module-level `view` is the one shown); the game's
 	-- own table (Details) reads for itself
+	---@generic R
+	---@param kind string
+	---@param reader fun(): R
+	---@return R?
 	local function read(kind, reader)
 		local ok, data = pcall(reader)
 		if ok then return data end
 		report(kind, data)
 		return nil
 	end
+	---@param old? uo.gui.finances.Table
+	---@return uo.gui.finances.Table?
 	local tableState = engine_react_util.useStepStateTimer(function(old)
 		if view ~= "income" and view ~= "cashflow" then return old end
 		return read("table", finances.read_table) or old
 	end, 1.0)
+	---@param old? uo.core.statements.Values
+	---@return uo.core.statements.Values?
 	local balanceState = engine_react_util.useStepStateTimer(function(old)
 		if view ~= "balance" then return old end
 		return read("balance", finances.read_balance) or old
@@ -261,6 +335,7 @@ local function render(params)
 	end
 	local balance_data = balanceState:old()
 	if not balance_data and selected == "balance" then balance_data = read("balance", finances.read_balance) end
+	---@type react.TreeNodeId
 	local content
 	if selected == "details" then
 		content = react.CallOriginalRecipe(base_finances_table, params)
@@ -277,6 +352,7 @@ local function render(params)
 		local data = table_data
 		if data then
 			local income, cash = statements.build(data, journal_enum())
+			---@type uo.gui.finances.Cell[]
 			local header = { { text = "" } }
 			for i = 1, data.columns do header[#header + 1] = { text = data.header[i] or "" } end
 			local title = selected == "income" and _("Income statement") or _("Cash flow")
@@ -305,6 +381,7 @@ finances.switch = fallback.switch("finance statements")
 local Replacement = fallback.replacement(finances.switch, "FinancesTable", render, base_finances_table)
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function finances.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_finances_table, Replacement)
 end

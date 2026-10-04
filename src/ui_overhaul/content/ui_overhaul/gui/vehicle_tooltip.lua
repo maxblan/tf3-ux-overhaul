@@ -14,13 +14,17 @@ local vehicle_tooltip = {}
 
 local REFRESH = 0.25 -- seconds: speed and load change while the player looks
 
-local reported = {}
+local reported = {} ---@type table<string, boolean>
+---@param key string
+---@param err any the pcall error, any value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
 	debugPrint("[ui_overhaul] vehicle tooltip: ", key, ": ", tostring(err))
 end
 
+---@param param game.gui.main.game_tooltips.DefaultEntityTooltipParam
+---@return uo.gui.vehicle_info.Info?
 local function read(param)
 	local entity = param.entityRef and param.entityRef:get()
 	if param.filter and not param.filter(entity) then return nil end
@@ -28,6 +32,8 @@ local function read(param)
 	return vehicle and vehicle_info.read(vehicle) or nil
 end
 
+---@param param game.gui.main.game_tooltips.DefaultEntityTooltipParam
+---@return react.TreeNodeId
 local VehicleBlock = react.RegisterRecipe("UioVehicleTooltip", function(param)
 	react.setMouseTransparent(true)
 	local state = engine_react_util.useStepStateTimer(function()
@@ -51,6 +57,8 @@ local VehicleBlock = react.RegisterRecipe("UioVehicleTooltip", function(param)
 	} }
 end)
 
+---@param param game.gui.main.game_tooltips.DefaultEntityTooltipParam
+---@return react.TreeNodeId
 local Tooltip = react.RegisterRecipe("DefaultEntityToolTip", function(param)
 	react.setMouseTransparent(true)
 	return builtin.BoxLayout{
@@ -63,6 +71,7 @@ local Tooltip = react.RegisterRecipe("DefaultEntityToolTip", function(param)
 end)
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function vehicle_tooltip.install(replacement_api)
 	replacement_api.ReplaceRecipe(game_tooltips.DefaultEntityToolTip, Tooltip)
 	debugPrint("[ui_overhaul] vehicle tooltip installed")

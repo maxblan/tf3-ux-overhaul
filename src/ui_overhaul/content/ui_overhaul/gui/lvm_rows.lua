@@ -17,16 +17,38 @@ local cargo_util = require("::/gui/main/cargo_util.tl")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 
+---@class uo.gui.lvm_rows
 local lvm_rows = {}
 
 local REFRESH = 2.0 -- seconds; the Line Manager can show many rows
 local CARGO_SLOTS = 3 -- icons that fit the fixed-width cargo column (lvm_rows.css.lua)
 
+---What `read` found for a line row.
+---@class uo.gui.lvm_rows.LineData
+---@field kind "line"
+---@field vehicles integer
+---@field balance integer the last 12 months
+---@field cargo CargoTypeId[]
+
+---What `read` found for a vehicle row.
+---@class uo.gui.lvm_rows.VehicleData
+---@field kind "vehicle"
+---@field purchase integer game time (ms)
+---@field lifespan integer ms
+---@field now integer game time (ms)
+---@field info? uo.gui.vehicle_info.Info
+
+---@alias uo.gui.lvm_rows.Data uo.gui.lvm_rows.LineData|uo.gui.lvm_rows.VehicleData
+
+---@param children react.TreeNodeId[]
+---@param class? string
+---@return react.TreeNodeId
 local function horizontal(children, class)
 	return builtin.BoxLayout{ meta = { class = class }, orientation = builtin.type.Orientation.Horizontal,
 		children = children }
 end
 
+---@return integer
 local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
@@ -34,15 +56,17 @@ end
 --- Cargo type ids a line carries, passengers first: the capacities of its vehicles, sorted as the
 -- line's header in the Line Manager (LineCargoDisplay) sorts them. A line without vehicles falls
 -- back to the cargo its stops are configured to load. Engine reads only.
+---@param line Engine.Entity
+---@return CargoTypeId[]
 function lvm_rows.cargo_types(line)
 	local ids = cargo_util.getSortedProducedCargoTypes(
 		{ lineEntity = line, getTendency = true, showEmpty = true }, "CAPACITY", true, nil, true)
-	local result = {}
+	local result = {} ---@type CargoTypeId[]
 	for i, id in ipairs(ids) do result[i] = id end
 	if #result > 0 then return result end
 
 	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
-	local seen = {}
+	local seen = {} ---@type table<CargoTypeId, boolean>
 	for _i, stop in ipairs(component and component.stops or {}) do
 		for index, load in ipairs(stop.stopConfig.load) do
 			local id = index - 1 -- an id vector: index - 1 is the cargo type id
@@ -65,8 +89,12 @@ end
 
 --- Splits cargo ids into the icons shown and the rest behind a "+N". When they do not all fit,
 -- the last slot holds the "+N".
+---@param ids CargoTypeId[]
+---@param slots integer
+---@return CargoTypeId[] shown
+---@return CargoTypeId[] more
 function lvm_rows.cargo_slots(ids, slots)
-	local shown, more = {}, {}
+	local shown, more = {}, {} ---@type CargoTypeId[], CargoTypeId[]
 	local fit = #ids <= slots and slots or slots - 1
 	for i, id in ipairs(ids) do
 		if i <= fit then shown[#shown + 1] = id else more[#more + 1] = id end
@@ -88,6 +116,8 @@ function lvm_rows.lifetime(purchase, lifespan, t)
 end
 
 --- Plain data for a row's entity (engine reads only; runs in a timer callback).
+---@param entity Engine.Entity
+---@return uo.gui.lvm_rows.Data?
 local function read(entity)
 	if not api.engine.entityExists(entity) then return nil end
 	local t = now()
@@ -110,19 +140,26 @@ local function read(entity)
 	return nil
 end
 
+---@param value string
+---@param class string
+---@param tooltip? string
+---@return react.TreeNodeId
 local function text(value, class, tooltip)
 	return builtin.TextView{ meta = { class = class, tooltip = tooltip }, text = value }
 end
 
 --- Fixed-width column of cargo icons (tooltip: the cargo name), so rows with 0 to 3 icons align.
+---@param entity Engine.Entity
+---@param ids CargoTypeId[]
+---@return react.TreeNodeId
 local function cargo_column(entity, ids)
 	local shown, more = lvm_rows.cargo_slots(ids, CARGO_SLOTS)
-	local children = {}
+	local children = {} ---@type react.TreeNodeId[]
 	for _i, id in ipairs(shown) do
 		children[#children + 1] = cargo_react_util.makeCargoIcon(id, "uio-lvm-cargo-icon")
 	end
 	if #more > 0 then
-		local names = {}
+		local names = {} ---@type string[]
 		for i, id in ipairs(more) do names[i] = api.res.cargoTypeRep.get(id).name end
 		children[#children + 1] = text("+" .. tostring(#more), "font-scale-body, uio-lvm-cargo-more",
 			table.concat(names, ", "))
@@ -133,6 +170,9 @@ local function cargo_column(entity, ids)
 	}
 end
 
+---@param entity Engine.Entity
+---@param d uo.gui.lvm_rows.LineData
+---@return react.TreeNodeId
 local function render_line(entity, d)
 	local money = api.util.getAppConfig().moneyPrefix .. api.util.formatKMB(d.balance)
 	local class = d.balance < 0 and "font-scale-body, negative, uio-lvm-money" or "font-scale-body, uio-lvm-money"
@@ -144,14 +184,17 @@ local function render_line(entity, d)
 	}, "uio-lvm-info")
 end
 
+---@param d uo.gui.lvm_rows.VehicleData
+---@return react.TreeNodeId
 local function render_vehicle(d)
 	local age = api.engine.util.formatAge(d.purchase, d.now)
 	local reached, used = lvm_rows.lifetime(d.purchase, d.lifespan, d.now)
-	local tooltip = reached and _("Lifetime Reached") or lang_util.format(_("{total} of Lifetime ({age} Remaining)"), {
+	-- `used` is nil exactly when the lifespan is reached
+	local tooltip = used and lang_util.format(_("{total} of Lifetime ({age} Remaining)"), {
 		total = api.util.toStringPercentPrecision(used, 0),
 		age = api.engine.util.formatAge(d.now, d.purchase + d.lifespan),
-	})
-	local children = {}
+	}) or _("Lifetime Reached")
+	local children = {} ---@type react.TreeNodeId[]
 	local info = d.info
 	if info then
 		local status = vehicle_info.tooltip(info, false)
@@ -170,6 +213,8 @@ local function render_vehicle(d)
 	return horizontal(children, "uio-lvm-info")
 end
 
+---@param entity Engine.Entity
+---@return react.TreeNodeId
 local function render(entity)
 	-- The callback runs inside the hook on the first render: an error there would leave the hook half
 	-- declared, so it is caught and the hook is the same on every render.
@@ -184,6 +229,8 @@ local function render(entity)
 end
 
 -- Recipe bodies run later than the call that creates their node, so the body guards itself.
+---@param entity Engine.Entity
+---@return react.TreeNodeId
 local RowInfo = react.RegisterRecipe("UioLvmRowInfo", function(entity)
 	local ok, node = pcall(render, entity)
 	if ok then return node end
@@ -191,11 +238,14 @@ local RowInfo = react.RegisterRecipe("UioLvmRowInfo", function(entity)
 	return horizontal{}
 end)
 
+---@param entity Engine.Entity
+---@return react.TreeNodeId
 local Replacement = react.RegisterRecipe("ManagerNotificationWidget", function(entity)
 	return horizontal{ RowInfo(entity), react.CallOriginalRecipe(line_react_util.ManagerNotificationWidget, entity) }
 end)
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function lvm_rows.install(replacement_api)
 	replacement_api.ReplaceRecipe(line_react_util.ManagerNotificationWidget, Replacement)
 end

@@ -4,6 +4,7 @@
 local ssu = require("::/gui/main/stylesheetutil.lua")
 local color_util = require("::/gui/main/color_util.tl")
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

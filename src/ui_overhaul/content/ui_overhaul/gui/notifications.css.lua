@@ -8,6 +8,7 @@
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
 -- contrast to white: base / hover / pressed
+---@type table<string, string[]>
 local STATES = {
 	["uio-subsidy-offer"] = { "#1453A6", "#11478D", "#0E3C78" }, -- available: blue, 7.5 / 9.1 / 10.9
 	["uio-subsidy-active"] = { "#9C3700", "#852F00", "#702800" }, -- in progress: orange, 7.1 / 8.7 / 10.5
@@ -16,10 +17,13 @@ local STATES = {
 	["uio-subsidy-missed"] = { "#4D4D4D", "#414141", "#373737" }, -- offer missed: grey, 8.5 / 10.2 / 11.9
 }
 
+---@param hex string "#RRGGBB"
+---@return number[]
 local function rgb(hex)
 	return { tonumber(hex:sub(2, 3), 16) / 255, tonumber(hex:sub(4, 5), 16) / 255, tonumber(hex:sub(6, 7), 16) / 255, 1 }
 end
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)
@@ -31,9 +35,15 @@ function data()
 		innerSpacing = { 0, 0 },
 	})
 
+	-- the colour table of default_colors.gres: name -> colour
+	---@type table<string, game.gui.main.color_util.GResColor>
 	local colorDefault = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main/default_colors.gres")).data
 	-- the base status classes (!pending, !failed) are listed too, so these rules outrank the base ones
+	---@param class string
+	---@param prefix string
+	---@return string
 	local function selectors(class, prefix)
+		---@type string[]
 		local list = {}
 		for _i, status in ipairs({ "", "!pending", "!failed" }) do
 			local state = prefix .. "R::Component!" .. class

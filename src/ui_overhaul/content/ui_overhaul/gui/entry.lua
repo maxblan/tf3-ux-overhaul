@@ -10,8 +10,10 @@ local cleanup = require("/ui_overhaul/gui/cleanup.lua")
 local lvm_tweaks = require("/ui_overhaul/gui/lvm_tweaks.lua")
 local ui = require("/ui_overhaul/gui/ui.lua")
 
+---@class uo.gui.entry
 local entry = {}
 
+---@return react.TreeNodeId
 function entry.render()
 	react.onEvent(actions.ACTION_EVENT, function(_e, param) actions.run(param) end)
 	-- The entry point mounts with the game's UI root, which keeps gameCtx.filters the same way
@@ -20,20 +22,28 @@ function entry.render()
 	react.onEvent("openVehicleManager", function(_e, param) lvm_tweaks.on_open(param) end)
 	-- testbench: replace `vehicles` with identical configs the way the vehicle store does; expects the
 	-- Line Manager's question instead of an immediate replace
+	---@param _e string
+	---@param vehicles Engine.Entity[]
 	react.onEvent("uio.debug.replace", function(_e, vehicles)
 		local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.tl")
-		local changes = {}
+		local changes = {} ---@type game.gui.line_vehicle_mgmt.vehicle_react_util.VehicleChange[]
 		for _i, v in ipairs(vehicles) do
 			local tv = api.engine.getComponent(v, api.type.ComponentType.TRANSPORT_VEHICLE)
-			local config = api.type.TransportVehicleConfig.new(tv.transportVehicleConfig)
-			changes[#changes + 1] = { vehicleEntity = v, config = config }
+			if tv then
+				local config = api.type.TransportVehicleConfig.new(tv.transportVehicleConfig)
+				changes[#changes + 1] = { vehicleEntity = v, config = config }
+			end
 		end
 		vehicle_react_util.HandleVehicleChanges(changes, actions.protected_entities(), nil, nil, nil, nil)
 	end)
 	-- testbench: the bulldozer warning for a proposal that removes `entity`
+	---@param _e string
+	---@param entity Engine.Entity
 	react.onEvent("uio.debug.bulldoze", function(_e, entity)
 		local construction = require("ui_overhaul_1::/ui_overhaul/gui/construction.lua")
 		local fake = { toRemove_native = { size = function() return 1 end, at = function() return entity end } }
+		-- a stand-in with only toRemove_native, the one member station_warnings reads
+		---@diagnostic disable-next-line: param-type-mismatch
 		for _i, text in ipairs(construction.station_warnings(fake)) do
 			debugPrint("[ui_overhaul] bulldozer warning: ", text)
 		end

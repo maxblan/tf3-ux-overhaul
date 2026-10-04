@@ -128,7 +128,7 @@ The repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-tem
 
 ```bash
 make deps                          # once
-make lint test                     # luacheck and offline specs
+make lint typecheck test           # luacheck, strict type check and offline specs
 make test-ingame                   # in-game checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make validate                      # the game's mod validator
@@ -145,6 +145,7 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 | `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |
 | `docs/design.md` | how the mod is built and the rules it follows |
+| `types/` | type stubs for the engine API and the base-game modules the mod requires (`make typecheck`) |
 | `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 
 ## License

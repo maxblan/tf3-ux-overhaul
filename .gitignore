@@ -4,3 +4,5 @@ dist/
 spec/ingame/results/
 spec/ingame/last_run.txt
 .game/
+tools/luals/server/
+.lua-check/

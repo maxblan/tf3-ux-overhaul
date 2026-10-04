@@ -1,6 +1,7 @@
 -- Line Manager row info: fixed widths so the figures form columns across rows.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

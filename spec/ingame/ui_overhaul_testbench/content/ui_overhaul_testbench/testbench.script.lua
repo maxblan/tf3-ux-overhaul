@@ -15,18 +15,29 @@ local testbench = {}
 local TAG = "[testbench]"
 local WAIT_START = 60 -- update() calls before the first scenario, 0.2 s game time each
 
+---@param ... any logged with tostring
 local function log(...)
-	local parts = { TAG }
+	local parts = { TAG } ---@type string[]
 	for i = 1, select("#", ...) do parts[#parts + 1] = tostring(select(i, ...)) end
 	debugPrint(table.concat(parts, " "))
 end
 
+--- The engine side's progress, in the game script state.
+---@class uo.testbench.Run
+---@field phase? "wait"|"next"|"built"|"done"
+---@field frames integer update() calls in this phase
+---@field index integer the current scenario
+---@field site? uo.testbench.Site
+
 -- The engine side only marks itself done; guiUpdate logs DONE when the GUI checks are finished too.
+---@param run uo.testbench.Run
 local function finish(run)
 	log("engine scenarios finished")
 	run.phase = "done"
 end
 
+---@param run uo.testbench.Run
+---@return nil
 local function setup(run)
 	run.site = site.find(#scenarios)
 	if not run.site then
@@ -38,6 +49,8 @@ local function setup(run)
 	run.phase, run.frames = "next", 0
 end
 
+---@param run uo.testbench.Run
+---@return nil
 local function start_scenario(run)
 	run.index = run.index + 1
 	local scenario = scenarios[run.index]
@@ -47,6 +60,7 @@ local function start_scenario(run)
 	run.phase, run.frames = "built", 0
 end
 
+---@param run uo.testbench.Run
 local function check_scenario(run)
 	local scenario = scenarios[run.index]
 	local ok, passed, details = pcall(scenario.check, site.area(run.site, run.index))
@@ -55,6 +69,7 @@ local function check_scenario(run)
 	run.phase, run.frames = "next", 0
 end
 
+---@param run uo.testbench.Run
 local function step(run)
 	run.frames = run.frames + 1
 	if run.phase == "wait" and run.frames >= WAIT_START then
@@ -66,6 +81,9 @@ local function step(run)
 	end
 end
 
+---@param _user_params table
+---@param state GameScriptState<uo.testbench.Run>
+---@param _dt number
 function testbench.update(_user_params, state, _dt)
 	local run = state:get() or {}
 	if not run.phase then
@@ -85,6 +103,16 @@ end
 function testbench.handleEvent()
 end
 
+--- The GUI side's progress, in the GUI state.
+---@class uo.testbench.GuiRun
+---@field unpaused? boolean
+---@field phase "next"|"acted"|"shot_wait"|"finished"|"done"
+---@field frames integer guiUpdate calls in this phase
+---@field index integer the current check
+---@field ctx uo.testbench.GuiContext
+
+---@param g uo.testbench.GuiRun
+---@param engine_done boolean
 local function gui_step(g, engine_done)
 	g.frames = g.frames + 1
 	local check = gui_checks[g.index]
@@ -118,6 +146,9 @@ end
 
 --- A new game starts paused, and update() only runs while the simulation runs. Afterwards runs the
 -- GUI checks; the engine state is read-only here.
+---@param _user_params table
+---@param read_only_state GameScriptStateReadOnly<uo.testbench.Run>
+---@param gui_state GameScriptState<uo.testbench.GuiRun>
 function testbench.guiUpdate(_user_params, read_only_state, gui_state)
 	local g = gui_state:get() or {}
 	if not g.unpaused then
@@ -137,6 +168,7 @@ end
 
 -- The engine loads resource files (unlike modules loaded with require) by calling the global
 -- data(); see base/init.lua.
+---@return table
 function data()
 	return testbench
 end

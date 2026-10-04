@@ -31,6 +31,7 @@
         "ui_overhaul/gui/entry.lua",
         "ui_overhaul/gui/entry.res.lua",
         "ui_overhaul/gui/entry.script.lua",
+        "ui_overhaul/gui/fallback.css.lua",
         "ui_overhaul/gui/fallback.lua",
         "ui_overhaul/gui/finances.css.lua",
         "ui_overhaul/gui/finances.lua",

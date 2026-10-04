@@ -12,6 +12,7 @@ function stub.doReplaceFn(replacement_api)
 end
 
 -- The engine loads *.script.lua resources by calling data().
+---@return table
 function data()
 	return stub
 end

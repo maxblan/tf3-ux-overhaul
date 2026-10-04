@@ -30,26 +30,40 @@ local line_vehicles = {}
 --- Marked failed once the card failed: the base card is shown for the rest of the session.
 line_vehicles.switch = fallback.switch("line vehicles card")
 
-local reported = {}
+---@class uo.gui.line_vehicles.StatusParams: react.Param
+---@field vehicle Engine.Entity
+
+---@class uo.gui.line_vehicles.ContentParams: react.Param
+---@field line Engine.Entity
+---@field gameCtx game.gui.main.game_context.GameContext
+
+local reported = {} ---@type table<string, boolean>
+---@param key string
+---@param err any the pcall error, any value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
 	debugPrint("[ui_overhaul] line vehicles card: ", key, " failed: ", tostring(err))
 end
 
+---@param children react.TreeNodeId[]
+---@return react.TreeNodeId
 local function horizontal(children)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
 end
 
+---@return integer
 local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
 
 -- The status cell's content; `info` from vehicle_info.read, or nil.
+---@param info? uo.gui.vehicle_info.Info
+---@return react.TreeNodeId
 local function render_status(info)
 	if not info then return horizontal{} end
-	local ok, tooltip = pcall(vehicle_info.tooltip, info, false)
-	tooltip = ok and tooltip or nil
+	local ok, text = pcall(vehicle_info.tooltip, info, false)
+	local tooltip = ok and text or nil
 	local fraction = vehicle_info.load_fraction(info)
 	return builtin.BoxLayout{
 		meta = { class = "uio-line-vehicle-status" },
@@ -69,6 +83,8 @@ local function render_status(info)
 end
 
 -- Load and condition of a vehicle, the five figures in the tooltip.
+---@param params uo.gui.line_vehicles.StatusParams
+---@return react.TreeNodeId
 local Status = react.RegisterRecipe("UioLineVehicleStatus", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local ok, info = pcall(vehicle_info.read, params.vehicle)
@@ -82,6 +98,8 @@ end)
 
 -- Copy of base LineTableCellVehicle (line_eow.script.tl), same name for the base stylesheet; the
 -- status sits between the name and the vehicle icon.
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local CellVehicle = react.RegisterRecipe("LineTableCellVehicle", function(params)
 	return horizontal{
 		line_react_util.NameTextView{
@@ -94,6 +112,8 @@ end)
 
 -- Copy of base LineTableCellAge; the tooltip shows the real share of the lifespan (the base rounds
 -- it down to 0 % until the lifespan is reached).
+---@param params builtin.TableCellParam
+---@return react.TreeNodeId
 local CellAge = react.RegisterRecipe("LineTableCellAge", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local tv = api.engine.getComponent(params.rowKey, api.type.ComponentType.TRANSPORT_VEHICLE)
@@ -118,6 +138,8 @@ local CellAge = react.RegisterRecipe("LineTableCellAge", function(params)
 end)
 
 -- Copy of base LineVehiclesTable.
+---@param line Engine.Entity
+---@return react.TreeNodeId
 local Table = react.RegisterRecipe("LineVehiclesTable", function(line)
 	local state = engine_react_util.useStepState(function()
 		local vehicles = api.engine.system.transportVehicleSystem.getLineVehicles(line)
@@ -141,11 +163,14 @@ local Table = react.RegisterRecipe("LineVehiclesTable", function(line)
 	}
 end)
 
+---@param params uo.gui.line_vehicles.ContentParams
+---@return react.TreeNodeId
 local Content = react.RegisterRecipe("UioLineVehicles", function(params)
 	local line, game_ctx = params.line, params.gameCtx
 	-- The base handlers report why they did not act (money, mission, depot) through addFeedback; the
 	-- vehicle window shows that in a feedback list under its action buttons (vehicle.tl), and so does
 	-- this card.
+	---@type react.RefWrapApi<game.gui.line_vehicle_mgmt.feedback_list_util.FeedBackViewerAPI>
 	local feedback_ref = react.useNodeRef(feedback_list_util.FeedbackList)
 	---@type uo.actions.Feedback
 	local function add_feedback(message, mode, dialog_data, id)
@@ -204,6 +229,8 @@ local Content = react.RegisterRecipe("UioLineVehicles", function(params)
 	return builtin.BoxLayout{}
 end)
 
+---@param params game.gui.entity_window.line.line_eow.script.LineWidgetPluginParams
+---@return react.TreeNodeId
 local function render(params)
 	return builtin.BoxLayout{ children = {
 		content_card.ContentCard{
@@ -219,6 +246,8 @@ local function render(params)
 end
 
 -- The card's hooks are in its content recipe; this one declares fallback.use_base's two, always.
+---@param params game.gui.entity_window.line.line_eow.script.LineWidgetPluginParams
+---@return react.TreeNodeId
 local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
 	local use_base = fallback.use_base(line_vehicles.switch)
 	if not use_base and params.ownershipState == "Player" then
@@ -230,6 +259,7 @@ local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
 end)
 
 --- Called from the react-replacement-config before the UI starts.
+---@param replacement_api react.ReplacementApi
 function line_vehicles.install(replacement_api)
 	replacement_api.ReplaceRecipe(line_eow.LineVehiclesPlugin, Replacement)
 end

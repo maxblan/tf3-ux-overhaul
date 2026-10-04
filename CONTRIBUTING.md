@@ -11,7 +11,7 @@ Thanks for looking. This file covers the parts of this repository that are hard 
 ## The gates
 
 ```bash
-make lint test                     # luacheck, Lua 5.2 syntax rules, offline specs
+make lint typecheck test           # luacheck, Lua 5.2 syntax rules, strict type check, offline specs
 make test-ingame                   # starts the game, runs the GUI checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make test-ingame SAVE="My Save" ONLY="check_a check_b"   # just those GUI checks (to bisect a crash)
@@ -19,9 +19,18 @@ make validate                      # the game's mod validator (close the game fi
 python3 tools/strings_check.py     # every text the mod uses exists in every language
 ```
 
-CI runs `make lint test` and the strings check without the game. It cannot run the in-game checks, so a green CI run says nothing about what the game shows. Run `make test-ingame` before you open a pull request, and say in the pull request what you checked in the game and what you did not.
+CI runs `make lint typecheck test` and the strings check without the game. It cannot run the in-game checks, so a green CI run says nothing about what the game shows. Run `make test-ingame` before you open a pull request, and say in the pull request what you checked in the game and what you did not.
 
 When you pipe a gate's output through `tail` or `grep`, set `set -o pipefail` first. Otherwise a failed lint looks like a pass, and the next in-game run starts a broken build.
+
+## Types
+
+`make typecheck` runs the Lua Language Server with `.luarc.json`, where every diagnostic group is an error, including values whose type it cannot infer. It must report nothing, and editors with the Lua extension show the same errors.
+
+- Give every function `---@param` and `---@return` annotations, and declare data shapes as `---@class`. The mod's own types are named `uo.<...>`.
+- The engine API (`api`, `app`) and the base-game modules the mod requires (`::/gui/main/react.lua` and so on) have stubs in `types/`. They are typed from the game's Teal declarations (`.game/game/apidef/` after `tools/extract_game_sources.sh`) and declare only what the mod uses. When you use something new, add it there with the game's types.
+- `tools/luals/plugin.lua` resolves the game's require paths for the language server. The `different-requires` check is off because a module is required by its short path at load time and by its fully qualified path afterwards (see below).
+- No unexplained `any`, `---@cast` or suppression. A suppression is `---@diagnostic disable-next-line: <code>` with the reason next to it.
 
 ## Rules the game enforces
 

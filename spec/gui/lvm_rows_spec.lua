@@ -1,9 +1,21 @@
 -- lvm_rows.lua: which cargo icons a Line Manager line row shows and how a vehicle row reads its
 -- lifespan. The base modules it requires are stand-ins; only the pure helpers run.
+---@class spec.lvm_rows.Stop the stand-in LINE component's stop: what cargo_types reads
+---@field stopConfig { load: boolean[] }
+
+-- What the specs' stand-in for `api` provides: only what lvm_rows.cargo_types reads.
+---@class spec.lvm_rows.Api
+---@field type { ComponentType: { LINE: string } }
+---@field engine spec.lvm_rows.Engine
+
+---@class spec.lvm_rows.Engine
+---@field getComponent fun(entity: integer, kind: string): { stops: spec.lvm_rows.Stop[] }?
+---@field util { stock: { isCargoTypeCurrentlyProduced: fun(id: integer): boolean } }
+
 local PASSENGERS = 0
-local sorted -- what the stand-in cargo_util.getSortedProducedCargoTypes returns
-local stops -- the stand-in LINE component's stops
-local produced -- cargo type ids the stand-in reports as currently produced
+local sorted ---@type integer[] what the stand-in cargo_util.getSortedProducedCargoTypes returns
+local stops ---@type spec.lvm_rows.Stop[] the stand-in LINE component's stops
+local produced ---@type table<integer, boolean> cargo type ids the stand-in reports as currently produced
 
 package.loaded["::/gui/main/react.lua"] = { RegisterRecipe = function(_name, fn) return fn end }
 package.loaded["::/gui/main/builtin.lua"] = package.loaded["::/gui/main/builtin.lua"] or {} -- render only
@@ -18,10 +30,12 @@ package.loaded["::/gui/main/cargo_util.tl"] = {
 }
 
 local saved_api = _G.api
-local lvm_rows
+local lvm_rows ---@type uo.gui.lvm_rows
 
+---@param ... integer cargo type ids the stop loads
+---@return spec.lvm_rows.Stop
 local function stop(...)
-	local load = {}
+	local load = {} ---@type boolean[]
 	for i = 1, 6 do load[i] = false end
 	for _i, id in ipairs({ ... }) do load[id + 1] = true end
 	return { stopConfig = { load = load } }
@@ -30,13 +44,17 @@ end
 describe("lvm_rows cargo", function()
 	before_each(function()
 		sorted, stops, produced = {}, {}, { [0] = true, [1] = true, [2] = true, [3] = true, [4] = true }
-		_G.api = {
+		---@type spec.lvm_rows.Api
+		local mock = {
 			type = { ComponentType = { LINE = "LINE" } },
 			engine = {
 				getComponent = function(_entity, kind) return kind == "LINE" and { stops = stops } or nil end,
 				util = { stock = { isCargoTypeCurrentlyProduced = function(id) return produced[id] == true end } },
 			},
 		}
+		-- A partial stand-in (spec.lvm_rows.Api). The cast keeps LuaLS from merging the mock's types into
+		-- the global `api` everywhere else; a plain assignment would.
+		_G.api = mock --[[@as api]]
 		lvm_rows = lvm_rows or require("/ui_overhaul/gui/lvm_rows.lua")
 	end)
 
@@ -75,7 +93,7 @@ describe("lvm_rows cargo", function()
 end)
 
 describe("lvm_rows lifetime", function()
-	local lvm_rows_module
+	local lvm_rows_module ---@type uo.gui.lvm_rows
 	before_each(function() lvm_rows_module = require("/ui_overhaul/gui/lvm_rows.lua") end)
 
 	it("gives the share of the lifespan used until it is reached", function()
@@ -105,6 +123,8 @@ describe("lvm_rows row info hooks", function()
 		["::/gui/main/builtin.lua"] = builtin,
 		-- as the game's hook: declared once its callback returned (useStateLazy calls it)
 		["::/gui/main/engine_react_util.tl"] = {
+			---@param fn fun(old?: uo.gui.lvm_rows.Data): uo.gui.lvm_rows.Data? the row's read callback
+			---@return { old: fun(): uo.gui.lvm_rows.Data? }
 			useStepStateTimer = function(fn)
 				local value = fn(nil)
 				fake.hook("useStepStateTimer")

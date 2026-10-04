@@ -16,13 +16,24 @@ local selector_react_util = require("::/gui/main/selector_react_util.tl")
 
 local catchment = {}
 
+---Which catchment areas the map shows.
+---@class uo.gui.catchment.Shown: { [uo.gui.catchment.Kind]: boolean }
+---@field person boolean
+---@field cargo boolean
+
+---@alias uo.gui.catchment.Kind "person"|"cargo"
+
 local SAVE_KEY = "ui_overhaul_catchment"
 local EVENT = "uio.catchment"
 
--- { person = bool, cargo = bool }; read from the savegame on first use
+-- read from the savegame on first use
+---@type uo.gui.catchment.Shown?
 local shown
 
+---@type table<string, true>
 local reported = {}
+---@param key string
+---@param err any the pcall error value
 local function report(key, err)
 	if reported[key] then return end
 	reported[key] = true
@@ -30,6 +41,7 @@ local function report(key, err)
 end
 
 --- The current choice (GUI thread).
+---@return uo.gui.catchment.Shown
 function catchment.get()
 	if shown == nil then
 		shown = { person = false, cargo = false }
@@ -43,6 +55,8 @@ function catchment.get()
 end
 
 --- Switches one kind ("person" or "cargo") on or off, saves the choice and tells the map action.
+---@param kind uo.gui.catchment.Kind
+---@param on boolean
 function catchment.set(kind, on)
 	local current = catchment.get()
 	current[kind] = on and true or false
@@ -54,6 +68,8 @@ function catchment.set(kind, on)
 end
 
 --- The game's catchment overlay for all stations, passenger and/or cargo areas.
+---@param s uo.gui.catchment.Shown
+---@return LayerConfig
 function catchment.layer_config(s)
 	local config = api.type.LayerConfig.new()
 	local area = api.type.LayerConfig.CatchmentAreaRenderableConfig.new()
@@ -72,14 +88,25 @@ end
 
 -- Calls `inner` (the base action function) with builtin.ActionDescriptor swapped for one that adds
 -- the overlay to the children, for this call only.
+---@param inner fun(): react.TreeNodeId
+---@param s uo.gui.catchment.Shown
+---@return react.TreeNodeId
 local function with_overlay(inner, s)
 	local base = builtin.ActionDescriptor
+	-- called as the builtin is: (params) or (ref, params)
+	---@param p? builtin.ActionDescriptorParam|react.RefFill
+	---@param ... builtin.ActionDescriptorParam
+	---@return react.TreeNodeId
 	builtin.ActionDescriptor = function(p, ...)
 		if select("#", ...) == 0 and type(p) == "table" then
 			local ok, config = pcall(catchment.layer_config, s)
 			if ok then
+				---@cast p builtin.ActionDescriptorParam -- a table and the only argument: the params
+				-- a shallow copy of every field the caller set, whatever their types (hence any)
+				---@type table<string, any>
 				local copy = {}
-				for k, v in pairs(p) do copy[k] = v end
+				for k, v in pairs(p --[[@as table<string, any>]]) do copy[k] = v end
+				---@type react.TreeNodeId[]
 				local children = {}
 				for i, child in ipairs(p.children or {}) do children[i] = child end
 				children[#children + 1] = builtin.LayerConfig{ config = config }
@@ -96,6 +123,12 @@ local function with_overlay(inner, s)
 	return node
 end
 
+---@alias uo.gui.catchment.Params game.gui.main.selector_react_util.DefaultSelectorCompParams
+---@alias uo.gui.catchment.CombinedFn fun(params: uo.gui.catchment.Params, ...: any): (fun(): react.TreeNodeId)
+
+-- `...: any`: arguments a future game version might add, passed on untouched (the game passes none)
+---@param original uo.gui.catchment.CombinedFn
+---@return uo.gui.catchment.CombinedFn
 local function wrap_combined_fn(original)
 	return function(params, ...)
 		local inner = original(params, ...)
@@ -112,6 +145,11 @@ end
 
 -- Toggle buttons ------------------------------------------------------------------------------------
 
+---@param kind uo.gui.catchment.Kind
+---@param icon string
+---@param tooltip string
+---@param value boolean
+---@return react.TreeNodeId
 local function toggle(kind, icon, tooltip, value)
 	return builtin.ToggleButton{
 		meta = { tooltip = tooltip, class = "uio-catchment-toggle", id = "uio.catchment." .. kind },
@@ -123,6 +161,10 @@ local function toggle(kind, icon, tooltip, value)
 end
 
 -- One toggle, as its own plugin of the mod button area, so the area spaces it like its neighbours.
+---@param kind uo.gui.catchment.Kind
+---@param icon string
+---@param tooltip string
+---@return react.TreeNodeId
 local function button(kind, icon, tooltip)
 	local state = react.useState(catchment.get())
 	react.onEvent(EVENT, function(_e, s) state:set(s) end)
@@ -131,16 +173,19 @@ end
 
 --- Plugin recipe bodies of the mod button area (catchment_buttons.res.lua): the white symbols of
 -- the layer buttons next to them (layer_infrastructure.tl's areas).
+---@return react.TreeNodeId
 function catchment.person_button()
 	return button("person", "::/gui/layers/icons/symbol_person.tga",
 		_("Show the passenger catchment areas of all stations"))
 end
 
+---@return react.TreeNodeId
 function catchment.cargo_button()
 	return button("cargo", "::/gui/layers/icons/symbol_cargo.tga", _("Show the cargo catchment areas of all stations"))
 end
 
 --- Called from the react-replacement-config before the UI starts.
+---@param _replacement_api react.ReplacementApi
 function catchment.install(_replacement_api)
 	local original = selector_react_util.makeDefaultSelectorCombinedFn
 	if type(original) ~= "function" then error("makeDefaultSelectorCombinedFn not found") end

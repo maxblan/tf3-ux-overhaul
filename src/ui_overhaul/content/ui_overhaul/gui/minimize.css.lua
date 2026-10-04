@@ -3,6 +3,7 @@
 -- window's content is not drawn and takes no space.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)

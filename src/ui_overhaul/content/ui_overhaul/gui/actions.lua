@@ -8,7 +8,9 @@ local actions = {}
 
 local TAG = "[ui_overhaul]"
 
----@alias uo.actions.Feedback fun(message: string, mode?: string, dialogData?: table, id?: integer)
+---@alias uo.actions.FeedbackDialog game.gui.line_vehicle_mgmt.feedback_list_util.FeedbackDialogParam
+---The base handlers' addFeedback (DuplicateVehiclesParam in manager_window.d.tl).
+---@alias uo.actions.Feedback fun(message: string, mode?: string, dialogData?: uo.actions.FeedbackDialog, id?: number)
 ---@alias uo.actions.Protected table<Engine.Entity, table|boolean>
 
 -- Copy of gameCtx.filters:get().protectedEntities for callers without a gameCtx (the uio.action
@@ -54,7 +56,7 @@ end
 ---@return number
 local function purchase_time(vehicle)
 	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
-	local oldest
+	local oldest ---@type number?
 	for _i, part in ipairs(tv and tv.transportVehicleConfig.vehicles or {}) do
 		if oldest == nil or part.purchaseTime < oldest then oldest = part.purchaseTime end
 	end
@@ -66,7 +68,8 @@ end
 ---@param newest boolean
 ---@return Engine.Entity?
 local function line_vehicle(line, newest)
-	local best, best_time
+	local best ---@type Engine.Entity?
+	local best_time ---@type number?
 	for _i, vehicle in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
 		local t = purchase_time(vehicle)
 		if best == nil or (newest and t > best_time) or (not newest and t < best_time) then
@@ -154,7 +157,7 @@ function actions.run(param)
 	param = param or {}
 	for _i, name in ipairs(BY_NAME) do
 		if name == param.name then
-			local ok = actions[name](param.entity)
+			local ok = actions[name](param.entity) ---@type boolean? nil from open_entity/open_line_manager
 			debugPrint(TAG, " action ", name, " ", tostring(param.entity), " -> ", tostring(ok ~= false))
 			return
 		end

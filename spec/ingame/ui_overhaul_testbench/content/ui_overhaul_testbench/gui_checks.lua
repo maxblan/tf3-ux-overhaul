@@ -14,24 +14,30 @@
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
 
 -- Mods the run added (run.sh --with-mod): checks expect what they change.
-local with_mod = {}
+local with_mod = {} ---@type table<string, true>
 for _i, name in ipairs(fixture.mods or {}) do with_mod[name] = true end
 -- Replaces the station window and brings its own terminal buttons there.
 local TERMINAL_SELECTOR = with_mod.terminal_selector
 -- Takes over every popover named TerminalSelection, the mod's included.
 local EASY_TERMINALS = with_mod.zhenya_easy_terminal_assignment
 
+---@param id string
+---@return boolean
 local function visible(id)
 	return api.gui.byId.isVisibleRecursive(id)
 end
 
+---@param line Engine.Entity
+---@return Engine.Entity[]
 local function line_vehicles(line)
 	return api.engine.system.transportVehicleSystem.getLineVehicles(line)
 end
 
 --- The player's line with the most vehicles, or nil.
+---@return Engine.Entity? line
+---@return integer vehicles
 local function busiest_line()
-	local best, best_count = nil, 0
+	local best, best_count = nil, 0 ---@type Engine.Entity?, integer
 	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
 		local count = #line_vehicles(line)
 		if count > best_count then best, best_count = line, count end
@@ -39,17 +45,26 @@ local function busiest_line()
 	return best, best_count
 end
 
+---@param line Engine.Entity?
+---@return boolean?
 local function stops_card(line)
 	return line and visible("uio.card.line.stops." .. tostring(line))
 end
 
 --- A terminal of the first stop's station group that is neither preferred nor alternative: station
 -- and terminal (1-based), or nil.
+---@param line Engine.Entity
+---@return integer? station
+---@return integer? terminal
 local function free_terminal(line)
-	local stop = api.engine.getComponent(line, api.type.ComponentType.LINE).stops[1]
+	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+	local stop = component and component.stops[1]
+	if not stop then return nil end -- not a line (any more), or no stops
 	local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+	---@cast group -nil -- a line stop's station group always has this component
 	for s, station_entity in ipairs(group.stations) do
 		local station = api.engine.getComponent(station_entity, api.type.ComponentType.STATION)
+		---@cast station -nil -- the stations of a station group have this component
 		for t = 1, #station.terminals do
 			local used = stop.station == s - 1 and stop.terminal == t - 1
 			for _i, alternative in ipairs(stop.alternativeTerminals) do
@@ -61,11 +76,15 @@ local function free_terminal(line)
 end
 
 --- Number of alternative terminals of the first stop of `line`.
+---@param line Engine.Entity
+---@return integer
 local function alternatives(line)
 	return #api.engine.getComponent(line, api.type.ComponentType.LINE).stops[1].alternativeTerminals
 end
 
 --- Any player line other than `line`.
+---@param line Engine.Entity?
+---@return Engine.Entity?
 local function other_line(line)
 	for _i, candidate in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
 		if candidate ~= line then return candidate end
@@ -73,29 +92,33 @@ local function other_line(line)
 end
 
 --- Composition key of a vehicle, as lvm_models.model_key builds it.
+---@param vehicle Engine.Entity
+---@return string?
 local function model_key(vehicle)
 	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
 	if not tv then return nil end
-	local counts, order = {}, {}
+	local counts, order = {}, {} ---@type table<integer, integer>, integer[] model id -> parts; model ids
 	for _i, part in ipairs(tv.transportVehicleConfig.vehicles) do
 		local id = part.part.modelId
 		if not counts[id] then order[#order + 1] = id end
 		counts[id] = (counts[id] or 0) + 1
 	end
 	table.sort(order)
-	local parts = {}
+	local parts = {} ---@type string[]
 	for i, id in ipairs(order) do parts[i] = id .. "x" .. counts[id] end
 	return table.concat(parts, ",")
 end
 
 --- A player line whose list shows the model row: two or more models on the line, or a model that
 -- another line uses too. Returns the line and a description, or nil.
+---@return Engine.Entity? line
+---@return string? why
 local function model_row_line()
 	local lines = api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
-	local key_lines = {} -- key -> number of lines using it
-	local line_keys = {}
+	local key_lines = {} ---@type table<string, integer> key -> number of lines using it
+	local line_keys = {} ---@type table<Engine.Entity, { keys: table<string, true>, count: integer }>
 	for _i, line in ipairs(lines) do
-		local keys, count = {}, 0
+		local keys, count = {}, 0 ---@type table<string, true>, integer
 		for _j, v in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
 			local key = model_key(v)
 			if key and not keys[key] then keys[key] = true count = count + 1 end
@@ -115,11 +138,12 @@ local function model_row_line()
 end
 
 --- A player line with one model that no other line uses (the row stays hidden), or nil.
+---@return Engine.Entity?
 local function single_model_line()
 	local lines = api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())
-	local key_lines, line_key = {}, {}
+	local key_lines, line_key = {}, {} ---@type table<string, integer>, table<Engine.Entity, string>
 	for _i, line in ipairs(lines) do
-		local keys, count, last = {}, 0, nil
+		local keys, count, last = {}, 0, nil ---@type table<string, true>, integer, string?
 		for _j, v in ipairs(api.engine.system.transportVehicleSystem.getLineVehicles(line)) do
 			local key = model_key(v)
 			if key and not keys[key] then keys[key] = true count = count + 1 last = key end
@@ -133,23 +157,67 @@ local function single_model_line()
 	return nil
 end
 
+---@param line Engine.Entity
+---@return Engine.Entity?
 local function oldest_vehicle(line)
-	local best, best_time
+	local best ---@type Engine.Entity?
+	local best_time ---@type number
 	for _i, vehicle in ipairs(line_vehicles(line)) do
 		local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+		---@cast tv -nil -- the line's vehicles, read this frame
 		local t = math.huge
-		for _j, part in ipairs(tv.transportVehicleConfig.vehicles) do t = math.min(t, part.purchaseTime) end
+		for _j, part in ipairs(tv.transportVehicleConfig.vehicles) do
+			if part.purchaseTime < t then t = part.purchaseTime end -- not math.min: LuaLS cannot type it here
+		end
 		if best == nil or t < best_time then best, best_time = vehicle, t end
 	end
 	return best
 end
 
 --- The vehicle is still there and not on its way to be sold.
+---@param vehicle Engine.Entity
+---@return boolean
 local function kept(vehicle)
 	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
 	return tv ~= nil and tv.sellOnArrival ~= true
 end
 
+--- What the checks keep between act and check, in the GUI state: serialisable values only.
+---@class uo.testbench.GuiContext
+---@field card_line? Engine.Entity
+---@field card_station? Engine.Entity a station group
+---@field card_vehicle? Engine.Entity
+---@field second_line? Engine.Entity
+---@field cargo_line? Engine.Entity
+---@field clone_before? integer
+---@field town? Engine.Entity
+---@field industry? Engine.Entity
+---@field industry_blocked? boolean
+---@field models_line? Engine.Entity
+---@field models_why? string
+---@field replaced? Engine.Entity
+---@field replaced_to? string a model key
+---@field single_line? Engine.Entity
+---@field terminal_line? Engine.Entity
+---@field terminal_station? Engine.Entity a station group
+---@field free_station? integer 1-based
+---@field free_terminal? integer 1-based
+---@field alternatives_before? integer
+---@field configure? Engine.Entity a construction
+---@field depot? Engine.Entity
+---@field line? Engine.Entity
+---@field before? integer the line's vehicles before the action
+---@field vehicle? Engine.Entity
+---@field public protected? Engine.Entity a protected vehicle; `public` since the name is also a keyword
+
+---@class uo.testbench.GuiCheck
+---@field name string unique, shown in the PASS/FAIL line
+---@field act? fun(ctx: uo.testbench.GuiContext) drives the GUI
+---@field wait? integer guiUpdate calls between act and check
+---@field shot? string screenshot name: run.sh captures the screen after the check
+---@field check fun(ctx: uo.testbench.GuiContext): boolean?, string passed, and details
+
+---@type uo.testbench.GuiCheck[]
 local checks = {
 	{
 		name = "gui_fixture_facts",
@@ -499,15 +567,17 @@ local checks = {
 		name = "industry_window_cards",
 		act = function(ctx)
 			-- an industry whose expansion is blocked (the red area), else the one with the most output
-			local blocked = {}
+			local blocked = {} ---@type table<Engine.Entity, true>
 			local script = api.engine.system.gameScriptSystem.getEntityForGameScript(
 				"::/game_mechanics/industries/industries.gs")
 			local game_script = script and api.engine.getComponent(script, api.type.ComponentType.GAME_SCRIPT)
-			local failed = game_script and game_script.state_native:find("industryFailedExtensions")
-			local best, best_output = nil, -1
+			-- the script keeps a table there (industries.d.tl); the base reads it the same way (industry.tl:62)
+			local failed = game_script and game_script.state_native:find("industryFailedExtensions") --[[@as NativeLuaTable?]]
+			local best, best_output = nil, -1 ---@type Engine.Entity?, number
 			for _i, entity in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.INDUSTRY)) do
 				local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
-				local output = api.engine.util.stock.getCargoOutputPerYear(industry.stockList)
+				---@cast industry -nil -- the entities with this component
+				local output = api.engine.util.stock.getCargoOutputPerYear(industry.stockList) ---@type number
 				if failed and failed:find(entity) ~= nil then output = output + 1e9 blocked[entity] = true end
 				if output > best_output then best, best_output = entity, output end
 			end
@@ -624,13 +694,15 @@ local checks = {
 		act = function(ctx)
 			ctx.replaced, ctx.replaced_to = nil, nil
 			if not ctx.models_line then return end
-			local first, keys = {}, {} -- model key -> the line's first vehicle of it
+			-- model key -> the line's first vehicle of it; the keys in order
+			local first, keys = {}, {} ---@type table<string, Engine.Entity>, string[]
 			for _i, v in ipairs(line_vehicles(ctx.models_line)) do
 				local key = model_key(v)
 				if key and not first[key] then first[key], keys[#keys + 1] = v, key end
 			end
 			if #keys < 2 then return end
 			local tv = api.engine.getComponent(first[keys[1]], api.type.ComponentType.TRANSPORT_VEHICLE)
+			---@cast tv -nil -- model_key read it a moment ago
 			ctx.replaced, ctx.replaced_to = first[keys[2]], keys[1]
 			api.cmd.sendCommand(api.cmd.makeVehicleReplaceCmd(ctx.replaced, tv.transportVehicleConfig))
 		end,
@@ -847,10 +919,11 @@ local checks = {
 			local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
 			local native = notification_util.externalGetNotificationsStateNative()
 			if not native then return true, "skipped: no notification state" end
-			local entries = native:find("notifications")
-			local items = {}
+			-- tables in the native state; the base casts them the same way (notification_popups.tl:253-255)
+			local entries = native:find("notifications") --[[@as NativeLuaTable]]
+			local items = {} ---@type uo.core.notification_groups.Item[]
 			for _i, id in ipairs(notification_util.getHistoryFromNative(native)) do
-				local native_entry = entries:find(id)
+				local native_entry = entries:find(id) --[[@as NativeLuaTable?]]
 				if native_entry ~= nil and not native_entry:find("dismissed") then
 					local entry = notification_util.getNotificationEntryFromNative(native, id)
 					items[#items + 1] = { id = id, timestamp = entry.timestamp, notification = entry.notification }
@@ -1066,9 +1139,9 @@ local checks = {
 
 -- run.sh --only <name>: just those checks, after the fixture facts.
 if fixture.only and #fixture.only > 0 then
-	local wanted = { gui_fixture_facts = true }
+	local wanted = { gui_fixture_facts = true } ---@type table<string, true>
 	for _i, name in ipairs(fixture.only) do wanted[name] = true end
-	local selected = {}
+	local selected = {} ---@type uo.testbench.GuiCheck[]
 	for _i, check in ipairs(checks) do
 		if wanted[check.name] then selected[#selected + 1] = check end
 	end
@@ -1078,7 +1151,7 @@ end
 -- Crash probe (gui/probe.script.lua): set PROBE = true to open its window variants first.
 local PROBE = false
 if PROBE then
-	local probes = {}
+	local probes = {} ---@type uo.testbench.GuiCheck[]
 	for variant = 1, 5 do
 		probes[#probes + 1] = {
 			name = "probe_variant_" .. variant,

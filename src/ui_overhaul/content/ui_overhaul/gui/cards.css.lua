@@ -2,6 +2,7 @@
 -- (entity_window.css.lua: vehicle cell 300, age cell 98).
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local colorDefault = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main/default_colors.gres")).data

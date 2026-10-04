@@ -12,16 +12,25 @@ local groups = {}
 ---@field type string the notification script, e.g. "::/game_mechanics/notifications/types/line_warning.script"
 ---@field params any each notification type has its own parameters; groups.key reads them defensively
 
+-- The game's notification in the mod, a plain { type, params } in the specs; only those two are read.
+---@alias uo.core.notification_groups.AnyNotification
+---| uo.core.notification_groups.Notification
+---| game.game_mechanics.notifications.notifications.Notification
+
 ---@class uo.core.notification_groups.Item
 ---@field id integer notification id
 ---@field timestamp? number game ms
----@field notification? uo.core.notification_groups.Notification
+---@field notification? uo.core.notification_groups.AnyNotification
 
 ---@class uo.core.notification_groups.Group
 ---@field key string
 ---@field members uo.core.notification_groups.Item[] newest first
 ---@field oldest? number timestamp of the oldest member
 ---@field tile? string the icon that shows the group (set by groups.place)
+
+--- A group after groups.place: it always has its icon.
+---@class uo.core.notification_groups.PlacedGroup: uo.core.notification_groups.Group
+---@field tile string
 
 ---@class uo.core.notification_groups.Tile
 ---@field anchor number timestamp of the group's oldest member when the icon appeared
@@ -40,7 +49,7 @@ local function scalar(value)
 end
 
 --- The group key of a notification. `id` makes the key unique when the parameter is unknown.
----@param notification? uo.core.notification_groups.Notification
+---@param notification? uo.core.notification_groups.AnyNotification
 ---@param id? integer
 ---@return string
 function groups.key(notification, id)
@@ -142,7 +151,7 @@ end
 -- not move past others when its oldest member goes.
 ---@param list uo.core.notification_groups.Group[]
 ---@param previous? uo.core.notification_groups.Tiles the state returned by the last call
----@return uo.core.notification_groups.Group[] placed
+---@return uo.core.notification_groups.PlacedGroup[] placed
 ---@return uo.core.notification_groups.Tiles state
 function groups.place(list, previous)
 	local before = previous or { by_member = {}, tiles = {}, count = 0 }
@@ -166,8 +175,11 @@ function groups.place(list, previous)
 		group.tile = tile
 		for _j, member in ipairs(group.members) do state.by_member[member.id] = tile end
 	end
-	local placed = {} ---@type uo.core.notification_groups.Group[]
-	for i, group in ipairs(list) do placed[i] = group end
+	local placed = {} ---@type uo.core.notification_groups.PlacedGroup[]
+	for i, group in ipairs(list) do
+		---@cast group uo.core.notification_groups.PlacedGroup -- the loop above gave every group a tile
+		placed[i] = group
+	end
 	table.sort(placed, function(a, b)
 		-- the loop above gave every group a tile
 		---@type uo.core.notification_groups.Tile, uo.core.notification_groups.Tile

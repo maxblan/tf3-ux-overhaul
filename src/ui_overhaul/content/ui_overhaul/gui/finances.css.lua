@@ -6,12 +6,15 @@
 local color_util = require("::/gui/main/color_util.tl")
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table[]
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)
 	add("R::FinancesTable TextView!uio-statement-total", { fontWeight = "Medium" })
 	add("R::FinancesTable ToggleButtonGroup!uio-finances-views", { margin = { 0, 0, 8, 0 }, gravity = { 0, 0 } })
 
+	-- the colour table of default_colors.gres: name -> colour
+	---@type table<string, game.gui.main.color_util.GResColor>
 	local colorDefault = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main/default_colors.gres")).data
 	local accent = colorDefault.AccentMedium
 	local views = "R::FinancesTable ToggleButtonGroup!uio-finances-views ToggleButton"

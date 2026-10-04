@@ -7,6 +7,7 @@ local fake = fake_react.new()
 local builtin = fake_react.any()
 builtin.BoxLayout = function(t) return { layout = t } end
 builtin.ToolStack = fake.react.RegisterRecipe("ToolStack", function() end) -- the vanilla stack
+---@type uo.gui.tool_stack
 local tool_stack = fake_react.load("/ui_overhaul/gui/tool_stack.lua", {
 	["::/gui/main/react.lua"] = fake.react,
 	["::/gui/main/builtin.lua"] = builtin,
@@ -18,10 +19,12 @@ local parent_recipe = fake.recipe("ToolStack", 3)
 
 describe("tool_stack", function()
 	local saved_debug_print = _G.debugPrint
-	before_each(function() _G.debugPrint = function() end end)
+	local function quiet() end
+	before_each(function() _G.debugPrint = quiet end)
 	after_each(function() _G.debugPrint = saved_debug_print end)
 
 	it("replaces the vanilla stack", function()
+		---@type function[][]
 		local calls = {}
 		tool_stack.install({ ReplaceRecipe = function(old, new) calls[#calls + 1] = { old, new } end })
 		assert.are.same({ { builtin.ToolStack, parent_recipe } }, calls)
@@ -35,7 +38,7 @@ describe("tool_stack", function()
 		assert.are.same({ "ToolStack" }, parent.internals.setName)
 		assert.are.same({ true }, parent.internals.setMouseTransparent)
 		assert.are.same({ true }, parent.internals.setDisableFocusable)
-		local child_node = node.layout.children[1]
+		local child_node = node.layout.children[1] ---@type spec.FakeNode
 		assert.are.equal(child_recipe, child_node.recipe)
 
 		-- the mod's stack renders, with its hooks, and its api reaches the game through the parent
@@ -54,9 +57,10 @@ describe("tool_stack", function()
 		parent.step()
 		node = parent.render(params)
 		assert.are.same(PARENT_HOOKS, parent.hooks)
-		local base_node = node.layout.children[1]
+		local base_node = node.layout.children[1] ---@type spec.FakeNode
 		assert.are.equal(builtin.ToolStack, base_node.original)
 		assert.are.equal(params, base_node.args[1])
+		---@type any[] the arguments push got, whatever the game passes
 		local pushed
 		base_node.ref:set({ getApi = function() return { push = function(...) pushed = { ... } end } end })
 		parent.api.push("tool", 1)

@@ -8,6 +8,7 @@ local util = { useFn = function() return nil end }
 local builtin = fake_react.any()
 builtin.BoxLayout = function(t) return { layout = t } end
 
+---@type uo.gui.notifications
 local notifications = fake_react.load("/ui_overhaul/gui/notifications.lua", {
 	["::/gui/main/react.lua"] = fake.react,
 	["::/gui/main/builtin.lua"] = builtin,
@@ -18,11 +19,20 @@ local notifications = fake_react.load("/ui_overhaul/gui/notifications.lua", {
 	["::/game_mechanics/notifications/gui/notification_popups.tl"] = BASE,
 })
 local groups = require("/ui_overhaul/core/notification_groups.lua")
-local PARENT_HOOKS = { "useState", "onStep", "useRef", "useRef" }
+local PARENT_HOOKS = { "useState", "onStep", "useRef", "useRef", "useInputAction:IA_NOTIFICATIONS_OPEN" }
+
+-- What the Resolve specs' stand-in for `api` provides: the sound table and the sound player.
+---@class spec.notifications.Api
+---@field gui spec.notifications.Gui
+
+---@class spec.notifications.Gui
+---@field genericRep { find: (fun(): integer), get: (fun(): { data: { Resolve: string } }) }
+---@field sound { playRandomSoundEffect: fun(effect: string) }
 
 describe("notifications", function()
 	local saved_debug_print = _G.debugPrint
-	before_each(function() _G.debugPrint = function() end end)
+	local function quiet() end
+	before_each(function() _G.debugPrint = quiet end)
 	after_each(function() _G.debugPrint = saved_debug_print end)
 
 	it("registers under the base recipe names so the base stylesheet applies", function()
@@ -36,6 +46,7 @@ describe("notifications", function()
 	local parent_recipe = fake.recipe("NotificationPopups", 2)
 
 	it("replaces the base ridge", function()
+		---@type function[][]
 		local calls = {}
 		notifications.install({ ReplaceRecipe = function(old, new) calls[#calls + 1] = { old, new } end })
 		assert.are.equal(1, #calls)
@@ -49,6 +60,8 @@ describe("notifications", function()
 		assert.are.same(PARENT_HOOKS, parent.hooks)
 		assert.are.same({ true }, parent.internals.setMouseTransparent)
 		assert.are.same({ true }, parent.internals.setDisableFocusable)
+		-- the notification key the game forwards to this node reaches the ridge (game.tl:389-390)
+		assert.are.equal(node.layout.children[1].ref, parent.input_actions.IA_NOTIFICATIONS_OPEN.forward)
 		assert.are.equal(fake.recipe("NotificationPopups", 1), node.layout.children[1].recipe)
 	end)
 
@@ -69,6 +82,7 @@ describe("notifications", function()
 		local node = parent.render()
 		assert.are.same(PARENT_HOOKS, parent.hooks)
 		assert.are.equal(BASE, node.layout.children[1].original)
+		assert.are.equal(node.layout.children[1].ref, parent.input_actions.IA_NOTIFICATIONS_OPEN.forward)
 	end)
 
 	it("declares a member's sound handlers even when its data state fails", function()
@@ -107,10 +121,14 @@ describe("notifications", function()
 		local sounds ---@type any[]
 		before_each(function()
 			sounds = {}
-			_G.api = { gui = {
+			---@type spec.notifications.Api
+			local mock = { gui = {
 				genericRep = { find = function() return 1 end, get = function() return { data = { Resolve = "resolve" } } end },
 				sound = { playRandomSoundEffect = function(effect) sounds[#sounds + 1] = effect end },
 			} }
+			-- A partial stand-in (spec.notifications.Api). The cast keeps LuaLS from merging the mock's types
+			-- into the global `api` everywhere else; a plain assignment would.
+			_G.api = mock --[[@as api]]
 		end)
 		after_each(function() _G.api = saved_api end)
 

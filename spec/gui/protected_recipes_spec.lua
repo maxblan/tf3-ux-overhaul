@@ -4,10 +4,14 @@
 local fake_react = require("fake_react")
 
 -- engine_react_util's step states: declared once their callback returned, as in the game
+---@param fake spec.Fake
+---@return table<string, function>
 local function engine_hooks(fake)
+	---@param name string
+	---@return fun(fn: fun(old: nil): any): { old: fun(): any }
 	local function step_state(name)
 		return function(fn)
-			local value = fn(nil)
+			local value = fn(nil) ---@type any the state, whatever the recipe reads
 			fake.hook(name)
 			return { old = function() return value end }
 		end
@@ -15,11 +19,18 @@ local function engine_hooks(fake)
 	return { useStepState = step_state("useStepState"), useStepStateTimer = step_state("useStepStateTimer") }
 end
 
+---@param path string
+---@param extra? table<string, any> more module path -> stand-in, of any shape
+---@return spec.Fake fake
+---@return any module the loaded module, of whichever type `path` returns
 local function load(path, extra)
 	local fake = fake_react.new()
 	local builtin = fake_react.any()
 	builtin.BoxLayout = function(t) return { layout = t } end
+	---@param t builtin.TextViewParam
+	---@return { text: string?, meta: react.Meta? }
 	builtin.TextView = function(t) return { text = t.text, meta = t.meta } end
+	---@type table<string, any>
 	local stand_ins = {
 		["::/gui/main/react.lua"] = fake.react,
 		["::/gui/main/builtin.lua"] = builtin,
@@ -32,17 +43,22 @@ end
 local EMPTY = { layout = {} }
 
 describe("protected recipes", function()
-	local saved = {}
-	local logged
+	local globals = _G ---@type table<string, any> global name -> value, of any type
+	local saved = {} ---@type table<string, any> global name -> its value before the spec
+	local logged ---@type string[]
 	before_each(function()
-		for _i, name in ipairs({ "debugPrint", "_", "api" }) do saved[name] = _G[name] end
+		for _i, name in ipairs({ "debugPrint", "_", "api" }) do saved[name] = globals[name] end
 		logged = {}
-		_G.debugPrint = function(...) logged[#logged + 1] = table.concat({ ... }) end
-		_G._ = function(text) return text end
+		---@param ... any
+		local function record(...) logged[#logged + 1] = table.concat({ ... }) end
+		---@param text string
+		---@return string
+		local function tr(text) return text end
+		_G.debugPrint, _G._ = record, tr
 		_G.api = nil
 	end)
 	after_each(function()
-		for name, value in pairs(saved) do _G[name] = value end
+		for name, value in pairs(saved) do globals[name] = value end
 	end)
 
 	it("industry cards: Development and Served by keep their hooks and show nothing on failure", function()
@@ -108,7 +124,7 @@ describe("protected recipes", function()
 		})
 		local age = fake.mount(fake.recipe("VehicleAgeCell"))
 		local node = age.render({ rowKey = 1 }) -- no api: the tooltip fails
-		local text = node.layout.children[1]
+		local text = node.layout.children[1] ---@type { text: string, meta: react.Meta } the stand-in TextView
 		assert.are.equal("3 years", text.text)
 		assert.is_nil(text.meta.tooltip)
 		assert.are.same({ "useStepStateTimer" }, age.hooks)

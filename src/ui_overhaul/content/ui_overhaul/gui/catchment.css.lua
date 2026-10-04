@@ -3,6 +3,7 @@
 -- icon and margins 1, 1, 2, 1), so the area spaces all of them alike.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
+---@return table
 function data()
 	local result = {}
 	local add = ssu.makeAdder(result)
