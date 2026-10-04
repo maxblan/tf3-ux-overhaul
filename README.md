@@ -62,6 +62,11 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
 
+### Subsidies
+
+- Subsidy icons in the notification row show their state: offers and active subsidies keep their purple, a subsidy whose effect is active is green and a missed one grey. The timer ring is easier to read and turns amber when half the time is gone and red at the last quarter.
+- Offers have a ring and a bar for the time until the offer ends, and the card says "Time limit: 2 years - Offer ends in 3 months". Active subsidies say "Time limit" and "1 year 3 months left"; completed ones show how long their effect lasts.
+
 ### Game bar and vehicle store
 
 - The Earnings tooltip also shows the cash flow of the last 30 days and of the 30 days before.

@@ -5,6 +5,9 @@
 --   * right-click (gamepad: IA_OPTION2) dismisses the whole group
 --   * the hover card is the base card of the shown notification, with "2 of 3" next to the title
 -- A group of one looks and behaves like the base icon.
+-- Subsidy icons show their state: offers and active subsidies keep the base purple shades, a
+-- subsidy whose effect is active turns green and a missed one grey; the timer ring is drawn
+-- opaque and turns amber below half and red below a quarter of the time left (notifications.css.lua).
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
 -- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown.
@@ -202,20 +205,51 @@ end)
 
 -- Icons -------------------------------------------------------------------------------------------
 
-local function icon(dataState, guiType)
+local SUBSIDY = "::/game_mechanics/notifications/types/subvention_notification.script"
+local SUBSIDY_MISSED = "::/game_mechanics/notifications/types/subvention_missed.script"
+local SUBSIDY_STATUS = { "uio-subsidy-offer", "uio-subsidy-active", "uio-subsidy-complete" }
+
+--- css classes of a subsidy icon: its state (offer, active, effect active, missed) and, while time
+-- runs out on an offer or an active subsidy, the urgency of its timer ring. nil for other icons.
+function notifications.subsidy_class(notification_type, status, percentage)
+	if notification_type == SUBSIDY_MISSED then return "uio-subsidy-missed" end
+	if notification_type ~= SUBSIDY then return nil end
+	local class = SUBSIDY_STATUS[status]
+	if not class then return nil end
+	if status ~= 3 and percentage then
+		if percentage < 0.25 then
+			class = class .. ", uio-ring-urgent"
+		elseif percentage < 0.5 then
+			class = class .. ", uio-ring-warning"
+		end
+	end
+	return class
+end
+
+local function icon(dataState, guiType, notification)
+	local node
+	local percentage
 	if dataState.progress ~= nil or (dataState.progresses ~= nil and #dataState.progresses > 0) then
-		return notification_react_util.NotificationProgressIcon {
+		percentage = dataState.progress and dataState.progress.percentage or dataState.progresses[1].percentage
+		-- past a deadline the base value turns negative (a negative ring frame)
+		percentage = percentage and math.max(0, math.min(1, percentage))
+		node = notification_react_util.NotificationProgressIcon {
 			icon = dataState.icon,
 			status = dataState.status,
 			type = guiType,
-			percentage = dataState.progress and dataState.progress.percentage or dataState.progresses[1].percentage,
+			percentage = percentage,
+		}
+	else
+		node = notification_react_util.NotificationSimpleIcon{
+			icon = dataState.icon,
+			status = dataState.status,
+			type = guiType,
 		}
 	end
-	return notification_react_util.NotificationSimpleIcon{
-		icon = dataState.icon,
-		status = dataState.status,
-		type = guiType,
-	}
+	local status = notification and type(notification.params) == "table" and notification.params.status or nil
+	local class = notifications.subsidy_class(notification and notification.type, status, percentage)
+	if not class then return node end
+	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
 end
 
 local function on_member_mount(notificationId, dataState)
@@ -257,7 +291,7 @@ local function render_member(params)
 
 	click_handlers[id] = dataState and dataState.onClick or false
 	if not (params.current and dataState) then return empty() end
-	return builtin.BoxLayout{ children = { icon(dataState, guiType) } }
+	return builtin.BoxLayout{ children = { icon(dataState, guiType, params.notification) } }
 end
 
 local Member = react.RegisterRecipe("UioNotificationMember", function(params)

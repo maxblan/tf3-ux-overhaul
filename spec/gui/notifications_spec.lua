@@ -63,4 +63,18 @@ describe("notifications", function()
 		assert.are.equal(BASE, second.layout.children[1].original)
 		assert.are.equal(1, renders)
 	end)
+
+	it("names the state and the urgency of subsidy icons", function()
+		local subsidy = "::/game_mechanics/notifications/types/subvention_notification.script"
+		local missed = "::/game_mechanics/notifications/types/subvention_missed.script"
+		assert.are.equal("uio-subsidy-offer", notifications.subsidy_class(subsidy, 1, 0.8))
+		assert.are.equal("uio-subsidy-active, uio-ring-warning", notifications.subsidy_class(subsidy, 2, 0.4))
+		assert.are.equal("uio-subsidy-offer, uio-ring-urgent", notifications.subsidy_class(subsidy, 1, 0.1))
+		-- an active effect is no deadline: no urgency
+		assert.are.equal("uio-subsidy-complete", notifications.subsidy_class(subsidy, 3, 0.1))
+		assert.are.equal("uio-subsidy-active", notifications.subsidy_class(subsidy, 2, nil))
+		assert.are.equal("uio-subsidy-missed", notifications.subsidy_class(missed, nil, nil))
+		assert.is_nil(notifications.subsidy_class("::/other.script", 1, 0.1))
+		assert.is_nil(notifications.subsidy_class(subsidy, 7, 0.1))
+	end)
 end)

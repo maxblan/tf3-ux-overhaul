@@ -36,6 +36,8 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Construction | merged Rail/Tracks and Road/Roads menus, fastest track first, module tab order, bulldozer warning | `construction.lua` | patches `construction_react_util.getMenuCategories` and `getActionParams` |
 | Construction | gradient, curve radius, elevation, bridge height and tunnel depth in the build tooltip | `construction.lua`, `core/geometry.lua` | `getActionParams`: wraps `getProposalStringsFn` of the track and street builders |
 | Notifications | icons of the same kind grouped with a count | `notifications.lua` | Lua conversion of the base ridge (`notification_popups.tl`), replacing it |
+| Notifications | subsidy icons coloured by state, timer ring opaque and amber/red as time runs out | `notifications.lua`, `notifications.css.lua` | as the ridge above; a state class around the base icon recipes |
+| Subsidies | offer expiry ring and text, labelled time limit and time left, effect duration | `subsidies.lua` | patches `subvention_util.makeDefaultCardData` (GUI state only) |
 | Game bar | Earnings tooltip with the cash flow of the last 30 days and the 30 days before | `earnings.lua` | replaces `GameBarEarningsPlugin` |
 | Vehicle store | newest model first and preselected (list layout) | `store_tweaks.lua` | patches `react.useState` for the one sort state `{ mode = "YearFrom", ascending = true, groupTypes = true }` |
 
