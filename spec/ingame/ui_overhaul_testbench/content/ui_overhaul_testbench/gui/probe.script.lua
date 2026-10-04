@@ -148,6 +148,58 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		})
 	end)
 
+	-- Build tooltip measurements on a made-up proposal near the map centre: a straight rising track
+	-- and a bridge 20 m above the ground. Logs each tooltip line.
+	react.onEvent("uio.debug.measure", function()
+		local construction = require("ui_overhaul_1::/ui_overhaul/gui/construction.lua")
+		local ground = api.engine.terrain.getHeightAt(api.type.Vec2f.new(0, 0))
+		debugPrint("[testbench] measure ground at centre ", tostring(ground))
+		local function segment(x0, x1, z0, z1, edge_type)
+			local v = function(x, z) return api.type.Vec3f.new(x, 0, z) end
+			return { type = 1, comp = {
+				position0 = v(x0, z0), position1 = v(x1, z1),
+				tangent0 = v(x1 - x0, z1 - z0), tangent1 = v(x1 - x0, z1 - z0), type = edge_type,
+			} }
+		end
+		local base = ground or 100
+		local fake = { proposal = {
+			addedSegments = {
+				segment(0, 100, base, base + 3, api.type.enum.BaseEdgeType.NORMAL),
+				segment(100, 200, base + 20, base + 20, api.type.enum.BaseEdgeType.BRIDGE),
+			},
+			removedSegments = {},
+		} }
+		local ok, strings = pcall(construction.measurement_strings, fake, 1, nil)
+		if not ok then
+			debugPrint("[testbench] measure failed: ", tostring(strings))
+			return
+		end
+		for _i, line in ipairs(strings) do debugPrint("[testbench] measure ", line) end
+	end)
+
+	-- Reads the line's problems the way the Stops card does, and runs the path search the add-stop
+	-- hover uses from stop 1 to stop 2. Logs both.
+	react.onEvent("uio.debug.reach", function(_e, line)
+		local ok, data = pcall(mod_terminals().read_problems, line)
+		debugPrint("[testbench] reach problems ok=", tostring(ok), " stops=", ok and data and #data.stops or -1,
+			" segments=", ok and data and #data.segments or -1, ok and "" or (" " .. tostring(data)))
+		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+		if not component or #component.stops < 2 then return end
+		local function nodes(stop)
+			local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+			local station = api.engine.getComponent(group.stations[stop.station + 1], api.type.ComponentType.STATION)
+			return { station.terminals[stop.terminal + 1].vehicleNodeId }
+		end
+		local modes = {}
+		for mode, on in pairs(api.engine.util.line.getLineTransportModesUnion(line)) do
+			if on then modes[#modes + 1] = mode end
+		end
+		local found, result = pcall(api.engine.util.pathfinding.findPathNodeToNode,
+			nodes(component.stops[1]), nodes(component.stops[2]), modes)
+		debugPrint("[testbench] reach path ok=", tostring(found), " modes=", #modes, " edges=",
+			found and #result or -1, found and "" or (" " .. tostring(result)))
+	end)
+
 	react.onEvent("uio.debug.terminals", function(_e, line)
 		local windows = game_react_globals.getDefaultWindowApi()
 		windows.removeAllWindows(popover_react_util.PopoverWindow)

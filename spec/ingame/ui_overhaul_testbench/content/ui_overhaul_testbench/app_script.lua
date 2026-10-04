@@ -56,16 +56,22 @@ end
 local function load_fixture_game()
 	local data = pending_load.info:get()
 	local details = api.type.SaveGameDetails.new(data.info)
-	local mods, names = {}, {}
+	local mods, names, listed = {}, {}, {}
 	for _, mod in ipairs(details.mods) do
 		mods[#mods + 1], names[#names + 1] = mod, mod.name
+		listed[mod.name] = true
 	end
 	local added = { "ui_overhaul_1", "ui_overhaul_testbench_1" }
 	for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
+	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
+	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
 	for _, name in ipairs(added) do
-		local mod = api.type.ModId.new()
-		mod.name = name
-		mods[#mods + 1], names[#names + 1] = mod, name
+		if not listed[name] then
+			local mod = api.type.ModId.new()
+			mod.name = name
+			mods[#mods + 1], names[#names + 1] = mod, name
+			listed[name] = true
+		end
 	end
 	details.mods = mods
 	log("loading savegame", fixture.save, "with mods", table.concat(names, ", "))

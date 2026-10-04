@@ -560,6 +560,28 @@ local checks = {
 		end,
 	},
 	{
+		-- the rows of that popover carry the preferred / unreachable marks (screenshot for the look)
+		name = "terminal_rows_marked",
+		wait = 30,
+		shot = "terminal_rows",
+		check = function(ctx)
+			if not ctx.terminal_line or EASY_TERMINALS then return true, "skipped" end
+			local shown = visible("uio.terminals.row.1")
+			return shown, "row of terminal 1 visible=" .. tostring(shown)
+		end,
+	},
+	{
+		name = "stops_reach",
+		act = function(ctx)
+			if ctx.terminal_line then api.gui.fireReactEvent("uio.debug.reach", ctx.terminal_line) end
+		end,
+		wait = 10,
+		check = function(ctx)
+			if not ctx.terminal_line then return true, "skipped: no line" end
+			return true, "see the reach log lines"
+		end,
+	},
+	{
 		-- A real change through the buttons' parameters (on the savegame copy), undone by the next check.
 		name = "terminal_change_add",
 		act = function(ctx)
@@ -645,6 +667,12 @@ local checks = {
 		wait = 90,
 		shot = "construction_tracks",
 		check = function() return true, "screenshot" end,
+	},
+	{
+		name = "build_measurements",
+		act = function() api.gui.fireReactEvent("uio.debug.measure", nil) end,
+		wait = 10,
+		check = function() return true, "see the measure log lines" end,
 	},
 	{
 		name = "configure_opens_module_tab",
