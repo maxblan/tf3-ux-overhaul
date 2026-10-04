@@ -35,6 +35,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Map | vehicle hover tooltip: line, next stop, speed, load, condition, delivery quality | `vehicle_tooltip.lua`, `vehicle_info.lua` | replaces `game_tooltips.DefaultEntityToolTip`, calls the original |
 | Line Manager, line window | load and condition in vehicle rows, the five figures in the tooltip | `lvm_rows.lua`, `line_vehicles.lua`, `vehicle_info.lua` | as the rows and Vehicles card above |
 | Vehicle window | Performance card (rating, slope speeds loaded and empty); slope speeds in the store cart's Performance tooltip | `performance.lua` | `react-plugin ::VehicleEowExtensionPoint`, `order = 55`; wraps `vehicle_util.getPowerRatingTextAndToolTip` and `builtin.TextView` while `VehicleCart` renders |
+| Industry window | Development card (recipes, level, expansion chance, blockers), Served by card (lines) | `industry_cards.lua`, `core/industry_development.lua` | `react-plugin ::IndustryEowExtensionPoint`, `order = 15` |
 | Town window | growth bottleneck and progress to the next level as text | `window_tweaks.lua` | patches `content_card.makeRecipeAndParam` while `TownLevelPlugin` renders |
 | Construction | locked perk says *Promotion pending* | `window_tweaks.lua` | patches `company_util.getConstructionDisableReason` (GUI state only) |
 | Construction | merged Rail/Tracks and Road/Roads menus, fastest track first, module tab order, bulldozer warning | `construction.lua` | patches `construction_react_util.getMenuCategories` and `getActionParams` |

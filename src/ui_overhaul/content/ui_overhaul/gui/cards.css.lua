@@ -25,5 +25,9 @@ function data()
 		{ innerSpacing = { 4, 0 }, margin = { 0, 0, 0, 6 }, gravity = { 0, 0.5 } })
 	add("R::LineVehiclesTable TextView!uio-line-vehicle-load", { size = { 40, -1 }, textAlignment = { 1, 0.5 } })
 	add("R::LineVehiclesTable ImageView!uio-line-vehicle-condition", { size = { 16, 16 }, gravity = { 0, 0.5 } })
+	-- industry window (industry_cards.lua): blockers in the game's warning colour, lines in a column
+	add("R::UioIndustryDevelopment TextView!uio-industry-blocker", { color = colorDefault.Warning })
+	add("R::UioIndustryDevelopment BoxLayout!uio-industry-development", { innerSpacing = { 0, 4 } })
+	add("R::UioIndustryServedBy BoxLayout!uio-industry-lines", { innerSpacing = { 0, 2 } })
 	return result
 end

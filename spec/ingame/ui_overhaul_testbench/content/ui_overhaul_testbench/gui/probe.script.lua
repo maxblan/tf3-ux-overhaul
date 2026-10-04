@@ -181,6 +181,62 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		api.gui.byId.setVisible("probe.vehicle_tooltip", true)
 	end)
 
+	react.onEvent("uio.debug.industry", function(_e, entity)
+		local cards = require("ui_overhaul_1::/ui_overhaul/gui/industry_cards.lua")
+		local ok, facts = pcall(cards.read, entity)
+		if not ok then
+			debugPrint("[testbench] industry read failed: ", tostring(facts))
+			return
+		end
+		debugPrint("[testbench] industry level ", facts.level, "/", facts.maxLevel, " chance ", facts.chance,
+			" rating ", facts.productionRating, " shipped ", facts.shipped, "/", facts.output,
+			" blockers ", table.concat(facts.blockers, ","), " recipes ", #facts.recipes)
+		for i, recipe in ipairs(facts.recipes) do
+			local parts = {}
+			for _j, input in ipairs(recipe.inputs) do parts[#parts + 1] = input[1] .. "x" .. input[2] end
+			parts[#parts + 1] = "->"
+			for _j, output in ipairs(recipe.outputs) do
+				parts[#parts + 1] = output[1] .. "x" .. output[2] .. "/" .. tostring(output[3])
+			end
+			debugPrint("[testbench] industry recipe ", i, " ", table.concat(parts, " "))
+		end
+		local ok2, lines = pcall(cards.read_lines, entity)
+		debugPrint("[testbench] industry served by ok=", tostring(ok2), " lines=", ok2 and #lines or tostring(lines))
+	end)
+
+	-- The statements' sums against the game's own "Earnings" (total) per column: the net income plus
+	-- the investments must equal it if every booking is sorted in.
+	react.onEvent("uio.debug.finances", function()
+		local finances = require("ui_overhaul_1::/ui_overhaul/gui/finances.lua")
+		local statements = require("ui_overhaul_1::/ui_overhaul/core/statements.lua")
+		local ok, data = pcall(finances.read_table)
+		if not ok then
+			debugPrint("[testbench] finances read failed: ", tostring(data))
+			return
+		end
+		local J = api.type.JournalEntry
+		local income, cash = statements.build(data, {
+			INCOME = J.Type.INCOME, SUBSIDY = J.Type.SUBSIDY, MAINTENANCE = J.Type.MAINTENANCE,
+			ACQUISITION = J.Type.ACQUISITION, CONSTRUCTION = J.Type.CONSTRUCTION,
+			VEHICLE = J.Maintenance.VEHICLE, INFRASTRUCTURE = J.Maintenance.INFRASTRUCTURE,
+			VEHICLE_MAINTENANCE = J.Maintenance.VEHICLE_MAINTENANCE,
+		})
+		local function find(rows, key)
+			for _i, r in ipairs(rows) do if r.key == key then return r.values end end
+			return {}
+		end
+		local net, investing = find(income, "net_income"), find(cash, "investing")
+		for i = 1, data.columns do
+			debugPrint("[testbench] finances ", tostring(data.header[i]), " total=", tostring(data.total[i]),
+				" net=", tostring(net[i]), " net+investing=", tostring((net[i] or 0) + (investing[i] or 0)),
+				" entries=", #data.entries)
+		end
+		local ok2, sheet = pcall(finances.read_balance)
+		debugPrint("[testbench] finances balance ok=", tostring(ok2), " ", ok2 and string.format(
+			"cash=%s vehicles=%s assets=%s debt=%s", tostring(sheet.cash), tostring(sheet.vehicles),
+			tostring(sheet.assets), tostring(sheet.debt)) or tostring(sheet))
+	end)
+
 	react.onEvent("uio.debug.sliders", function(_e, open)
 		local windows = game_react_globals.getDefaultWindowApi()
 		windows.removeAllWindows(SliderWindow)

@@ -207,6 +207,19 @@ local checks = {
 		check = function() return visible("uio.statistics.stations.totals"), "crowded filter" end,
 	},
 	{
+		name = "statistics_warehouses",
+		act = function()
+			api.gui.fireReactEvent("uio.statistics.stations.filter", "all")
+			api.gui.fireReactEvent("openStatisticsWindow", "Warehouse")
+		end,
+		wait = 120,
+		shot = "statistics_warehouses",
+		check = function()
+			local shown = visible("uio.statistics.warehouses.totals")
+			return shown, "warehouses totals visible=" .. tostring(shown)
+		end,
+	},
+	{
 		name = "windows_side_by_side",
 		act = function(ctx)
 			api.gui.fireReactEvent("uio.statistics.filter", "all")
@@ -389,6 +402,31 @@ local checks = {
 		check = function(ctx)
 			if not ctx.town then return true, "skipped: no town" end
 			return visible("uio.town.bottleneck"), "bottleneck line visible=" .. tostring(visible("uio.town.bottleneck"))
+		end,
+	},
+	{
+		-- the industry with the most output, as players look at those first
+		name = "industry_window_cards",
+		act = function(ctx)
+			local best, best_output = nil, -1
+			for _i, entity in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.INDUSTRY)) do
+				local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
+				local output = api.engine.util.stock.getCargoOutputPerYear(industry.stockList)
+				if output > best_output then best, best_output = entity, output end
+			end
+			ctx.industry = best
+			if best then
+				api.gui.fireReactEvent("closeAllWindows", nil)
+				api.gui.fireReactEvent("selectEntity", { entity = best, stack = false })
+				api.gui.fireReactEvent("uio.debug.industry", best)
+			end
+		end,
+		wait = 90,
+		shot = "industry_window",
+		check = function(ctx)
+			if not ctx.industry then return true, "skipped: no industry" end
+			local shown = visible("uio.industry.development." .. tostring(ctx.industry))
+			return shown, "development card visible=" .. tostring(shown) .. " (see the industry log lines)"
 		end,
 	},
 	{
@@ -671,6 +709,41 @@ local checks = {
 			return true, string.format("game: %d notifications in %d groups (compare the ridge's log line)",
 				#items, #groups.build(items))
 		end,
+	},
+	{
+		name = "finance_income_statement",
+		act = function()
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			api.gui.fireReactEvent("openFinanceWindow", "Finances")
+			api.gui.fireReactEvent("uio.finances.view", "income")
+			api.gui.fireReactEvent("uio.debug.finances", nil)
+		end,
+		wait = 90,
+		shot = "finance_income",
+		check = function()
+			local shown = visible("uio.finances.views")
+			return shown, "statement views visible=" .. tostring(shown) .. " (see the finances log line)"
+		end,
+	},
+	{
+		name = "finance_cash_flow",
+		act = function() api.gui.fireReactEvent("uio.finances.view", "cashflow") end,
+		wait = 60,
+		shot = "finance_cash_flow",
+		check = function() return visible("uio.finances.views"), "cash flow" end,
+	},
+	{
+		name = "finance_balance_sheet",
+		act = function() api.gui.fireReactEvent("uio.finances.view", "balance") end,
+		wait = 60,
+		shot = "finance_balance_sheet",
+		check = function() return visible("uio.finances.views"), "balance sheet" end,
+	},
+	{
+		name = "finance_details",
+		act = function() api.gui.fireReactEvent("uio.finances.view", "details") end,
+		wait = 60,
+		check = function() return visible("uio.finances.views"), "the game's table" end,
 	},
 	{
 		name = "construction_rail_menu",

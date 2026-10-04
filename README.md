@@ -54,6 +54,11 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
 
+### Industry window
+
+- A Development card: the recipes in words ("4 Clay -> 4 Bricks, up to 460 per year"), the level while the industry can still grow, the chance that it expands at its next half-yearly check with the production rating and how much of its output is transported, and what keeps it from expanding (maximum reached, something in the way, nothing produced or transported, closure countdown).
+- A Served by card lists your lines with a stop that reaches the industry; each name opens the line.
+
 ### Towns and company
 
 - The town window names what limits growth ("Limited by Traffic") and shows the progress to the next town level as text.
