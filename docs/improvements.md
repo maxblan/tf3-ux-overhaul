@@ -71,7 +71,7 @@ Fixes to the mod's own code come first. After them the order follows value, with
 | 25 | Electric locos on non-electrified lines | Not offered for that line (like large aircraft for small airports) | med-high | open |
 | 26 | Town rating tiles and layer HUD | "Traffic · Poor" as text next to the colour | med | open |
 | 27 | Bridge/tunnel choice | Tooltip names the current type and its speed limit | med | open |
-| 28 | Subsidy offer | "Offer ends in 1 month" and "Due {date}" | med | open |
+| 28 | Subsidy offer | "Offer ends in 1 month", a labelled time limit and time left | med | done |
 | 29 | Perk "Already built" | "…another one at rank Director" | med | open |
 | 30 | Vehicle profit | "Last 12 months: +$X" in the Balance card | med | open |
 | 31 | Warehouse "Discard All Cargo" | Asks first | med | open |
@@ -79,13 +79,13 @@ Fixes to the mod's own code come first. After them the order follows value, with
 | 33 | Vehicle hover tooltip | Shows the line ("Line 4" / "In Depot") | med | open |
 | 34 | Finance window | Reopens on the tab used last | med | open |
 | 35 | Statistics after loading | The mod's Statistics tabs keep sort and quick filter across save/load | med | open |
-| 36 | Cargo Satisfaction layer | Keeps the chosen cargo | med | open |
+| 36 | Cargo Satisfaction layer | Keeps the chosen cargo | med | open (catchment areas: done, `catchment.lua`) |
 | 37 | Notification log (reading) | Date always visible (CSS); search would need a fork | med | open |
 | 38 | Celebrations | Click acts and dismisses; no crash on an empty queue; paused while the game is paused | med | open |
 | 39 | Moving a stop | Automatic cargo is recalculated, as for every other edit | med | open |
 | 40 | Adding a stop | Tooltip names the position and warns about the wrong carrier | med | open |
 | 41 | Rank tax and rank progress | "Ticket income at this rank: 96 %"; one consistent progress figure with population numbers | med–high | open |
-| 42 | Industry suppliers | Tables sorted by Received; per-cargo counts fixed | med | open |
+| 42 | Industry suppliers | Tables sorted by Received; per-cargo counts fixed | med | open (Development and Served by cards: done, `industry_cards.lua`) |
 | 43 | Industries tab | "0 %" workload shown for starving processors | med | open |
 | 44 | Account tooltip | Debt and monthly loan payment | med | open |
 | 45 | ConstructionWindow tabs | Each station tab gets its own type label (bug) | med | open |
@@ -424,6 +424,7 @@ The full entries follow, in the same order. Section 4 lists vanilla bugs, sectio
 - Route: wrap the exported `menu_category_util.FilterObjectsCalloutButton` (main/menu_category_util.tl:367-399) and extend `tooltip`.
 
 ### 28. Subsidy offer expiry
+- Status: done (`subsidies.lua`): offers get a ring and "Offer ends in …", the time limit is labelled, active subsidies say "… left", completed ones how long the effect lasts.
 - Vanilla friction:
   - Offers expire after `expireDurationProposed` (game_mechanics/subventions/subvention_util.tl:277-290). That is never shown; the offer just becomes "Subsidy Missed".
   - The proposed card shows only the task duration, unlabelled (:356-370).

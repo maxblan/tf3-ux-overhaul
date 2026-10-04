@@ -107,7 +107,15 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
 - It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list, row icons and add-stop hover, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar. It also wraps the popover window content to swap in the terminal buttons, which works together with Auto Assign Terminals. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- Two mods cannot replace the same vanilla part. This mod replaces:
+  - the Line Manager's vehicle list, row icons and add-stop hover;
+  - the Statistics Lines, Vehicles, Stations and Warehouses tabs;
+  - the line window's Vehicles card and the Finances tab's table;
+  - the map's entity hover tooltip;
+  - the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar.
+
+  Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- It also wraps some vanilla functions, which other mods can wrap as well: the popover window content (terminal buttons; works together with Auto Assign Terminals), the slider widget and the construction sliders, the entity window content (minimize), the subsidy card texts, the default map action (catchment areas) and the store's performance rating.
 - Terminal mods:
   - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
   - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.
