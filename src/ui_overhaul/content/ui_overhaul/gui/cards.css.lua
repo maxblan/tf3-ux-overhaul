@@ -14,6 +14,7 @@ function data()
 	add("R::UioStopsTable R::UioStopCell R::NameTextView", { size = { 220, -1 }, maxSize = { 220, -1 } })
 	-- a stop the line cannot reach: greyed, as the game greys what is unavailable; the alert icon
 	-- (statistics problem icon) carries the reason, so colour is not the only signal
+	add("R::UioStopCell R::Component!uio-stop-unreachable", { alphaScale = 0.6 })
 	add("R::UioStopCell R::Component!uio-stop-unreachable TextView", { color = colorDefault.NeutralMedium })
 	-- the name gives up the icon's room, so the terminal pin stays in the 300 wide cell
 	add("R::UioStopsTable R::UioStopCell R::Component!uio-stop-unreachable R::NameTextView",
@@ -27,7 +28,18 @@ function data()
 	add("R::LineVehiclesTable ImageView!uio-line-vehicle-condition", { size = { 16, 16 }, gravity = { 0, 0.5 } })
 	-- industry window (industry_cards.lua): blockers in the game's warning colour, lines in a column
 	add("R::UioIndustryDevelopment TextView!uio-industry-blocker", { color = colorDefault.Warning })
-	add("R::UioIndustryDevelopment BoxLayout!uio-industry-development", { innerSpacing = { 0, 4 } })
+	add("R::UioIndustryDevelopment BoxLayout!uio-industry-development", { innerSpacing = { 0, 6 } })
+	-- rows: a fixed-width label, so values line up; bars fill the rest
+	add("R::UioIndustryDevelopment BoxLayout!uio-industry-row", { innerSpacing = { 6, 0 } })
+	add("R::UioIndustryDevelopment TextView!uio-industry-label",
+		{ size = { 150, -1 }, minSize = { 150, -1 }, gravity = { 0, 0.5 }, color = colorDefault.NeutralLight })
+	add("R::UioIndustryDevelopment ProgressBar!uio-industry-bar", { gravity = { -1, 0.5 } })
+	add("R::UioIndustryDevelopment ImageView!uio-industry-cargo", { size = { 18, 18 }, gravity = { 0, 0.5 } })
+	add("R::UioIndustryDevelopment TextView!uio-industry-op",
+		{ margin = { 0, 4, 0, 4 }, color = colorDefault.NeutralLight })
+	add("R::UioIndustryDevelopment TextView!uio-industry-per-year",
+		{ margin = { 0, 0, 0, 8 }, gravity = { 0, 0.5 }, color = colorDefault.NeutralLight })
+	add("R::UioIndustryDevelopment ImageView!uio-industry-alert", { size = { 16, 16 }, gravity = { 0, 0.5 } })
 	add("R::UioIndustryServedBy BoxLayout!uio-industry-lines", { innerSpacing = { 0, 2 } })
 	return result
 end

@@ -15,6 +15,7 @@ local content_card = require("::/gui/main/content_card.tl")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
+local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
 local react = require("::/gui/main/react.lua")
 -- loaded at render time (guard.plugin): only fully qualified paths reach this mod
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
@@ -138,24 +139,6 @@ end
 
 -- Texts ------------------------------------------------------------------------------------------------
 
-local function cargo_name(id) return _(api.res.cargoTypeRep.get(id).name) end
-
-local function amounts(list)
-	local parts = {}
-	for _i, entry in ipairs(list) do parts[#parts + 1] = string.format("%d %s", entry[2], cargo_name(entry[1])) end
-	return table.concat(parts, " + ")
-end
-
-local function recipe_text(recipe)
-	local per_year = 0
-	for _i, output in ipairs(recipe.outputs) do per_year = per_year + (output[3] or 0) end
-	local rule = (#recipe.inputs > 0 and (amounts(recipe.inputs) .. " \xE2\x86\x92 ") or "") .. amounts(recipe.outputs)
-	if per_year > 0 then
-		return lang_util.format(_("{recipe}, up to {amount} per year"),
-			{ recipe = rule, amount = lang_util.formatInt(per_year) })
-	end
-	return rule
-end
 
 local function blocker_text(key, f)
 	if key == "max_level" then return _("Industry is expanded to it's full potential.") end
@@ -177,6 +160,47 @@ local function percent(v) return api.util.toStringPercentPrecision(v or 0, 0) en
 
 -- Cards -------------------------------------------------------------------------------------------------
 
+-- One row of the card: a label on the left (fixed width, so the values line up) and its value.
+local function row(label, value, tooltip)
+	return builtin.BoxLayout{
+		meta = { class = "uio-industry-row" },
+		orientation = builtin.type.Orientation.Horizontal,
+		children = { text(label, "font-scale-body, uio-industry-label", tooltip), value },
+	}
+end
+
+local function bar(fraction, label, tooltip)
+	return builtin.ProgressBar{
+		meta = { class = "font-scale-annotation, uio-industry-bar", tooltip = tooltip },
+		value = math.max(0, math.min(1, fraction or 0)),
+		label = label,
+	}
+end
+
+-- "[icon] 11 + [icon] 7 -> [icon] 48 / year" with the game's cargo icons.
+local function recipe_node(recipe)
+	local children = {}
+	local function amounts(list)
+		for i, entry in ipairs(list) do
+			if i > 1 then children[#children + 1] = text("+", "font-scale-body, uio-industry-op") end
+			children[#children + 1] = cargo_react_util.makeCargoIcon(entry[1], "uio-industry-cargo")
+			children[#children + 1] = text(lang_util.formatInt(entry[2]), "font-scale-body")
+		end
+	end
+	if #recipe.inputs > 0 then
+		amounts(recipe.inputs)
+		children[#children + 1] = text("\xE2\x86\x92", "font-scale-body, uio-industry-op")
+	end
+	amounts(recipe.outputs)
+	local per_year = 0
+	for _i, output in ipairs(recipe.outputs) do per_year = per_year + (output[3] or 0) end
+	if per_year > 0 then
+		children[#children + 1] = text(lang_util.format(_("up to {amount} per year"),
+			{ amount = lang_util.formatInt(per_year) }), "font-scale-annotation, uio-industry-per-year")
+	end
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children }
+end
+
 local Development = react.RegisterRecipe("UioIndustryDevelopment", function(params)
 	local state = engine_react_util.useStepStateTimer(function()
 		local ok, facts = pcall(industry_cards.read, params.entity)
@@ -184,29 +208,41 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 	end, REFRESH)
 	local f = state:old()
 	if not f then return vertical{} end
-	-- the level only while the industry can still grow (the game marks the maximum with a text)
+	local growing = f.level < f.maxLevel
 	local children = {}
-	if f.level < f.maxLevel then
-		children[1] = text(lang_util.format(_("Level {level} of {max}"),
-			{ level = lang_util.formatInt(f.level), max = lang_util.formatInt(f.maxLevel) }), "font-scale-headline")
+	for i, recipe in ipairs(f.recipes) do
+		children[#children + 1] = row(i == 1 and _("Production") or "", recipe_node(recipe))
 	end
-	for _i, recipe in ipairs(f.recipes) do children[#children + 1] = text(recipe_text(recipe)) end
-	if f.level < f.maxLevel then
-		children[#children + 1] = text(lang_util.format(_("Chance to expand at the next check: {chance}"),
-			{ chance = percent(#f.blockers == 0 and f.chance or 0) }), "font-scale-body, uio-industry-chance",
-			_("Every half year the industry may expand, if it produces well and its output is transported."))
-		local template = _("Production rating {rating}, {shipped} of {output} per year transported")
-		children[#children + 1] = text(lang_util.format(template, {
-			rating = percent(f.productionRating),
-			shipped = lang_util.formatInt(f.shipped),
-			output = lang_util.formatInt(f.output),
-		}), "font-scale-annotation")
+	if growing then
+		children[#children + 1] = row(_("Level"), bar(f.level / f.maxLevel,
+			lang_util.formatInt(f.level) .. " / " .. lang_util.formatInt(f.maxLevel)))
+	end
+	if f.output > 0 then
+		children[#children + 1] = row(_("Transported"), bar(f.shipped / f.output,
+			lang_util.format(_("{shipped} of {output} per year"),
+				{ shipped = lang_util.formatInt(f.shipped), output = lang_util.formatInt(f.output) })),
+			lang_util.format(_("Production rating: {rating}"), { rating = percent(f.productionRating) }))
+	end
+	if growing then
+		local explain = _("Every half year the industry may expand, if it produces well and its output is transported.")
+		children[#children + 1] = row(_("Expansion chance"),
+			bar(#f.blockers == 0 and f.chance or 0, percent(#f.blockers == 0 and f.chance or 0), explain), explain)
 	end
 	for _i, key in ipairs(f.blockers) do
 		local line = blocker_text(key, f)
 		if line then
-			local class = key == "max_level" and "font-scale-body" or "font-scale-body, uio-industry-blocker"
-			children[#children + 1] = text(line, class)
+			local warn = key ~= "max_level"
+			local parts = {}
+			if warn then
+				parts[1] = builtin.ImageView{ meta = { class = "uio-industry-alert" }, path = "::/gui/statistics/icons/alert.tga",
+					scaling = builtin.type.ImageViewScaling.AutoFit }
+			end
+			parts[#parts + 1] = text(line, warn and "font-scale-body, uio-industry-blocker" or "font-scale-body")
+			children[#children + 1] = builtin.BoxLayout{
+				meta = { class = "uio-industry-row" },
+				orientation = builtin.type.Orientation.Horizontal,
+				children = parts,
+			}
 		end
 	end
 	return builtin.BoxLayout{ children = {
