@@ -88,6 +88,10 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
 
+### Map
+
+- Two buttons in the mod button area of the game bar keep the passenger and the cargo catchment areas of all stations on the map, each switched on and off separately. They show whenever no tool or window draws its own overlay, and the choice is saved with the game.
+
 ### Subsidies
 
 - Subsidy icons in the notification row show their state: offers and active subsidies keep their purple, a subsidy whose effect is active is green and a missed one grey. The timer ring is easier to read and turns amber when half the time is gone and red at the last quarter.
