@@ -24,15 +24,16 @@ workflow, the overview.
    testbench asks. The subsidy scene adds offers with the game's own debug event, in the savegame copy
    only (it is deleted afterwards). `--only gallery_<name>` takes single scenes again.
 2. `make gallery` composes the cards (`tools/gallery/compose.py`, crops in screenshot pixels) and
-   renders them with the game's font, Lato, to `assets/gallery/01-…png` … `14-…png` (kept in the
-   repository).
+   renders them with the game's font, Lato, to the mod's gallery images
+   `src/ui_overhaul/_metadata/1.png` … `14.png` (`0.png` is the logo). `make deploy` takes them to the
+   staging copy, where the mod manager shows them, and Publish uploads them.
 
 The frames are measured on the shots of `World#1` (screenshot pixels, 3440 x 1440). Another savegame
 or screen size shows other lines and places: measure the regions in `compose.py` again on its shots.
 
 ## Page text
 
-Upload the cards in this order; the captions are for the gallery, the longer text for the mod page.
+The card numbers are the gallery order; the captions are for the gallery, the longer text for the mod page.
 
 | # | Card | Caption |
 |---|------|---------|

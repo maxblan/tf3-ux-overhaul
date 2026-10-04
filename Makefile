@@ -85,7 +85,7 @@ validate: deploy ## Run the game's mod validation (launches the game briefly)
 undeploy: ## Remove the mod and the testbench from the staging area
 	tools/deploy.sh --remove $(MOD_DIR) $(TESTBENCH)
 
-gallery: ## Compose the mod.io gallery cards in assets/gallery/ (screenshots first: see docs/gallery.md)
+gallery: ## Compose the mod.io gallery cards (src/ui_overhaul/_metadata/1.png ...) (screenshots first: see docs/gallery.md)
 	tools/gallery/build.sh
 
 package: content preview ## Build the upload zip in dist/

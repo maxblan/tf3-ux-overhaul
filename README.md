@@ -146,7 +146,7 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 | `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |
 | `docs/design.md` | how the mod is built and the rules it follows |
-| `docs/gallery.md`, `assets/gallery/` | the mod.io gallery: how the cards are made, their captions, the cards |
+| `docs/gallery.md` | the mod.io gallery (`_metadata/1.png` …): how the cards are made, their captions |
 | `types/` | type stubs for the engine API and the base-game modules the mod requires (`make typecheck`) |
 | `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 

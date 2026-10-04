@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the mod.io gallery: composes the cards (compose.py) from the gallery screenshots and renders
-# them to 1920 x 1080 PNGs in assets/gallery/ (kept in the repository). Take the screenshots first (English, this mod only):
+# them to 1920 x 1080 PNGs, the gallery images src/ui_overhaul/_metadata/1.png ... 14.png. Take the screenshots first (English, this mod only):
 #   spec/ingame/run.sh --save "<savegame>" --gallery --language en
 #   spec/ingame/run.sh --save "<savegame>" --gallery --language en --vanilla
 # The cards use Lato, the game's UI font, read from the game's locale.zip (not kept in the repo).
@@ -8,7 +8,7 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 shots="$repo/spec/ingame/results"
-out="$repo/assets/gallery" # the cards, kept in the repository
+out="$repo/src/ui_overhaul/_metadata" # the cards, as the mod's gallery images 1.png ... (0.png is the logo)
 work="$repo/dist/gallery" # fonts and the composed SVGs
 game_dir="/mnt/c/Program Files (x86)/Steam/steamapps/common/Transport Fever 3"
 node="/mnt/c/Program Files/nodejs/node.exe"
@@ -42,7 +42,8 @@ done < "$work/svg/crops.txt"
 win() { wslpath -w "$1"; }
 for svg in "$work"/svg/*.svg; do
 	name="$(basename "$svg" .svg)"
-	"$node" "$(win "$repo/tools/gallery/render.js")" "$(win "$svg")" "$(win "$out/$name.png")" "$(win "$shots")" \
+	number=$((10#${name:0:2}))
+	"$node" "$(win "$repo/tools/gallery/render.js")" "$(win "$svg")" "$(win "$out/$number.png")" "$(win "$shots")" \
 		"$(win "$work/fonts/Lato-Regular.ttf")" "$(win "$work/fonts/Lato-Bold.ttf")"
 done
 echo "gallery: $out"
