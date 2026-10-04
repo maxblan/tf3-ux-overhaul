@@ -1,6 +1,6 @@
 # mod.io gallery
 
-Fourteen 1920 x 1080 cards, each a small feature story: the screen, a headline that names what the player
+Ten 1920 x 1080 cards (mod.io takes at most 10 gallery images per upload: error 13003), each a small feature story: the screen, a headline that names what the player
 gains, one line of explanation, and the screenshots. They share the thumbnail's look
 (`assets/preview.svg`): its dark blue glow, screenshots in a silver bevelled rim like its window, round
 silver markers like its close button, and white frames with a soft glow for where to look. The
@@ -25,7 +25,7 @@ workflow, the overview.
    only (it is deleted afterwards). `--only gallery_<name>` takes single scenes again.
 2. `make gallery` composes the cards (`tools/gallery/compose.py`, crops in screenshot pixels) and
    renders them with the game's font, Lato, to the mod's gallery images
-   `src/ui_overhaul/_metadata/1.png` … `14.png` (`0.png` is the logo). `make deploy` takes them to the
+   `src/ui_overhaul/_metadata/1.png` … `10.png` (`0.png` is the logo). `make deploy` takes them to the
    staging copy, where the mod manager shows them, and Publish uploads them.
 
 The frames are measured on the shots of `World#1` (screenshot pixels, 3440 x 1440). Another savegame
@@ -43,14 +43,13 @@ The card numbers are the gallery order; the captions are for the gallery, the lo
 | 4 | `04-terminals` | Set a stop's terminals in one click |
 | 5 | `05-industry` | Know why an industry isn't growing |
 | 6 | `06-statistics` | Find the lines that lose money in one click |
-| 7 | `07-warehouses` | See what lies in every warehouse |
-| 8 | `08-finances` | Read your company like a balance sheet |
-| 9 | `09-build-tooltip` | Know the gradient before you build |
-| 10 | `10-notifications` | Fewer icons, clearer colours, offers that say when they end |
-| 11 | `11-catchment` | Keep every station's catchment area on the map |
-| 12 | `12-minimize` | Minimize any window to its title bar |
-| 13 | `13-workflow-replace-model` | Replace a bus model across your whole network |
-| 14 | `14-overview` | More to read, fewer clicks, in the windows you know |
+| 7 | `07-finances` | Read your company like a balance sheet |
+| 8 | `08-build-tooltip` | Know the gradient before you build |
+| 9 | `09-notifications` | Fewer icons, clearer colours, offers that say when they end |
+| 10 | `10-minimize` | Minimize any window to its title bar |
+
+`compose.py` also has cards for the warehouses, catchment areas, the model workflow and an overview; they
+are left out of `CARDS` to stay within the 10 images.
 
 1. **Line Manager.** Every line shows its vehicle count and its balance over the last 12 months, red
    when it loses money, and every vehicle its load, condition and age. The same window, same scene:
@@ -69,23 +68,12 @@ The card numbers are the gallery order; the captions are for the gallery, the lo
    hides the red area of a blocked expansion. Served by lists the lines that reach it.
 6. **Statistics.** Quick filters above the Lines, Vehicles, Stations and Warehouses tabs (losing
    money, problems, no vehicles, old, crowded …), and totals for exactly what the filter shows.
-7. **Warehouses.** Each warehouse lists its cargo with the amounts, largest first. Full and Empty
-   filter the list, a cargo picker shows only the warehouses holding that cargo, and the totals add
-   up what is shown.
-8. **Finances.** The Finances tab shows the game's figures as an income statement, a cash flow
+7. **Finances.** The Finances tab shows the game's figures as an income statement, a cash flow
    statement and a balance sheet; *Details* keeps the game's own table.
-9. **Construction.** While you draw track or road, the build tooltip gives the length, the steepest
+8. **Construction.** While you draw track or road, the build tooltip gives the length, the steepest
    gradient and the tightest curve with the limits of the chosen type, the height range and the angle.
-10. **Notifications.** Notifications of the same kind share one icon with a count; click to visit
-    each, right-click to dismiss the group. Every icon colour, subsidies included, has at least 7:1
-    contrast to its white symbol, and subsidy offers say when they end.
-11. **Map.** Two buttons keep the passenger and the cargo catchment areas of all stations on the map,
-    each on its own. The choice is saved with the game.
-12. **Windows.** Every window with a close button gets a minimize button next to it. A minimized
+9. **Notifications.** Notifications of the same kind share one icon with a count; click to visit
+   each, right-click to dismiss the group. Every icon colour, subsidies included, has at least 7:1
+   contrast to its white symbol, and subsidy offers say when they end.
+10. **Windows.** Every window with a close button gets a minimize button next to it. A minimized
     window folds to its title bar and keeps its place, tabs and scroll position.
-13. **Replacing a model.** Select the model in the row above the vehicle list, add its vehicles from
-    every line with "In all lines", then replace them in one go. The Line Manager asks before it
-    replaces or clones several vehicles.
-14. **Overview.** The windows you already use, side by side: the Line Manager with balances and the
-    model row, Statistics, and a vehicle window with its performance on slopes. Notifications of one
-    kind share an icon, and every window can be minimized to its title bar.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the mod.io gallery: composes the cards (compose.py) from the gallery screenshots and renders
-# them to 1920 x 1080 PNGs, the gallery images src/ui_overhaul/_metadata/1.png ... 14.png. Take the screenshots first (English, this mod only):
+# them to 1920 x 1080 PNGs, the gallery images src/ui_overhaul/_metadata/1.png ... 10.png. Take the screenshots first (English, this mod only):
 #   spec/ingame/run.sh --save "<savegame>" --gallery --language en
 #   spec/ingame/run.sh --save "<savegame>" --gallery --language en --vanilla
 # The cards use Lato, the game's UI font, read from the game's locale.zip (not kept in the repo).

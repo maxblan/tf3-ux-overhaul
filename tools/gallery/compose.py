@@ -188,7 +188,7 @@ MOD = "gallery-mod/"
 VANILLA = "gallery-vanilla/"
 TOP = 256  # first line below the subline
 BOTTOM = 1000  # last line above the footer
-TOTAL = 14
+TOTAL = 10
 
 
 def before_after():
@@ -381,7 +381,7 @@ def warehouses():
 
 
 def finances():
-    c = Card(8, TOTAL, "Finances", "Read your company like a balance sheet",
+    c = Card(7, TOTAL, "Finances", "Read your company like a balance sheet",
              "Income statement, cash flow and balance sheet from the game's own figures, next to its table.")
     src = MOD + "gallery_finances_cashflow.png"
     crop = (730, 96, 1990, 784)  # the window, from its title to the last row
@@ -391,11 +391,11 @@ def finances():
     m = c.shot(src, crop, (x, TOP + 8, w, h))
     c.outline(c.mapped(m, (746, 252, 682, 52)))    # the statements
     c.outline(c.mapped(m, (750, 752, 1940, 112)))  # change in the bank account, bank account
-    return "08-finances", c
+    return "07-finances", c
 
 
 def build_tooltip():
-    c = Card(9, TOTAL, "Construction", "Know the gradient before you build",
+    c = Card(8, TOTAL, "Construction", "Know the gradient before you build",
              "While you draw track or road: steepest gradient and tightest curve with the type's limits, and the height.")
     src = MOD + "gallery_build_tooltip.png"
     crop = (600, 380, 1500, 720)
@@ -404,11 +404,11 @@ def build_tooltip():
     x = (W - w) // 2
     m = c.shot(src, crop, (x, TOP + 8, w, h))
     c.outline(c.mapped(m, (798, 914, 420, 168)))
-    return "09-build-tooltip", c
+    return "08-build-tooltip", c
 
 
 def notifications():
-    c = Card(10, TOTAL, "Notifications", "Fewer icons, clearer colours, offers that say when they end",
+    c = Card(9, TOTAL, "Notifications", "Fewer icons, clearer colours, offers that say when they end",
              "Notifications of one kind share an icon with a count; every colour has 7:1 contrast to its symbol.")
     vanilla_ridge = (1140, 8, 642, 70)
     mod_ridge = (1140, 8, 268, 70)
@@ -425,7 +425,7 @@ def notifications():
     c.plate(bc[0], bc[1] + bc[3] + 26, "A subsidy offer, with the time it has left")
     c.text(MARGIN, y2 + 70 + round(70 * scale) + 74, "Ten icons become four groups, in high-contrast colours.", 24,
            MUTED, 400)
-    return "10-notifications", c
+    return "09-notifications", c
 
 
 def catchment():
@@ -446,18 +446,18 @@ def catchment():
 
 
 def minimize():
-    c = Card(12, TOTAL, "Windows", "Minimize any window to its title bar",
+    c = Card(10, TOTAL, "Windows", "Minimize any window to its title bar",
              "A button next to close folds the window; it keeps its place, its tabs and what you scrolled to.")
     crop = (2280, 0, 1160, 1220)
     after, _box, before = pair(c, crop, MOD + "gallery_minimize_open.png", MOD + "gallery_minimize_folded.png",
                                ("Open", "Minimized"))
     c.outline(c.mapped(before, (3222, 20, 42, 42)), radius=21)
     c.outline(c.mapped(after, (2796, 8, 612, 84)))
-    return "12-minimize", c
+    return "10-minimize", c
 
 
-CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, warehouses, finances,
-         build_tooltip, notifications, catchment, minimize, workflow, overview]
+CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, finances, build_tooltip, notifications, minimize]
+# not in the gallery (mod.io takes at most 10 images per upload): warehouses, catchment, workflow, overview
 
 
 def main():
