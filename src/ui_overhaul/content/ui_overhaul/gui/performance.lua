@@ -1,33 +1,36 @@
---- How a train or tram copes with slopes, where players decide about it:
---   * the vehicle window gets a Performance card: the game's rating (Poor to Excellent) and the
---     top speed on flat track and on medium and steep slopes, with the time and distance it takes
---     to reach it, fully loaded and empty
---   * in the vehicle store's composition (the cart), the Performance row's tooltip shows the same
---     slope speeds (the game computes them there and throws them away)
--- All figures come from the game's own vehicle_util.getPowerRatingTextAndToolTip, so they match the
--- rating the store shows. The card is a plugin of ::VehicleEowExtensionPoint (performance_card.res);
--- the cart tooltip wraps that function and builtin.TextView while the cart renders
+--- How a vehicle copes with slopes, where players decide about it:
+--   * the vehicle window gets a Performance card: the game's rating (Poor to Excellent) and a table
+--     of the top speed on flat track and on medium and steep slopes, with the time and distance it
+--     takes to reach it; a switch shows it fully loaded or without load
+--   * in the vehicle store's composition (the cart), the Performance row's tooltip shows the slope
+--     speeds (the game computes them there and throws them away)
+-- The figures follow the game's own formula (core/vehicle_slopes.lua, with the game's Romberg
+-- integration), so they match the rating the store shows. The card is a plugin of
+-- ::VehicleEowExtensionPoint (performance_card.res); the cart tooltip wraps
+-- vehicle_util.getPowerRatingTextAndToolTip and builtin.TextView while the cart renders
 -- (performance.res, react-replacement-config).
 -- @module ui_overhaul.gui.performance
 local builtin = require("::/gui/main/builtin.lua")
 local content_card = require("::/gui/main/content_card.tl")
-local lang_util = require("::/scripts/lang_util.tl")
+local gui_react_util = require("::/gui/main/gui_react_util.tl")
 local react = require("::/gui/main/react.lua")
 local vehicle_store_util = require("::/gui/line_vehicle_mgmt/vehicle_store_util.tl")
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
+local romberg = require("::/scripts/util/romberg.tl")
+local vehicle_slopes = require("/ui_overhaul/core/vehicle_slopes.lua")
 
 local performance = {}
 
--- The slopes the game rates against (vehicle_util.tl: 0, 0.0375, 0.075).
-local MEDIUM, HIGH = 0.0375, 0.075
-
-local function text(value, class)
-	return builtin.TextView{ meta = { class = class or "font-scale-body" }, text = value }
+local function text(value, class, tooltip)
+	return builtin.TextView{ meta = { class = class or "font-scale-body", tooltip = tooltip }, text = value }
 end
 
---- Rating and slope speeds of a consist of `model_ids` (with the vehicle's maintenance modifiers),
--- fully loaded and empty: { rating, loaded, empty } (texts), or nil for vehicles the game does not
--- rate (no power or tractive effort: ships, aircraft, wagons alone). GUI thread (texts).
+local function integrate(a, h, tolerance, fn)
+	return romberg.rombergIntegration(a, h, tolerance, 9, fn)
+end
+
+--- The rating text and the slope rows fully loaded and without load: { rating, loaded, empty }, or
+-- nil for vehicles the game does not rate (no power or tractive effort: ships, aircraft, wagons).
 function performance.ratings(model_ids, modifiers)
 	local vehicles = {}
 	for i, model_id in ipairs(model_ids or {}) do
@@ -36,36 +39,78 @@ function performance.ratings(model_ids, modifiers)
 	if #vehicles == 0 then return nil end
 	local data = vehicle_store_util.collectVehicleData(vehicles, modifiers)
 	if not data or not (data.power > 0 and data.tractiveEffort > 0) then return nil end
-	local loaded = vehicle_util.getPowerRatingTextAndToolTip(data.weight + data.weightMaxPayload, data.power,
-		data.tractiveEffort, data.speed, data.rollingFriction)
-	local empty = vehicle_util.getPowerRatingTextAndToolTip(data.weight, data.power, data.tractiveEffort, data.speed,
-		data.rollingFriction)
+	local function rows(weight)
+		return vehicle_slopes.compute({ weight = weight, power = data.power, tractiveEffort = data.tractiveEffort,
+			speed = data.speed, rollingFriction = data.rollingFriction }, integrate)
+	end
+	local loaded = rows(data.weight + data.weightMaxPayload)
 	if not loaded then return nil end
-	return { rating = loaded[1], loaded = loaded[2], empty = empty and empty[2] or nil }
+	-- the game's own rating word, as the store shows it
+	local base = vehicle_util.getPowerRatingTextAndToolTip(data.weight + data.weightMaxPayload, data.power,
+		data.tractiveEffort, data.speed, data.rollingFriction)
+	return { rating = base and base[1] or "", loaded = loaded, empty = rows(data.weight) }
 end
 
--- What the game's slope names mean: "Medium slope: 3.8 %, high slope: 7.5 %".
-local function slopes_text()
-	return lang_util.format(_("Medium slope: {medium}, high slope: {high}"), {
-		medium = api.util.toStringPercentPrecision(MEDIUM, 1),
-		high = api.util.toStringPercentPrecision(HIGH, 1),
-	})
+local SLOPE_NAMES = { "Flat", "Medium", "High" }
+
+local function slope_rows(rows)
+	local result = {
+		builtin.Row{ cells = {
+			text(_("Slope"), "font-scale-annotation, uio-performance-header"),
+			text(_("Top Speed"), "font-scale-annotation, uio-performance-header"),
+			text(_("Time"), "font-scale-annotation, uio-performance-header"),
+			text(_("Distance"), "font-scale-annotation, uio-performance-header"),
+		} },
+	}
+	for i, row in ipairs(rows) do
+		local name = string.format("%s (%s)", pGetText("terrain-slope", SLOPE_NAMES[i]),
+			api.util.toStringPercentPrecision(row.slope, 1))
+		local cells = { text(name) }
+		if row.enough then
+			cells[2] = text(api.util.formatSpeed(row.speed))
+			cells[3] = text(api.util.formatSeconds(math.floor(row.time + 0.5)))
+			cells[4] = text(api.util.formatLength(row.distance))
+		else
+			cells[2] = text(_("Not enough power"), "font-scale-body, negative")
+			cells[3] = text("")
+			cells[4] = text("")
+		end
+		result[#result + 1] = builtin.Row{ cells = cells }
+	end
+	return result
 end
 
 local Card = react.RegisterRecipe("UioVehiclePerformance", function(params)
 	local r = params.ratings
-	-- fully loaded in the card (the case that limits a train); without load in the tooltip
-	local tooltip = r.empty and (_("Without load") .. "\n" .. r.empty) or nil
-	local children = {
-		builtin.TextView{ meta = { class = "font-scale-headline", tooltip = tooltip },
-			text = _("Performance") .. ": " .. r.rating .. " (" .. _("Fully loaded") .. ")" },
-		builtin.TextView{ meta = { class = "font-scale-body", tooltip = tooltip }, text = r.loaded },
-	}
-	children[#children + 1] = text(slopes_text(), "font-scale-annotation")
+	local emptyState = react.useState(false)
+	local show_empty = emptyState:old() and r.empty ~= nil
+	local switch = r.empty and builtin.ToggleButtonGroup{
+		meta = { class = "uio-performance-load" },
+		buttons = {
+			{ content = text(_("Fully loaded"), "font-scale-annotation") },
+			{ content = text(_("Without load"), "font-scale-annotation") },
+		},
+		selected = show_empty and 2 or 1,
+		onValueChange = function(index) emptyState:set(index == 2) end,
+	} or nil
 	return builtin.BoxLayout{
 		meta = { class = "uio-performance", id = "uio.vehicle.performance." .. tostring(params.entityId) },
 		orientation = builtin.type.Orientation.Vertical,
-		children = children,
+		children = {
+			builtin.BoxLayout{
+				orientation = builtin.type.Orientation.Horizontal,
+				children = {
+					text(_("Performance") .. ": " .. r.rating, "font-scale-headline"),
+					gui_react_util.makeHorizontalSpacer(),
+					switch,
+				},
+			},
+			builtin.TableLayout{
+				meta = { class = "uio-performance-table" },
+				columnWeights = { 9, 11, 5, 6 },
+				rows = slope_rows(show_empty and r.empty or r.loaded),
+			},
+		},
 	}
 end)
 
