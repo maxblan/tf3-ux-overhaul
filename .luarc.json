@@ -1,0 +1,45 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "runtime.version": "Lua 5.2",
+    "runtime.plugin": "tools/luals/plugin.lua",
+
+    "workspace.ignoreDir": [".game", ".lua-check", "dist", "tools/luals/server", "tools/lua/node_modules", "tools/lua/vendor", "tools/preview/node_modules"],
+    "workspace.library": ["${3rd}/busted/library", "${3rd}/luassert/library"],
+    "workspace.checkThirdParty": false,
+
+    "diagnostics.globals": ["api", "app", "debugPrint", "_", "pGetText", "nGetText", "data", "orderedPairs", "_react", "read_file"],
+
+    "type.checkTableShape": true,
+    "type.castNumberToInteger": false,
+    "type.weakNilCheck": false,
+    "type.weakUnionCheck": false,
+
+    "diagnostics.enable": true,
+    "diagnostics.disable": ["different-requires"],
+
+    "diagnostics.groupFileStatus": {
+        "ambiguity": "Any",
+        "duplicate": "Any",
+        "global": "Any",
+        "luadoc": "Any",
+        "redefined": "Any",
+        "strict": "Any",
+        "strong": "Any",
+        "type-check": "Any",
+        "unbalanced": "Any",
+        "unused": "Any"
+    },
+
+    "diagnostics.groupSeverity": {
+        "ambiguity": "Error",
+        "duplicate": "Error",
+        "global": "Error",
+        "luadoc": "Error",
+        "redefined": "Error",
+        "strict": "Error",
+        "strong": "Error",
+        "type-check": "Error",
+        "unbalanced": "Error",
+        "unused": "Error"
+    }
+}

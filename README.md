@@ -8,9 +8,10 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 
 ### Line Manager
 
-- Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
+- Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the load, a condition icon and the age, in red once the lifespan is reached; their tooltip names the next stop, speed, load, condition and delivery quality.
 - A row above the vehicle list shows each vehicle model in it with its count. Clicking a model selects exactly those vehicles; *In all lines* adds that model's vehicles from every line, so one Replace, Sell or Send to Depot reaches all of them. Shift+click on a vehicle selects all listed vehicles of its model.
 - In *Select Terminals*, each terminal has three buttons (Don't Use, Alternative, Preferred) instead of a drop-down list, so a change takes one click.
+- In *Select Terminals*, the preferred terminal is highlighted. Terminals the line cannot use (another kind of vehicle, a passenger terminal on a freight line and the reverse) or cannot reach (no path, with the missing piece such as catenaries) are greyed, and their tooltip says why. This also works when the popover is opened from the station or line window.
 
 ### Station window
 
@@ -18,11 +19,20 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 - Reopening the Line Manager selects the line you had selected before.
 - Cloning or replacing more than one vehicle asks first, in the Line Manager's own prompt.
 - With two or more lines ticked, or vehicles from several lines selected, clicking a station creates the new line without moving those vehicles onto it.
+- When adding a stop, the hover says if vehicles could not get there from the stop before it, or on to the next stop.
 
 ### Line window
 
-- The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there.
-- A Stops card lists every stop with its waiting passengers and a *Select Terminals* button. The tooltip adds waiting cargo.
+- Each vehicle in the Vehicles card shows its load and a condition icon, with the next stop, speed, load, condition and delivery quality in the tooltip.
+- The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there. When the game refuses (not enough money, a vehicle a mission protects, no depot), the card says why under the buttons, as the vehicle window does.
+- A Stops card lists every stop with everything waiting there (passengers and cargo) and a *Select Terminals* button. The tooltip splits it by passengers and cargo type, and the column sorts by it.
+- A stop the line's vehicles cannot reach (no path into it, or an incompatible or doubled stop) is greyed with an alert icon. Its tooltip gives the game's own problem text, such as "Missing catenaries".
+
+### Vehicle window
+
+- Hovering a vehicle on the map shows, under its name, its line, next stop, speed (or why it stands), load, condition and delivery quality (passenger happiness, cargo on time).
+
+- Vehicles with power get a Performance card: the game's rating (Poor to Excellent) and a table of the top speed on flat track and on medium and steep slopes, with the time and distance to reach it, fully loaded or without load. In the vehicle store's composition, the Performance row's tooltip shows the same.
 
 ### Statistics
 
@@ -34,13 +44,26 @@ The Lines, Vehicles and Stations tabs get quick filters above the table and the 
 | Vehicles | All, Losing money, Problems, Old | vehicles, balance |
 | Stations | All, Problems, Crowded, No lines | stations, upkeep |
 
+The Warehouses tab shows each cargo's icon with its quantity, the largest first, and has the quick filters All, Full and Empty with the totals (warehouses, stored of capacity, upkeep). A cargo drop-down next to the quick filters lists the warehouses that hold one cargo and sorts the Stocks column by its quantity.
+
 Sorting is fixed where vanilla sorts by something other than what it shows: line vehicle counts, line balance, vehicle age (ascending is now youngest first) and station utilization. Vehicle ages are red once the lifespan is reached. *No lines* lists your stations that no line uses, which vanilla hides.
+
+### Finances
+
+- The Finances tab shows the game's figures as an income statement (revenue, running costs, operating result, interest, net income), a cash flow statement (net income, vehicles bought and sold, construction, loans taken and repaid, change in the bank account) and a balance sheet (bank account, vehicles at their depreciated value, other assets, debt, company value). *Details* shows the game's own table.
 
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
+- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the close button's design, with the title bar's own buttons on the right: it folds the window to its title bar, keeps its place and its content. Finances, Company and Statistics fold too, though the game gives them a fixed size.
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
+
+### Industry window
+
+- A Development card: the recipes in words ("4 Clay -> 4 Bricks, up to 460 per year"), the level while the industry can still grow, the chance that it expands at its next half-yearly check with the production rating and how much of its output is transported, and what keeps it from expanding (maximum reached, something in the way, nothing produced or transported, closure countdown).
+- When something blocks the next expansion, an eye button in the Development card shows or hides the game's red area on the map, so you can see what stands there. (Its colour is fixed by the engine and cannot be made see-through.)
+- A Served by card lists your lines with a stop that reaches the industry; each name opens the line.
 
 ### Towns and company
 
@@ -53,10 +76,28 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - Tracks are listed fastest first, and tracks you can already build come before future ones, so the preselected track is the best one available.
 - *Configure* on a station opens the Tracks, Platforms, Road Access or Building tab instead of Decoration.
 - The bulldozer's tooltip warns before it removes a station that lines stop at.
+- The construction settings (bottom left, and the Settings window) no longer slip under the game bar or off the screen at large UI or text scales: they scroll instead.
+- While you draw track or road, the build tooltip measures it: the steepest gradient and the tightest curve radius, each with the limit of the chosen type, the height range, and how far bridges run above and tunnels below the ground.
+
+### Sliders
+
+- The mouse wheel moves the slider under the cursor one step.
+- A value can be typed: double-click a slider, or click the value next to a construction slider (height, incline, bend). A typed value picks the nearest one the game offers.
+- The settings menu keeps its sliders as they are.
 
 ### Notifications
 
 - Notifications of the same kind share one icon with a count, for example three "noise" warnings. Clicking it jumps to each of them in turn; right-clicking dismisses the whole group. Which notifications appear is unchanged.
+- Notification icons keep the game's colours in darker shades with at least 7:1 contrast to the white symbol (WCAG AAA), also on hover: amber warnings, red problems, blue information, green achievements. The game's yellow had 1.6:1.
+
+### Map
+
+- Two buttons in the mod button area of the game bar keep the passenger and the cargo catchment areas of all stations on the map, each switched on and off separately. They show whenever no tool or window draws its own overlay, and the choice is saved with the game.
+
+### Subsidies
+
+- Subsidy icons in the notification row and their hover card show their state: available blue, in progress orange, effect active green, failed red, a missed offer grey. Every colour keeps at least 7:1 contrast to the white symbol (WCAG AAA), also on hover. Their timer ring is drawn in plain white.
+- Offers have a ring and a bar for the time until the offer ends, and the card says "Time limit: 2 years - Offer ends in 3 months". Active subsidies say "Time limit" and "1 year 3 months left"; completed ones show how long their effect lasts.
 
 ### Game bar and vehicle store
 
@@ -67,11 +108,19 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
 - It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces the Line Manager's vehicle list and row icons, the Statistics Lines, Vehicles and Stations tabs, the line window's Vehicles card, the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar. It also wraps the popover window content to swap in the terminal buttons, which works together with Auto Assign Terminals. Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- Two mods cannot replace the same vanilla part. This mod replaces the industry window (calling the original) and:
+  - the Line Manager's vehicle list, row icons and add-stop hover;
+  - the Statistics Lines, Vehicles, Stations and Warehouses tabs;
+  - the line window's Vehicles card and the Finances tab's table;
+  - the map's entity hover tooltip;
+  - the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar.
+
+  Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
+- It also wraps some vanilla functions, which other mods can wrap as well: the popover window content (terminal buttons; works together with Auto Assign Terminals), the slider widget and the construction sliders, windows (minimize, and window recipe registration), the subsidy card texts, the default map action (catchment areas) and the store's performance rating.
 - Terminal mods:
   - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
   - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.
-- English and German.
+- English, German, French, Italian, Spanish, Dutch, Japanese, Korean, Polish, Brazilian Portuguese, Russian and Chinese (simplified and traditional): all the game's languages.
 
 ## Development
 
@@ -79,10 +128,11 @@ The repository follows [tf3-mod-template](https://github.com/maxblan/tf3-mod-tem
 
 ```bash
 make deps                          # once
-make lint test                     # luacheck and offline specs
+make lint typecheck test           # luacheck, strict type check and offline specs
 make test-ingame                   # in-game checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make validate                      # the game's mod validator
+make gallery                       # the mod.io gallery cards (docs/gallery.md)
 ```
 
 `_metadata/mod.io_fileid.txt` links the mod to its mod.io entry. Keep it in the repository: `make deploy` copies it to the staging area, so publishing from the game updates the existing mod instead of creating a new one.
@@ -96,6 +146,8 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 | `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |
 | `docs/design.md` | how the mod is built and the rules it follows |
+| `docs/gallery.md`, `assets/gallery/` | the mod.io gallery: how the cards are made, their captions, the cards |
+| `types/` | type stubs for the engine API and the base-game modules the mod requires (`make typecheck`) |
 | `tools/extract_game_sources.sh` | extracts the game's GUI sources to `.game/` for reference |
 
 ## License

@@ -14,8 +14,10 @@ local function rating(id, timestamp, key)
 	return item(id, timestamp, RATING, { entities = { { 100 + id, 1 } }, param = { key = key } })
 end
 
+---@param result uo.core.notification_groups.Group[]
+---@return string[]
 local function keys_and_ids(result)
-	local out = {}
+	local out = {} ---@type string[]
 	for i, group in ipairs(result) do
 		out[i] = table.concat(groups.ids(group), ",")
 	end
@@ -129,7 +131,7 @@ describe("notification_groups", function()
 		end)
 
 		it("visits every member and wraps", function()
-			local seen, current = {}, nil
+			local seen, current = {}, nil ---@type integer[], integer?
 			for i = 1, 4 do
 				current = groups.next_id(group, current)
 				seen[i] = current
@@ -140,6 +142,86 @@ describe("notification_groups", function()
 		it("stays on a single member", function()
 			local single = groups.build({ rating(7, 10, "noise") })[1]
 			assert.are.equal(7, groups.next_id(single, 7))
+		end)
+	end)
+
+	describe("place", function()
+		local function subsidy(id, timestamp, status)
+			return item(id, timestamp, SUBVENTION, { uid = id, id = "x", status = status })
+		end
+
+		---@param items uo.core.notification_groups.Item[]
+		---@param previous? uo.core.notification_groups.Tiles
+		---@return uo.core.notification_groups.Group[], uo.core.notification_groups.Tiles
+		local function place(items, previous)
+			return groups.place(groups.build(items), previous)
+		end
+
+		---@param placed uo.core.notification_groups.Group[]
+		---@return string[]
+		local function tiles(placed)
+			local out = {} ---@type string[]
+			for i, group in ipairs(placed) do out[i] = group.tile .. "=" .. table.concat(groups.ids(group), ",") end
+			return out
+		end
+
+		it("keeps the icon and its place when a member's status changes", function()
+			local before, state = place({ subsidy(1, 10, 1), rating(2, 20, "noise"), subsidy(3, 30, 2) })
+			assert.are.same({ "t1=1", "t2=2", "t3=3" }, tiles(before))
+			local after = place({ subsidy(1, 10, 2), rating(2, 20, "noise"), subsidy(3, 30, 2) }, state)
+			-- 1 joins the icon of 3 by status; the icon of the older member 1 stays where it was
+			assert.are.same({ "t1=3,1", "t2=2" }, tiles(after))
+		end)
+
+		it("resolves nothing on a status change", function()
+			local _placed, state = place({ subsidy(1, 10, 1), subsidy(2, 20, 1) })
+			local after
+			after, state = place({ subsidy(1, 10, 2), subsidy(2, 20, 1) }, state)
+			-- the group splits: one icon each, both notifications still shown
+			assert.are.same({ "t1=1", "t2=2" }, tiles(after))
+			assert.is_true(groups.shown(state, 1))
+			assert.is_true(groups.shown(state, 2))
+		end)
+
+		it("resolves a notification that leaves the ridge", function()
+			local _placed, state = place({ subsidy(1, 10, 1), subsidy(2, 20, 1) })
+			local after
+			after, state = place({ subsidy(2, 20, 1) }, state)
+			assert.are.same({ "t1=2" }, tiles(after))
+			assert.is_false(groups.shown(state, 1))
+			assert.is_true(groups.shown(state, 2))
+			assert.is_false(groups.shown(nil, 2))
+		end)
+
+		it("gives a replaced notification a new icon at the end, as the base does", function()
+			-- the game replaces a subsidy whose status changes: the old id goes, a new one comes
+			local _placed, state = place({ subsidy(1, 10, 1), rating(2, 20, "noise") })
+			local after
+			after, state = place({ rating(2, 20, "noise"), subsidy(5, 50, 2) }, state)
+			assert.are.same({ "t2=2", "t3=5" }, tiles(after))
+			assert.is_false(groups.shown(state, 1))
+		end)
+
+		it("keeps an icon in place when its oldest member goes", function()
+			local items = { rating(1, 10, "noise"), rating(2, 20, "pollution"), rating(3, 30, "noise") }
+			local before, state = place(items)
+			assert.are.same({ "t1=3,1", "t2=2" }, tiles(before))
+			local after = place({ items[2], items[3] }, state)
+			assert.are.same({ "t1=3", "t2=2" }, tiles(after))
+		end)
+
+		it("never reuses an icon key", function()
+			local _placed, state = place({ rating(1, 10, "noise") })
+			state = select(2, place({}, state))
+			local after = place({ rating(2, 5, "noise"), rating(3, 20, "pollution") }, state)
+			assert.are.same({ "t2=2", "t3=3" }, tiles(after))
+		end)
+
+		it("is stable when placed again", function()
+			local items = { rating(1, 10, "noise"), rating(2, 20, "pollution"), rating(3, 30, "noise") }
+			local first, state = place(items)
+			local second = place(items, state)
+			assert.are.same(tiles(first), tiles(second))
 		end)
 	end)
 end)

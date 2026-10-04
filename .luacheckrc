@@ -1,6 +1,10 @@
 -- The game embeds Lua 5.2.2 (TransportFever3.exe strings); specs run on fengari (Lua 5.3).
 std = "lua52"
 
+-- No globals defined by assignment. Unused arguments and values are reported by default (see ignore below).
+allow_defined = false
+allow_defined_top = false
+
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
 read_globals = { "api", "app", "debugPrint", "_", "pGetText", "nGetText" }
@@ -30,4 +34,12 @@ files["src/ui_overhaul/content/ui_overhaul/gui/statistics_stations.lua"] = { max
 -- Wraps the engine's global orderedPairs and reads the React registry _react (base/init.lua).
 files["src/ui_overhaul/content/ui_overhaul/gui/station_terminals.lua"] = {
 	globals = { "orderedPairs" }, read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}
+-- Reads the React registry _react (base/init.lua): which recipes wrap builtin.Window.
+files["src/ui_overhaul/content/ui_overhaul/gui/minimize.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}
+-- Reads the React registry _react (base/init.lua): a builtin's recipe id.
+files["src/ui_overhaul/content/ui_overhaul/gui/builtin_wraps.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
 }

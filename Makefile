@@ -16,20 +16,27 @@ NODE       ?= $(shell command -v node 2>/dev/null || command -v node.exe 2>/dev/
 NPM        ?= $(shell command -v npm.cmd >/dev/null 2>&1 && echo "cmd.exe /c npm" || echo npm)
 LUA_TOOLS  := tools/lua
 LUACHECK_VERSION := 1.2.0
+# The Lua Language Server type-checks with .luarc.json. Used when installed; otherwise `make deps`
+# downloads it to tools/luals/server.
+LUALS_VERSION := 3.19.1
+LUALS      ?= $(or $(shell command -v lua-language-server 2>/dev/null),tools/luals/server/bin/lua-language-server)
 LUA_FILES  := $(shell find src spec tools/lua -name '*.lua' -not -path '*/node_modules/*' -not -path '*/vendor/*')
 
 .DEFAULT_GOAL := help
-.PHONY: help deps test lint test-ingame check content preview deploy validate undeploy package clean
+.PHONY: help deps test lint typecheck test-ingame check content preview gallery deploy validate undeploy package clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
-deps: ## Install the tooling (fengari, luacheck source, SVG renderer)
+deps: ## Install the tooling (fengari, luacheck source, Lua Language Server, SVG renderer)
 	cd $(LUA_TOOLS) && $(NPM) ci
 	cd tools/preview && $(NPM) ci
 	rm -rf $(LUA_TOOLS)/vendor/luacheck && mkdir -p $(LUA_TOOLS)/vendor/luacheck
 	curl -sSL https://github.com/lunarmodules/luacheck/archive/refs/tags/v$(LUACHECK_VERSION).tar.gz \
 		| tar xz --strip-components=1 -C $(LUA_TOOLS)/vendor/luacheck
+	rm -rf tools/luals/server && mkdir -p tools/luals/server
+	curl -sSL https://github.com/LuaLS/lua-language-server/releases/download/$(LUALS_VERSION)/lua-language-server-$(LUALS_VERSION)-linux-x64.tar.gz \
+		| tar xz -C tools/luals/server
 
 test: ## Run the offline specs (spec/*_spec.lua)
 ifneq ($(BUSTED),)
@@ -40,10 +47,13 @@ else
 endif
 
 lint: ## Run luacheck on src, spec and tools/lua, and reject syntax the game's Lua 5.2 lacks
-	@! grep -rnE --include='*.lua' '\\u\{|[^-/]//[^/]|[^~]~[^=]|<<|>>' src \
+	@# Full-line comments are skipped: type annotations such as table<K, table<K2, V>> never reach Lua.
+	@! grep -rnE --include='*.lua' '\\u\{|[^-/]//[^/]|[^~]~[^=]|<<|>>' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
 		|| { echo "Lua 5.3 syntax above (\\u{} escape, //, bitwise ops): the game embeds Lua 5.2"; exit 1; }
 	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src \
 		|| { echo "wrap CallOriginalRecipe in a layout: a recipe's root must be a layout (else the game UI drops)"; exit 1; }
+	@! grep -rnE --include='*.lua' '\braw(get|set|equal|len)\(' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
+		|| { echo "rawget/rawset/rawequal/rawlen are not there in the game's GUI Lua state (observed in game)"; exit 1; }
 ifneq ($(LUACHECK),)
 	"$(LUACHECK)" $(LUA_FILES)
 else
@@ -51,10 +61,14 @@ else
 	"$(NODE)" $(LUA_TOOLS)/run.js $(LUA_TOOLS)/lint.lua $(LUA_FILES)
 endif
 
-test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods)
-	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m))
+typecheck: ## Type-check all Lua files with the Lua Language Server (strict, see .luarc.json)
+	@test -x "$(LUALS)" || { echo "run 'make deps' first"; exit 1; }
+	"$(LUALS)" --check . --checklevel=Warning --trust_all_plugins --logpath=.lua-check
 
-check: lint test test-ingame ## Run lint and all tests
+test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods; ONLY="check_a check_b" runs just those GUI checks)
+	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(foreach c,$(ONLY),--only $(c))
+
+check: lint typecheck test test-ingame ## Run lint, the type check and all tests
 
 content: ## Regenerate the _content.json file lists of the mod and the testbench
 	tools/content_index.sh $(MOD_DIR) $(TESTBENCH)
@@ -70,6 +84,9 @@ validate: deploy ## Run the game's mod validation (launches the game briefly)
 
 undeploy: ## Remove the mod and the testbench from the staging area
 	tools/deploy.sh --remove $(MOD_DIR) $(TESTBENCH)
+
+gallery: ## Compose the mod.io gallery cards in assets/gallery/ (screenshots first: see docs/gallery.md)
+	tools/gallery/build.sh
 
 package: content preview ## Build the upload zip in dist/
 	@mkdir -p $(DIST)

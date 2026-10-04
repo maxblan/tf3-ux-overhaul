@@ -3,10 +3,17 @@
 # with the testbench's app script, waits for the scenarios to finish and prints their results.
 #
 # Usage: spec/ingame/run.sh [--timeout SECONDS] [--keep-testbench] [--save NAME] [--with-mod ID ...]
+#                           [--only CHECK ...] [--gallery [--vanilla]] [--language CODE]
 #   --save NAME    run on a copy of the savegame NAME (without .sav) instead of a new small map. The
 #                  copy is called uio_fixture; it and its autosaves are deleted afterwards.
+#   --only CHECK   run only the GUI checks of that name (and the fixture facts); repeatable
 #   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
 #                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
+#   --gallery      shoot the gallery scenes (gui_checks.lua) instead of running the checks, paused and
+#                  with only the game's own mods besides this one; needs --save. The cursor is parked
+#                  at the top edge before each shot, so nothing shows a hover state.
+#   --vanilla      with --gallery: without the mod, for the "before" shots
+#   --language CODE  run in that game language (e.g. en); the profile is restored afterwards
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
 set -euo pipefail
 
@@ -14,12 +21,20 @@ timeout=900
 keep_testbench=0
 save=""
 with_mods=()
+only=()
+gallery=0
+vanilla=0
+language=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--timeout) timeout="$2"; shift 2 ;;
 		--keep-testbench) keep_testbench=1; shift ;;
 		--save) save="$2"; shift 2 ;;
 		--with-mod) with_mods+=("$2"); shift 2 ;;
+		--only) only+=("$2"); shift 2 ;;
+		--gallery) gallery=1; shift ;;
+		--vanilla) vanilla=1; shift ;;
+		--language) language="$2"; shift 2 ;;
 		*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 done
@@ -55,7 +70,44 @@ if [ ! -f "$game_dir/steam_appid.txt" ]; then
 	exit 1
 fi
 
+if [ "$gallery" -eq 1 ] && [ -z "$save" ]; then echo "--gallery needs --save" >&2; exit 2; fi
+if [ "$vanilla" -eq 1 ] && [ "$gallery" -eq 0 ]; then echo "--vanilla needs --gallery" >&2; exit 2; fi
+
 "$repo/tools/deploy.sh" "$mod_dir" "$testbench_dir"
+
+# The game language lives in the profile (language = { code = "de", ... }); a backup is put back
+# however this script ends.
+profile="$userdata/profile.lua"
+profile_backup=""
+restore_profile() {
+	if [ -n "$profile_backup" ] && [ -f "$profile_backup" ]; then
+		cp "$profile_backup" "$profile" && rm -f "$profile_backup"
+	fi
+}
+# --gallery: large text and the full render resolution for sharp, readable crops (settings.lua, also
+# put back afterwards)
+settings="$userdata/settings.lua"
+settings_backup=""
+restore_settings() {
+	if [ -n "$settings_backup" ] && [ -f "$settings_backup" ]; then
+		cp "$settings_backup" "$settings" && rm -f "$settings_backup"
+	fi
+}
+if [ "$gallery" -eq 1 ]; then
+	settings_backup="$(mktemp)"
+	cp "$settings" "$settings_backup"
+	sed -i -E 's/^(\s*)fontScaleClass = "[A-Z]+",/\1fontScaleClass = "LARGE",/; s/^(\s*)resolutionScale = [0-9.]+,/\1resolutionScale = 1,/' \
+		"$settings"
+fi
+if [ -n "$language" ]; then
+	profile_backup="$(mktemp)"
+	cp "$profile" "$profile_backup"
+	sed -i -E '/language = \{/,/\}/ s/code = "[^"]*"/code = "'"$language"'"/' "$profile"
+	grep -q "code = \"$language\"" "$profile" \
+		|| { restore_profile; restore_settings; echo "could not set the language" >&2; exit 1; }
+	echo "language for this run: $language"
+fi
+trap 'restore_profile; restore_settings' EXIT
 
 remove_fixture() {
 	rm -f "$saves/$fixture_name".* "$saves/autosave_$fixture_name"_*
@@ -69,16 +121,23 @@ if [ -n "$save" ]; then
 	fixture_save="\"$fixture_name\""
 	echo "running on a copy of savegame '$save' ($fixture_name)"
 fi
-if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ]; then
+if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ "$gallery" -eq 1 ]; then
 	extra=""
 	for m in "${with_mods[@]}"; do extra="$extra\"$m\", "; done
+	only_list=""
+	for c in "${only[@]}"; do only_list="$only_list\"$c\", "; done
 	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
-	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s} }\n' "$fixture_save" "$extra" > "$staged_fixture"
+	flags=""
+	[ "$gallery" -eq 1 ] && flags="$flags gallery = true,"
+	[ "$vanilla" -eq 1 ] && flags="$flags vanilla = true,"
+	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s},%s }\n' "$fixture_save" \
+		"$extra" "$only_list" "$flags" > "$staged_fixture"
 	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
 fi
 
 launched_at=$(date +%s)
 shots_dir="$results_dir/shots-$(date +%Y%m%d-%H%M%S)"
+if [ "$gallery" -eq 1 ]; then shots_dir="$results_dir/gallery-$([ "$vanilla" -eq 1 ] && echo vanilla || echo mod)"; fi
 
 # Screenshots for visual review: the testbench logs "[testbench] SHOT <name>" and holds still for a
 # few seconds; this captures the primary screen (where the game runs, in front) into
@@ -86,16 +145,54 @@ shots_dir="$results_dir/shots-$(date +%Y%m%d-%H%M%S)"
 capture_screen() {
 	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Left,\$b.Top,0,0,\$bmp.Size); \$bmp.Save('$1')" < /dev/null > /dev/null 2>&1
 }
+# The cursor at the top edge, half way across (edge scrolling is off in the settings): no hover state.
+park_cursor() {
+	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point ([int](\$b.Left+\$b.Width/2)),\$b.Top" < /dev/null > /dev/null 2>&1
+}
+# A hover or a click the testbench asks for ("[testbench] MOUSE x y" / "CLICK x y", screen pixels): the
+# cursor goes a few pixels off and back, so the game sees it move, and stays there for the next shot.
+# The click helper is compiled before the game starts: compiling it while the game runs hung (observed).
+mouse_dll_win=""
+if [ "$gallery" -eq 1 ]; then
+	# on C: (.NET refuses to load an assembly from the WSL share, observed)
+	mkdir -p "$results_dir"
+	mouse_dll="$results_dir/uio_mouse.dll"
+	rm -f "$mouse_dll"
+	mouse_dll_win="$(wslpath -w "$mouse_dll")"
+	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -OutputAssembly '$mouse_dll_win' -TypeDefinition 'public static class UioMouse { [System.Runtime.InteropServices.DllImport(\"user32.dll\")] public static extern void mouse_event(int f, int dx, int dy, int d, int e); }'" < /dev/null
+	[ -f "$mouse_dll" ] || { echo "could not build the mouse helper" >&2; exit 1; }
+fi
+mouse_at() {
+	local click=""
+	if [ "${3:-}" = "click" ]; then
+		click="[Reflection.Assembly]::LoadFile('$mouse_dll_win') | Out-Null; Start-Sleep -Milliseconds 150; [UioMouse]::mouse_event(2,0,0,0,0); Start-Sleep -Milliseconds 80; [UioMouse]::mouse_event(4,0,0,0,0);"
+	fi
+	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point ($1 - 6),($2 - 6); Start-Sleep -Milliseconds 120; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point $1,$2; $click" < /dev/null >> "$shots_dir/mouse.log" 2>&1
+}
 watch_shots() {
-	local taken=0 names
+	set +e # a failed step must not end the watcher
+	local done_count=0 steps step hovering=0
 	while true; do
 		if [ -f "$log" ] && [ "$(stat -c %Y "$log")" -ge "$launched_at" ]; then
-			mapfile -t names < <(grep -a "\[testbench\] SHOT " "$log" | sed 's/.*SHOT //; s/[^A-Za-z0-9_.-]//g')
-			while [ "$taken" -lt "${#names[@]}" ]; do
+			mapfile -t steps < <(grep -aoE "\[testbench\] (SHOT [A-Za-z0-9_.-]+|MOUSE -?[0-9]+ -?[0-9]+|CLICK -?[0-9]+ -?[0-9]+)" "$log" \
+				| sed 's/^\[testbench\] //')
+			while [ "$done_count" -lt "${#steps[@]}" ]; do
+				read -r -a step <<< "${steps[$done_count]}"
 				mkdir -p "$shots_dir"
-				capture_screen "$(wslpath -w "$shots_dir")\\${names[$taken]}.png"
-				echo "$(date +%H:%M:%S) captured ${names[$taken]}" >> "$shots_dir/captures.txt"
-				taken=$((taken + 1))
+				echo "$(date +%H:%M:%S) ${step[*]}" >> "$shots_dir/mouse.log"
+				case "${step[0]}" in
+					MOUSE) mouse_at "${step[1]}" "${step[2]}"; hovering=1 ;;
+					CLICK) mouse_at "${step[1]}" "${step[2]}" click; hovering=1 ;;
+					SHOT)
+						mkdir -p "$shots_dir"
+						# the cursor out of the way, unless the shot shows what it hovers
+						if [ "$gallery" -eq 1 ] && [ "$hovering" -eq 0 ]; then park_cursor; sleep 1.5; fi
+						capture_screen "$(wslpath -w "$shots_dir")\\${step[1]}.png"
+						echo "$(date +%H:%M:%S) captured ${step[1]}" >> "$shots_dir/captures.txt"
+						hovering=0
+						;;
+				esac
+				done_count=$((done_count + 1))
 			done
 		fi
 		sleep 0.5
@@ -108,6 +205,10 @@ powershell.exe -NoProfile -NonInteractive -Command \
 
 watch_shots &
 watcher=$!
+# the watcher loops forever: stop it however this script ends (Ctrl-C, an error under set -e)
+trap 'kill "$watcher" 2> /dev/null || true; restore_profile; restore_settings' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 outcome="timeout"
 seen=0
 missing=0

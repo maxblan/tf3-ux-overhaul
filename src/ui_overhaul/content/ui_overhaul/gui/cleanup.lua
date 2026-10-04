@@ -4,6 +4,7 @@
 -- @module ui_overhaul.gui.cleanup
 local notification_util = require("::/game_mechanics/notifications/notification_util.tl")
 
+---@class uo.gui.cleanup
 local cleanup = {}
 
 local OLD_TYPES = {

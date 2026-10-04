@@ -1,0 +1,14 @@
+---@meta
+-- Types of gui/entity_window/view_manager.d.tl (no module of its own here).
+
+---Params of an entity window's content recipe.
+---@class game.gui.entity_window.view_manager.IEntityWindowParam: react.Param
+---@field keyEntity? Engine.Entity the entity shown (or keyNonEntity)
+---@field replacedEntity? Engine.Entity
+---@field keyNonEntity? string
+---@field gameCtx game.gui.main.game_context.GameContext
+---@field simple? boolean
+---@field isMapEditor? boolean
+---@field isSandboxMode? boolean
+---@field setActionFn fun(actionFn?: (fun(): react.TreeNodeId), key2?: string)
+---@field closeFn fun()

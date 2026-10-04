@@ -1,0 +1,24 @@
+---@meta
+-- Types of gui/line_vehicle_mgmt/vehicle_store.d.tl (no module of its own here).
+
+---@alias game.gui.line_vehicle_mgmt.vehicle_store.VehicleBrowserSortMode
+---| "Alphabetical"
+---| "Speed"
+---| "Capacity"
+---| "Cost"
+---| "RunningCosts"
+---| "Noise"
+---| "Pollution"
+---| "Comfort"
+---| "Power"
+---| "Thrust"
+---| "Weight"
+---| "Length"
+---| "LoadingSpeed"
+---| "YearFrom"
+
+---The vehicle store's sort state (VehicleStore.VehicleBrowserSort).
+---@class game.gui.line_vehicle_mgmt.vehicle_store.VehicleBrowserSort
+---@field mode game.gui.line_vehicle_mgmt.vehicle_store.VehicleBrowserSortMode
+---@field ascending boolean
+---@field groupTypes boolean

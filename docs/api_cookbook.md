@@ -359,6 +359,9 @@ local qualityData = api.engine.util.cargo.getCargoQualityDataAtStop(lineEntity, 
 - `CargoQualityData` is defined at `apidef/api/engine/util.d.tl:716-723`. It is userdata; call `:clone()` before you keep it in state (`cargo_react_util.tl:380`).
 - Count only, without quality: `api.engine.system.simEntityAtTerminalSystem.getLineStopSimEntitiesCount(line, stopIndex0, cargoTypeId)` (`system.d.tl:186-199`). It exists in the API but the base never calls it.
 - Waiting passengers grouped by destination stop: `getLineStopSimEntities(line, stopIndex0, passengerId)`, then `SIM_ENTITY_AT_TERMINAL.lineStop1` (`station_group.tl:648-690`). This is heavy: one component read per passenger.
+- The stop index must be one the line has. Rows of a stops table refresh on a timer, so a row can outlive its
+  stop by a refresh; read the stops from the `LINE` component in the same callback (`cards.lua` reads all stops
+  in the table's timer and its cells only look them up).
 - Cargo: the base shows no waiting-cargo count per stop anywhere. The station window counts passengers only.
   - In TF3, cargo is loaded from the stock lists of catchable industries and warehouses (`cargo_util.getInputOutputStocksForStation` → `catchmentAreaSystem.getStationCatchables(station, true)`, `cargo_util.tl:544-563`).
   - The `getCargoQualityDataAt*` docs say "cargo type (passengers allowed)", so calling `getCargoQualityDataAtStop(line, stopIndex0, cargoTypeId)` for each type from `getConfiguredStopCargoTypes` is the closest API. Whether it returns non-zero for cargo needs in-game verification.
@@ -425,6 +428,7 @@ local dataState = dataStateFn and dataStateFn(n.params, n.simParams) or nil
   - `notification_util` = `game_mechanics/game_mechanics/notifications/notification_util.tl` (functions at lines 12, 280, 294, 376);
   - `util` = `scripts/scripts/util.tl`.
 - **Hook rule:** `useDataState` calls `useStepStateTimer` internally (`line_warning.script.tl:181`). Call it only inside a dedicated child recipe with `meta = { localKey = tostring(id) }`, as `WarningIcon` (`statistics_react_util.tl:317-344`) and `ManagerNotificationWidgetEntry` do. Never call it in a variable-length loop inside one recipe.
+- **Same hooks on every render:** the hooks of one recipe instance are kept by position, so a recipe declares the same ones in the same order on every render, also after an error. A render that can fail does not choose between its own hooks and the base recipe in one recipe: `gui/fallback.lua` puts the hooks in a child recipe and has a parent with fixed hooks show the base after a failure. A callback of `useStepState`/`useStepStateTimer` runs inside the hook on the first render (`useStateLazy`, `engine_react_util.tl:74`, `:139`), so it must not raise either.
 - `line_station_warning` notifications persist on both the line and the station group (`entities = {line, stationGroup}`, `notifications.script.tl:187-192`), so they appear under the line too.
 - Problem notifications are created even when their type is ignored, which is the default for line, station and overcrowding, `initiallyIgnoredType = true` in `types/line_warning.res.lua:8`. They are only marked `dismissed=true, tracked=false`. They are dropped only when `ignored.fully` is set (`game_mechanics/game_mechanics/notifications/notification_util.tl:137-146`). So reading persisting notifications works in free play.
 - Ready-made cell: `statistics_react_util.ProblemsCell` (DataTable cell; needs `userParam.notificationState = entity2ids`, `statistics_react_util.tl:346-367`).
@@ -630,6 +634,7 @@ api.engine.util.vehicle.getRunningCost(vehicleEntity)       -- number, per year 
 api.engine.util.vehicle.getPartPrice(transportVehiclePart)  -- integer
 ```
 These are defined at `apidef/api/engine/util.d.tl:462-472`.
+- The player's vehicles: `api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE, { requireOwnedByPlayer = api.engine.util.getPlayer() })`. The engine applies the filter (`EntityFilters`, `apidef/api/engine.d.tl:1693-1713`; used by `G/statistics/statistic_vehicles.tl:322` and `LVM/manager_window.tl:1359`), so no `PLAYER_OWNED` read per vehicle is needed. `filterFn` in the same record is a Lua callback per entity ("very slow").
 
 ---
 
@@ -733,7 +738,10 @@ Module paths for `require`: `"::/game_mechanics/notifications/notification_util.
   (game ms; `notification_util.defaultAutoDismissDurationMs = 60000`, `notification_util.tl:10`), `simParams`.
 - Persistent entries are recomputed by the game script in 4 round-robin slices
   (`currentTick % 4`, `notifications.script.tl:13,49`) and diffed by `updatePersistentNotifications`
-  (`notification_util.tl:205-258`).
+  (`notification_util.tl:205-258`). The diff compares `params` with `deepEquals`, so a change of parameters
+  (for example a subsidy's `status` going from offered to active, `notifications.script.tl:462-489`) ends the old
+  entry (`dismissed = expired = true`) and adds a new one with a new id, timestamp and `playedInitialSound = false`.
+  The base ridge therefore plays Resolve and the initial sound, and shows the new icon at the end.
 - Thread: the state belongs to the game-script (engine) side. The GUI reads it read-only through the
   GameScript component (`notification_util.externalGetNotificationsStateNative`, `notification_util.tl:280-285`).
   It changes it only by sending script events (§5.4-5.6).
@@ -1028,7 +1036,7 @@ General rules:
 - **Respect mission locks** as the base does:
   - `gameCtx.filters:get().protectedEntities[entity]` (truthy means protected; type `{entity : ProtectionConfig|boolean}`, `gui/gui/main/game_context.d.tl:38-58`);
   - `game_react_globals.getDisableFeatures()[feature]`, where the features are `CreateNewLine`, `GameSpeedControl`, `GameSpeedPause`, `HudIconMaster`, `Layers`, `OpenEntityWindow`, `PerkHudIcons` (`gui/gui/main/disable_features.d.tl:3-11`).
-  - Only EOW plugins receive `gameCtx`. `protectedEntities` is set via the `setProtectedEntities` event (`game.tl:156-159`) and cannot be read without gameCtx. Mods that act outside an EOW should route through the base events (`duplicateVehicles`, or the vehicle window), which perform these checks themselves.
+  - Only EOW plugins receive `gameCtx`. `GameUIRoot` fills `protectedEntities` from the `setProtectedEntities` event (`game.tl:156-159`), which the mission script fires whenever the set changes (`mission_x/mission/mission_sim.script.tl:1239-1242`). Code without a gameCtx can keep its own copy from the same event in a `ModEntryPointExtension` plugin, which mounts with `GameUIRoot` (`game.tl:578-586`); the mod's `actions.lua` does that for the `uio.action` event. The base events (`duplicateVehicles`) check the mission lock themselves; a send to depot does not, so check `protectedEntities` before you sell on arrival.
 
 ### 6.1 Clone a vehicle into its line: event `duplicateVehicles`
 Handler: `LVM/manager_window.tl:8494-8561`, mounted in `ManagerEntryPoint`. Param type `DuplicateVehiclesParam` (`LVM/manager_window.d.tl:131-140`):
@@ -1076,6 +1084,7 @@ else                                                              -- replace
 end
 ```
 - **Surprise:** pass a non-nil `onBuy`; otherwise the clone stays in the depot. The vehicle window passes an empty function for this reason.
+- `addFeedback` is how the player learns why nothing was bought (mission error, "Could not clone vehicles (not enough money).", "Could not find suitable depot."). The vehicle window renders `feedback_list_util.FeedbackList(react.ref(ref), {})` under its action buttons and forwards to `ref:get():getApi().addFeedback(message, mode, dialogData, nil, id, true)` while `not ref:hasExpired()` (`EOW/vehicle/vehicle.tl:302-311, 627`). The stylesheet for it applies inside any entity window (`R::EntityWindowContent R::FeedbackList`, `entity_window.css.lua:147-157`). A function that only logs leaves the click without any visible result.
 - `vehicle_react_util.onBuy` does NOT EXIST. `onBuy` is a callback parameter, and `vehicle_react_util.getLineAndDepot` does not exist either.
 - `makeVehicleBuyCmd(player, depot, tvc) -> VehicleBuyCommandData{ resultVehicleEntity }` (`cmd.d.tl:892, 425-433`) and `makeVehicleSetLineCmd(vehicle, line, stopIndex0)` (`cmd.d.tl:922`).
 
@@ -1117,6 +1126,7 @@ The LVM bulk sell asks for confirmation first, using `addFeedback(text, "Questio
   The cart path concatenates `vehiclePartsLists` into `vehicles`, with `vehicleGroups = {#parts per list}` and `muFileNames = {muFileName per list}` (`vehicle_store_window.tl:4181-4203`).
   Multiple units expand through `api.res.multipleUnitRep.get(id).vehicles`, calling `makePart(api.res.modelRep.find(v.name), v.forward, color)` for each entry (`:4107-4113`).
 - `purchaseTime` stays 0 in `makePart`. `HandleVehicleChanges` sets it to "now" (`vehicle_react_util.tl:333-341`).
+- The vehicle keeps its entity id: `VehicleReplaceCommandData` has no result entity (`cmd.d.tl:436-444`). Nothing in the GUI is told about the new model; the base VehicleWidget re-reads `transportVehicleConfig` on a `useStepStateTimer` (`LVM/vehicle_react_util.tl:118-166`). Anything cached by vehicle id must re-read the config the same way (`lvm_models.lua` does every 2 s and before each action). Unverified: whether the Line Manager keeps the replaced vehicle in its list (it drops entries whose `revision.num[1]` grew, `entity_util.entityChanged0`); the in-game check `lvm_models_after_replace` logs the list size.
 - Direct: `api.cmd.sendCommand(api.cmd.makeVehicleReplaceCmd(vehicleEntity, tvc))` (`cmd.d.tl:893-898`). The store also fires `api.gui.fireGuiScriptEvent("vehicleStore", "mission.buyVehicle", {...})` before buying (`:4226-4232`); mods that bypass it skip mission checks.
 
 ### 6.5 Open the Line/Vehicle Manager: event `openVehicleManager`
@@ -1351,6 +1361,9 @@ return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, child
 - `ColumnDescParam` (`scripts/scripts/builtin.d.tl:1137-1153`): `name`, `tooltip`, `path` (header icon),
   `headerStyleClass`, `weight`, `recipe` (cell recipe receiving `Builtin.TableCellParam {rowKey, colKey, userParam}`, `:1125-1129`),
   `getCompareValue(rowKey) → any` (C++ sort; strings use natural compare unless `forceLexicographicalStringComparison`).
+  The base computes the value when the table sorts, either from the engine (`statistic_depots.tl:146-159`) or from
+  the table's state (`getProblemsCompareValue` reads `tableState:old()`). A column whose cell shows data the
+  table's own timer already read can sort by that copy, which is cheap and matches the cell (`cards.lua`, Waiting).
 - `DataTableParam` (`builtin.d.tl:1160-1181`): `columns`, `rowKeys : {integer}`, `preferredInitialSelectionRowKey`,
   `disableSortKey`, `iaSort`, `compareFn` (deprecated, use `getCompareValue`), `userParam` (given only to
   newly created cells, existing cells are not updated), `fnUserFilter(rowKey)`, `initialSortColumn = {colIndex, asc}`,

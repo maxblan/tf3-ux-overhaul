@@ -7,11 +7,30 @@ local statistics_react_util = require("::/gui/statistics/statistics_react_util.t
 
 local statistics_common = {}
 
+---@class uo.statistics_common.QuickFilter
+---@field key string
+---@field label string
+
+---@class uo.statistics_common.QuickFilterBarOpts
+---@field filters uo.statistics_common.QuickFilter[]
+---@field selected string
+---@field onSelect fun(key: string)
+---@field tagPrefix string
+---@field totalsId string
+---@field totalsText string
+---@field amountLabel string
+---@field amount integer
+---@field amountClass? string
+---@field extra? react.TreeNodeId
+
+---@return integer
 local function game_time()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
 
 --- Balance of the last 12 months, as the statistics "Balance" columns show it. Reads only the engine.
+---@param entity Engine.Entity
+---@return integer
 function statistics_common.balance(entity)
 	local gameTime = game_time()
 	local fromTime = math.max(gameTime - api.util.getDefaultYearDuration(), 0)
@@ -20,7 +39,9 @@ end
 
 --- A cached statistics_common.balance: values are reused for one second of game time, so quick
 -- filters and totals do not query the journal every frame. Reads only the engine.
+---@return fun(entity: Engine.Entity): integer
 function statistics_common.makeBalanceCache()
+	---@type { time: integer, values: table<Engine.Entity, integer> }
 	local cache = { time = -1, values = {} }
 	return function(entity)
 		local gameTime = game_time()
@@ -38,6 +59,9 @@ end
 
 --- True if the entity has active problem notifications.
 -- getProblemsCompareValue returns { count, ids } (statistics_react_util.tl).
+---@param notificationsState table<Engine.Entity, integer[]>?
+---@param entity Engine.Entity
+---@return boolean
 function statistics_common.hasProblems(notificationsState, entity)
 	local value = statistics_react_util.getProblemsCompareValue(notificationsState or {}, entity)
 	if type(value) == "table" then return (value[1] or 0) > 0 end
@@ -54,7 +78,11 @@ end
 -- opts.amountLabel  label in front of the amount ("Balance")
 -- opts.amount       money value
 -- opts.amountClass  style classes of the amount (default "font-scale-body")
+-- opts.extra        optional node after the filters (for example a drop-down list)
+---@param opts uo.statistics_common.QuickFilterBarOpts
+---@return react.TreeNodeId
 function statistics_common.QuickFilterBar(opts)
+	---@type builtin.ToggleButtonGroupChildParam[]
 	local buttons, selectedIndex = {}, 1
 	for i, filter in ipairs(opts.filters) do
 		buttons[i] = { content = builtin.TextView{ meta = { class = "font-scale-body" }, text = filter.label },
@@ -73,6 +101,7 @@ function statistics_common.QuickFilterBar(opts)
 					if filter then opts.onSelect(filter.key) end
 				end,
 			},
+			opts.extra,
 			gui_react_util.makeHorizontalSpacer(),
 			builtin.TextView{ meta = { class = "font-scale-body", id = opts.totalsId }, text = opts.totalsText },
 			builtin.TextView{ meta = { class = "font-scale-body" }, text = opts.amountLabel },
@@ -83,11 +112,16 @@ function statistics_common.QuickFilterBar(opts)
 end
 
 --- Style classes of a balance: red when negative, green otherwise.
+---@param value number
+---@return string
 function statistics_common.balanceClass(value)
 	return value < 0 and "font-scale-body, negative" or "font-scale-body, positive"
 end
 
 --- True if two arrays of entities are equal (faster than deepEquals for long arrays).
+---@param a Engine.Entity[]?
+---@param b Engine.Entity[]?
+---@return boolean
 function statistics_common.sameArray(a, b)
 	if a == b then return true end
 	if a == nil or b == nil or #a ~= #b then return false end
@@ -98,6 +132,9 @@ function statistics_common.sameArray(a, b)
 end
 
 --- True if two sets ({ [entity] = true }) are equal.
+---@param a table<Engine.Entity, boolean>?
+---@param b table<Engine.Entity, boolean>?
+---@return boolean
 function statistics_common.sameSet(a, b)
 	if a == b then return true end
 	if a == nil or b == nil then return false end
@@ -112,7 +149,10 @@ end
 
 --- A string that changes whenever the base filter of the statistics window changes (search, carrier
 -- categories, "only visible"), used to refilter at once instead of waiting for the next refresh.
+---@param params game.gui.statistics.statistics.StatisticsRecipeParams
+---@return string
 function statistics_common.filterSignature(params)
+	---@type string[]
 	local categories = {}
 	for index, enabled in pairs(params.filterShowCategories or {}) do
 		if enabled then categories[#categories + 1] = tostring(index) end

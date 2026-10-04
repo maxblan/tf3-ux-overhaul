@@ -25,14 +25,30 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Line Manager | *Select Terminals* with three buttons per terminal | `terminals.lua` | wraps the module function `popover_react_util.PopoverWindowContent`; swaps only a popover with the Line Manager's parameters |
 | Station window | *Select Terminals* button for each line stop in the Terminals list | `station_terminals.lua`, `terminals.lua` | wraps the global `orderedPairs` and `gui_react_util.makeHorizontalSpacer` while the file-local recipe `TerminalStops` renders; off while another mod replaces the station window |
 | Line window | *Add Vehicle* and *Remove Vehicle* in the Vehicles card | `line_vehicles.lua` | replaces `line_eow.LineVehiclesPlugin` |
-| Line window | Stops card, with a *Select Terminals* button per stop | `cards.lua`, `terminals.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
-| Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
+| Line window | Stops card, with a *Select Terminals* button per stop; unreachable stops greyed with the base problem text | `cards.lua`, `terminals.lua`, `core/line_problems.lua` | `react-plugin ::LineEowExtensionPoint`, `order = 55` |
+| Line Manager | *Select Terminals*: preferred terminal highlighted, unusable or unreachable terminals greyed with the reason | `terminals.lua`, `core/line_problems.lua` | as *Select Terminals* above |
+| Line Manager | add-stop hover names a missing path from the stop before or to the next | `lvm_tweaks.lua` | replaces `manager_tooltips_util.LMAddStop`; `api.engine.util.pathfinding.findPathNodeToNode` |
+| Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua`, `statistics_common.css.lua` (quick-filter bar, all four tabs) | Lua conversions of the base tabs, replacing them |
+| Statistics | Warehouses tab: cargo icons with quantities, cargo picker that filters and sorts, quick filters, totals | `statistics_warehouses.lua` | Lua conversion of the base tab, replacing it |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
-| Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |
+| Windows | minimize button in the title bar of every window with a title and a close button | `minimize.lua` | wraps `builtin.Window` (header slot: the title row with the title, an own rename field and the button, since the engine draws the header before its title; content: hidden by class while folded; windows of a `builtin.Window` wrapper recipe also get `uio-window-folded`, which drops the fixed height of Finances, Company and Statistics) and `react.RegisterWrapperRecipe` (window recipes registered later must still wrap the base builtin, or the game crashes) |
+| Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | wraps `content_card.makeContentCardsCollapsibleFunctions` (calls the previous one with `onlyOneExpandable = false` for sections, the caller's value for collapse-all); replaces `entity_window_util.ActionButtonBar` |
+| Map | vehicle hover tooltip: line, next stop, speed, load, condition, delivery quality | `vehicle_tooltip.lua`, `vehicle_info.lua` | replaces `game_tooltips.DefaultEntityToolTip`, calls the original |
+| Line Manager, line window | load and condition in vehicle rows, the five figures in the tooltip | `lvm_rows.lua`, `line_vehicles.lua`, `vehicle_info.lua` | as the rows and Vehicles card above |
+| Vehicle window | Performance card (rating, slope speeds loaded and empty); slope speeds in the store cart's Performance tooltip | `performance.lua` | `react-plugin ::VehicleEowExtensionPoint`, `order = 55`; wraps `vehicle_util.getPowerRatingTextAndToolTip` and `builtin.TextView` while `VehicleCart` renders |
+| Industry window | Development card (recipes, level, expansion chance, blockers), Served by card (lines) | `industry_cards.lua`, `core/industry_development.lua` | `react-plugin ::IndustryEowExtensionPoint`, `order = 15` |
+| Industry window | eye button shows or hides the red area of a blocked expansion | `industry_cards.lua` | replaces the exported `IndustryWindow` (calls the original with a wrapped `setActionFn`); wraps `builtin.LayerConfig` while that action renders to drop `plotsRenderableConfig` |
 | Town window | growth bottleneck and progress to the next level as text | `window_tweaks.lua` | patches `content_card.makeRecipeAndParam` while `TownLevelPlugin` renders |
 | Construction | locked perk says *Promotion pending* | `window_tweaks.lua` | patches `company_util.getConstructionDisableReason` (GUI state only) |
 | Construction | merged Rail/Tracks and Road/Roads menus, fastest track first, module tab order, bulldozer warning | `construction.lua` | patches `construction_react_util.getMenuCategories` and `getActionParams` |
+| Construction | settings panel and Settings window stay above the game bar at large scales | `construction.css.lua` | CSS: height limits in `vh`, bottom padding per text scale |
+| Construction | gradient, curve radius, elevation, bridge height and tunnel depth in the build tooltip | `construction.lua`, `core/geometry.lua` | `getActionParams`: wraps `getProposalStringsFn` of the track and street builders |
+| Sliders | mouse wheel, typed values | `sliders.lua`, `core/slider_values.lua` | wraps the module fields `builtin.Slider` (recipe `UioSlider` around the base slider) and `script_param_util.buildScriptParamCompSimple` (Lua copy of the local `ScriptParamSliderAndText`); off inside `SettingsPage` |
 | Notifications | icons of the same kind grouped with a count | `notifications.lua` | Lua conversion of the base ridge (`notification_popups.tl`), replacing it |
+| Notifications | icons of every type in darker shades of the game's colours (caution amber, problem red, info blue, achievement green, unknown grey; all ≥ 7:1 to white); subsidy icons coloured by state (blue/orange/green/red/grey, all ≥ 7:1 to white), timer ring plain white | `notifications.lua`, `notifications.css.lua` | as the ridge above; a state class around the base icon recipes |
+| Subsidies | offer expiry ring and text, labelled time limit and time left, effect duration | `subsidies.lua` | patches `subvention_util.makeDefaultCardData` (GUI state only) |
+| Finance window | income statement, cash flow, balance sheet next to the game's table | `finances.lua`, `core/statements.lua` | replaces the exported `FinancesTable` (finances_table.tl); *Details* calls the original |
+| Map | passenger and cargo catchment areas of all stations, switched separately, saved with the game | `catchment.lua` | `react-plugin ::MainModButtonAreaExtension` (toggles); wraps `selector_react_util.makeDefaultSelectorCombinedFn` and, during its call, `builtin.ActionDescriptor` to add a `LayerConfig` |
 | Game bar | Earnings tooltip with the cash flow of the last 30 days and the 30 days before | `earnings.lua` | replaces `GameBarEarningsPlugin` |
 | Vehicle store | newest model first and preselected (list layout) | `store_tweaks.lua` | patches `react.useState` for the one sort state `{ mode = "YearFrom", ascending = true, groupTypes = true }` |
 
@@ -41,9 +57,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 ```
 src/ui_overhaul/content/ui_overhaul/
   core/      pure Lua, no engine access; offline specs run against the mock engine
-  engine/    snapshot.lua reads the game into plain tables; store.lua caches the snapshot
   gui/       one module per change, each with a .res.lua resource and a .script.lua stub
-  logger.lua
 ```
 
 ### Guarded stubs
@@ -55,7 +69,7 @@ A mistake in a GUI mod can take the whole game UI down: an error that escapes a 
 
 For a plugin, the stub registers a recipe that renders `guard.plugin(path, field)`. If the module fails to load or the call raises an error, the recipe renders an empty `BoxLayout` and logs one `[ui_overhaul] disabled ...` line.
 
-For a replacement, the stub's `doReplaceFn` calls the module's `install(replacement_api)` inside `pcall`. If that fails, nothing is replaced, the game keeps its vanilla screen and the stub logs one `[ui_overhaul]` line. A replacement recipe that fails while rendering falls back to the base recipe through `react.CallOriginalRecipe` (for example `notifications.lua`, which then keeps showing the base ridge for the session).
+For a replacement, the stub's `doReplaceFn` calls the module's `install(replacement_api)` inside `pcall`. If that fails, nothing is replaced, the game keeps its vanilla screen and the stub logs one `[ui_overhaul]` line. A replacement recipe that fails while rendering falls back to the base recipe for the rest of the session through `gui/fallback.lua`: the mod's render is a child recipe that owns its hooks, and a parent with fixed hooks shows the base (`react.CallOriginalRecipe`) from the GUI step after the failure, so no recipe instance changes the hooks it declares. The parent keeps what the game expects of the replaced node: the api the base recipe provides (the tool stack, the Statistics Lines tab), its focus child, the input actions the game forwards to it (the ridge's IA_NOTIFICATIONS_OPEN, game.tl:389-390), its component settings, and nothing at all where the base renders nothing (the Earnings display in the map editor). Its wrapper layout is unspaced and fills the node (`fallback.css.lua`), since base rules such as `R::GameBarEarningsPlugin BoxLayout` select every layout under the replaced recipe. Used by the notification ridge, the tool stack, the Earnings display, the Finances table, the four Statistics tabs, the terminal popover and (with its content recipe as the child) the line window's Vehicles card. The mod's own card recipes declare their hooks first and render an empty layout when the rest fails.
 
 ### Extension points, replacements and module-field wraps
 
@@ -69,19 +83,20 @@ The README lists every recipe the mod replaces, so players can see which other m
 
 ### Data and actions
 
-- The entry point (`entry.lua`) is mounted for the whole session. It refreshes the shared snapshot in `engine/store.lua` every `store.REFRESH_SECONDS` (2 s), drives `defer.lua`, runs `cleanup.lua` (which ends persistent notifications of `ux_overhaul` types that the mod does not define), and owns the `uio.action` event that other mods and the testbench use.
+- The entry point (`entry.lua`) is mounted for the whole session. It runs `cleanup.lua` (which ends persistent notifications of `ux_overhaul` types that the mod does not define), keeps a copy of the mission's protected entities for `actions.lua`, and owns the `uio.action` event that other mods and the testbench use.
+- There is no shared snapshot of the network. Each widget reads only what it shows, while it is shown.
 - Widgets read engine data with `engine_react_util.useStepStateTimer`. Reads over a whole town or network use the parallel variants (`useStepStateParallelSimple`).
-- Timer callbacks only read the engine. They must not call GUI-thread functions, including `_()`, so the snapshot holds untranslated base-game string keys and the GUI translates them when it renders. See [CONTRIBUTING.md](../CONTRIBUTING.md#rules-the-game-enforces).
-- Actions go through the base game's own events and helpers where they exist (`duplicateVehicles`, `selectEntity{stack = true}`, `openVehicleManager`, `openStatisticsWindow`, `openFinanceWindow`), so the base checks for money, depots and mission locks apply. Otherwise they send `api.cmd.make*Cmd` with a callback. The mod respects `gameCtx.filters.protectedEntities`, so campaign missions keep working.
+- Timer callbacks only read the engine. They must not call GUI-thread functions, including `_()`, so they return untranslated base-game string keys and the GUI translates them when it renders. See [CONTRIBUTING.md](../CONTRIBUTING.md#rules-the-game-enforces).
+- Actions go through the base game's own events and helpers where they exist (`duplicateVehicles`, `selectEntity{stack = true}`, `openVehicleManager`), so the base checks for money, depots and mission locks apply. Otherwise they send `api.cmd.make*Cmd` with a callback. The mod respects `gameCtx.filters.protectedEntities`, so campaign missions keep working: every path that sells a vehicle checks it first, from the window's `gameCtx` or, for the `uio.action` event, from the copy the entry point keeps from the same `setProtectedEntities` event. The reasons the game gives for refusing (money, mission lock, protected vehicle, depot) appear in the window's feedback list, as in the vehicle window; without a window they go to the game log.
 - Recipe names of the mod's own recipes start with `Uio`, events with `uio.`, and all variables are `local`. CSS selectors and event names are global and shared with other mods.
 - `GameUIRoot`, `HudIconMasterGame` and `PerkHudIcon` are never replaced; campaign missions replace the last two.
 
 ### Testing
 
-- Offline: specs for `core/` and `engine/` against the mock engine (`make test`).
-- In game: `make test-ingame` starts the game with the testbench in `spec/ingame/ui_overhaul_testbench/`. Its GUI checks fire `uio.*` events and test `api.gui.byId.isVisibleRecursive("uio.…")` for PASS or FAIL. `spec/ingame/run.sh` also fails on `ReactFramework::Load() failed` and on React errors in `stdout.txt`.
+- Offline: specs for `core/` and for the engine-free parts of `gui/` against the mock engine (`make test`).
+- In game: `make test-ingame` starts the game with the testbench in `spec/ingame/ui_overhaul_testbench/`. `ONLY="…"` runs just the named checks, which makes bisecting a native crash a matter of minutes. Its GUI checks fire `uio.*` events and test `api.gui.byId.isVisibleRecursive("uio.…")` for PASS or FAIL. `spec/ingame/run.sh` also fails on `ReactFramework::Load() failed` and on React errors in `stdout.txt`.
 - `api.gui.camera.takeScreenshot` renders without the UI, and `byId.getSize` returns 0×0 for anything that is not a window, so GUI checks use `byId.isVisible` and CSS-driven probes.
-- Every text exists in English and German (`tools/strings_check.py`).
+- Every text exists in all the game's languages (`en`, `de`, `fr`, `it`, `es`, `nl`, `ja`, `ko`, `pl`, `pt_BR`, `ru`, `zh_CN`, `zh_TW`, the game's own language folders; `tools/strings_check.py`).
 
 The gates and how to check what players see are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -123,5 +138,5 @@ Community mods that use the same hooks:
 
 - Game updates. The mod depends on internal module paths and exported recipes, which are not a public API. After a game patch, re-run `tools/extract_game_sources.sh` and diff the sources. Replacements stay few and call the original recipe where they can, and each stub falls back to the vanilla screen when its module fails.
 - Mod conflicts. Only one mod can replace a given recipe; the one that registers last wins. The README lists the replaced recipes.
-- Performance on large networks. Widgets read the engine on timers or through parallel state, and the shared snapshot is refreshed once for all of them.
+- Performance on large networks. Widgets read the engine on timers or through parallel state, and only while they are shown; nothing reads the whole network in the background.
 - Savegames. The mod changes only the GUI and adds no game script, so it can be added to and removed from a savegame.

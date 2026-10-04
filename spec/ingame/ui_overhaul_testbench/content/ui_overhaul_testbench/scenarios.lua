@@ -12,4 +12,13 @@
 -- state between game script calls): pass everything through `area`, not through upvalues.
 -- GUI checks live in gui_checks.lua.
 -- @module ui_overhaul_testbench.scenarios
-return {}
+
+---@class uo.testbench.Scenario
+---@field name string
+---@field build fun(area: uo.testbench.Area)
+---@field wait? integer
+---@field check fun(area: uo.testbench.Area): boolean, string?
+
+---@type uo.testbench.Scenario[]
+local scenarios = {}
+return scenarios

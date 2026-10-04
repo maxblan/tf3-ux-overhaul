@@ -3,7 +3,8 @@ name: CI
 # The mod runs inside Transport Fever 3, which is not available on a runner. The in-game tests
 # (make test-ingame) and the game's own validator (make validate) start the game, so they run
 # locally before a release. CI runs the part that needs no game: luacheck with the Lua 5.2 syntax
-# rules, the offline specs on fengari, the translation file and the content index.
+# rules, the strict Lua Language Server type check, the offline specs on fengari, the translation
+# file and the content index.
 
 on:
   push:
@@ -25,7 +26,8 @@ jobs:
         with:
           node-version: "20"
 
-      # fengari (Lua 5.3 in node) for the specs, the luacheck sources and the SVG renderer.
+      # fengari (Lua 5.3 in node) for the specs, the luacheck sources, the Lua Language Server and the
+      # SVG renderer.
       - name: Install the tooling
         run: make deps
 
@@ -33,6 +35,11 @@ jobs:
       # `return react.CallOriginalRecipe(...)`. Both only show up at runtime, where they break the game's whole UI.
       - name: Lint
         run: make lint
+
+      # Every diagnostic group in .luarc.json is an error, including values of unknown type. The game
+      # API comes from the stubs in types/.
+      - name: Type check
+        run: make typecheck
 
       - name: Offline specs
         run: make test
