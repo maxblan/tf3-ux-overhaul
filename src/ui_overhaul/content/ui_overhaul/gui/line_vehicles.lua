@@ -1,7 +1,9 @@
 --- The line window's "Vehicles" card with two vanilla action buttons under the vehicle table:
 -- "Add Vehicle" (clone the line's newest vehicle onto the line) and "Remove Vehicle" (send the
 -- oldest to a depot and sell it there). Adding or removing a vehicle no longer needs the Line
--- Manager or the vehicle store.
+-- Manager or the vehicle store. Each vehicle row also shows its load and a condition icon between
+-- the name and the vehicle icon; their tooltip names the next stop, speed, load, condition and
+-- delivery quality (vehicle_info.lua).
 -- Replaces the exported base plugin recipe line_eow.LineVehiclesPlugin (react-replacement-config,
 -- see line_vehicles.script.lua). The vehicle table is a copy of the base one, registered under the
 -- base recipe names so the base stylesheet applies unchanged. If rendering fails, the base card is
@@ -18,6 +20,7 @@ local vehicle_react_util = require("::/gui/line_vehicle_mgmt/vehicle_react_util.
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local actions = require("/ui_overhaul/gui/actions.lua")
+local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 
 local line_vehicles = {}
 
@@ -29,12 +32,42 @@ local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
 
--- Copy of base LineTableCellVehicle (line_eow.script.tl), same name for the base stylesheet.
+-- Load and condition of a vehicle, the five figures in the tooltip.
+local Status = react.RegisterRecipe("UioLineVehicleStatus", function(params)
+	local state = engine_react_util.useStepStateTimer(function()
+		local ok, info = pcall(vehicle_info.read, params.vehicle)
+		return ok and info or nil
+	end, 1.0)
+	local info = state:old()
+	if not info then return horizontal{} end
+	local ok, tooltip = pcall(vehicle_info.tooltip, info, false)
+	tooltip = ok and tooltip or nil
+	local fraction = vehicle_info.load_fraction(info)
+	return builtin.BoxLayout{
+		meta = { class = "uio-line-vehicle-status" },
+		orientation = builtin.type.Orientation.Horizontal,
+		children = {
+			builtin.TextView{
+				meta = { class = "font-scale-body, uio-line-vehicle-load", tooltip = tooltip },
+				text = fraction and api.util.toStringPercentPrecision(fraction, 0) or "",
+			},
+			info.condition and builtin.ImageView{
+				meta = { class = "uio-line-vehicle-condition", tooltip = tooltip },
+				path = vehicle_util.getConditionIcon(info.condition),
+				scaling = builtin.type.ImageViewScaling.AutoFit,
+			} or nil,
+		},
+	}
+end)
+
+-- Copy of base LineTableCellVehicle (line_eow.script.tl), same name for the base stylesheet; the
+-- status sits between the name and the vehicle icon.
 local CellVehicle = react.RegisterRecipe("LineTableCellVehicle", function(params)
 	return horizontal{
 		line_react_util.NameTextView{
 			entity = params.rowKey, locationButton = true, stackEntityOpen = true, editMode = false,
 		},
+		Status{ vehicle = params.rowKey },
 		vehicle_react_util.VehicleWidget{ vehicleEntities = { params.rowKey } },
 	}
 end)

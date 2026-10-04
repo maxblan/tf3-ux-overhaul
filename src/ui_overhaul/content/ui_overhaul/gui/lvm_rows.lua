@@ -1,6 +1,8 @@
 --- Status in the Line Manager's rows, where the player already looks:
 --   line rows:    cargo icons, vehicle count and the 12-month balance (red when losing money)
---   vehicle rows: age (red once the lifespan is reached)
+--   vehicle rows: load (in % of the capacity), a condition icon and the age (red once the lifespan
+--                 is reached); the row's tooltip names the next stop, speed, load, condition and
+--                 delivery quality (vehicle_info.lua)
 -- Wraps the exported base recipe line_react_util.ManagerNotificationWidget, which the base renders
 -- at the end of every line, depot and vehicle row (react-replacement-config, see lvm_rows.script.lua);
 -- the base problem icons stay. Uses the rows' own text style (font-scale-body).
@@ -13,6 +15,7 @@ local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local cargo_util = require("::/gui/main/cargo_util.tl")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
+local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 
 local lvm_rows = {}
 
@@ -87,7 +90,9 @@ local function read(entity)
 	local tv = api.engine.getComponent(entity, api.type.ComponentType.TRANSPORT_VEHICLE)
 	if tv then
 		local purchase_and_lifespan = vehicle_util.getMinPurchaseTimeAndLifespan(tv)
-		return { kind = "vehicle", purchase = purchase_and_lifespan[1], lifespan = purchase_and_lifespan[2], now = t }
+		local ok, info = pcall(vehicle_info.read, entity)
+		return { kind = "vehicle", purchase = purchase_and_lifespan[1], lifespan = purchase_and_lifespan[2], now = t,
+			info = ok and info or nil }
 	end
 	return nil
 end
@@ -133,7 +138,23 @@ local function render_vehicle(d)
 		total = api.util.toStringPercentPrecision((d.now - d.purchase) / d.lifespan, 0),
 		age = api.engine.util.formatAge(d.now, d.purchase + d.lifespan),
 	})
-	return horizontal({ text(age, reached and "font-scale-body, negative" or "font-scale-body", tooltip) }, "uio-lvm-info")
+	local children = {}
+	local info = d.info
+	if info then
+		local status = vehicle_info.tooltip(info, false)
+		local fraction = vehicle_info.load_fraction(info)
+		children[#children + 1] = text(fraction and api.util.toStringPercentPrecision(fraction, 0) or "",
+			"font-scale-body, uio-lvm-load", status)
+		if info.condition then
+			children[#children + 1] = builtin.ImageView{
+				meta = { class = "uio-lvm-condition", tooltip = status },
+				path = vehicle_util.getConditionIcon(info.condition),
+				scaling = builtin.type.ImageViewScaling.AutoFit,
+			}
+		end
+	end
+	children[#children + 1] = text(age, reached and "font-scale-body, negative" or "font-scale-body", tooltip)
+	return horizontal(children, "uio-lvm-info")
 end
 
 local function render(entity)

@@ -19,5 +19,11 @@ function data()
 	add("R::UioStopsTable R::UioStopCell R::Component!uio-stop-unreachable R::NameTextView",
 		{ size = { 200, -1 }, maxSize = { 200, -1 } })
 	add("R::UioStopCell ImageView!uio-stop-alert", { size = { 16, 16 }, margin = { 0, 0, 0, 4 }, gravity = { 0, 0.5 } })
+	-- line window Vehicles card (line_vehicles.lua): load and condition between the 180 wide name and
+	-- the vehicle icon, inside the vanilla 300 wide cell
+	add("R::LineVehiclesTable R::UioLineVehicleStatus BoxLayout!uio-line-vehicle-status",
+		{ innerSpacing = { 4, 0 }, margin = { 0, 0, 0, 6 }, gravity = { 0, 0.5 } })
+	add("R::LineVehiclesTable TextView!uio-line-vehicle-load", { size = { 40, -1 }, textAlignment = { 1, 0.5 } })
+	add("R::LineVehiclesTable ImageView!uio-line-vehicle-condition", { size = { 16, 16 }, gravity = { 0, 0.5 } })
 	return result
 end

@@ -8,7 +8,7 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 
 ### Line Manager
 
-- Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the age, in red once the lifespan is reached.
+- Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the load, a condition icon and the age, in red once the lifespan is reached; their tooltip names the next stop, speed, load, condition and delivery quality.
 - A row above the vehicle list shows each vehicle model in it with its count. Clicking a model selects exactly those vehicles; *In all lines* adds that model's vehicles from every line, so one Replace, Sell or Send to Depot reaches all of them. Shift+click on a vehicle selects all listed vehicles of its model.
 - In *Select Terminals*, each terminal has three buttons (Don't Use, Alternative, Preferred) instead of a drop-down list, so a change takes one click.
 - In *Select Terminals*, the preferred terminal is highlighted. Terminals the line cannot use (another kind of vehicle, a passenger terminal on a freight line and the reverse) or cannot reach (no path, with the missing piece such as catenaries) are greyed, and their tooltip says why. This also works when the popover is opened from the station or line window.
@@ -23,11 +23,14 @@ A Transport Fever 3 mod that makes the game's own screens quicker to read and to
 
 ### Line window
 
+- Each vehicle in the Vehicles card shows its load and a condition icon, with the next stop, speed, load, condition and delivery quality in the tooltip.
 - The Vehicles card has *Add Vehicle*, which buys a copy of the line's newest vehicle, and *Remove Vehicle*, which sends the oldest one to a depot and sells it there.
 - A Stops card lists every stop with its waiting passengers and a *Select Terminals* button. The tooltip adds waiting cargo.
 - A stop the line's vehicles cannot reach (no path into it, or an incompatible or doubled stop) is greyed with an alert icon. Its tooltip gives the game's own problem text, such as "Missing catenaries".
 
 ### Vehicle window
+
+- Hovering a vehicle on the map shows, under its name, its line, next stop, speed (or why it stands), load, condition and delivery quality (passenger happiness, cargo on time).
 
 - Trains and trams get a Performance card: the game's rating (Poor to Excellent) and the top speed on flat track and on medium and steep slopes, with the time and distance to reach it, fully loaded and without load. In the vehicle store's composition, the Performance row's tooltip shows the same.
 
