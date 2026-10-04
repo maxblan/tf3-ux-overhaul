@@ -7,7 +7,8 @@
 -- Infrastructure layer draws it). The default map action is built by the module function
 -- selector_react_util.makeDefaultSelectorCombinedFn, which the window manager calls through the module
 -- table; it is wrapped so its ActionDescriptor gets one more LayerConfig. Toggles: a plugin of
--- ::MainModButtonAreaExtension (catchment_buttons.res.lua). Installed by catchment.script.lua.
+-- ::MainModButtonAreaExtension, one per button (catchment_buttons*.res.lua). Installed by
+-- catchment.script.lua.
 -- @module ui_overhaul.gui.catchment
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
@@ -121,22 +122,22 @@ local function toggle(kind, icon, tooltip, value)
 	}
 end
 
---- Plugin recipe body of the mod button area.
-function catchment.buttons()
+-- One toggle, as its own plugin of the mod button area, so the area spaces it like its neighbours.
+local function button(kind, icon, tooltip)
 	local state = react.useState(catchment.get())
 	react.onEvent(EVENT, function(_e, s) state:set(s) end)
-	local s = state:old()
-	return builtin.BoxLayout{
-		meta = { class = "uio-catchment-buttons" },
-		orientation = builtin.type.Orientation.Horizontal,
-		children = {
-			-- the white symbols of the layer buttons next to them (layer_infrastructure.tl's areas)
-			toggle("person", "::/gui/layers/icons/symbol_person.tga",
-				_("Show the passenger catchment areas of all stations"), s.person),
-			toggle("cargo", "::/gui/layers/icons/symbol_cargo.tga",
-				_("Show the cargo catchment areas of all stations"), s.cargo),
-		},
-	}
+	return builtin.BoxLayout{ children = { toggle(kind, icon, tooltip, state:old()[kind]) } }
+end
+
+--- Plugin recipe bodies of the mod button area (catchment_buttons.res.lua): the white symbols of
+-- the layer buttons next to them (layer_infrastructure.tl's areas).
+function catchment.person_button()
+	return button("person", "::/gui/layers/icons/symbol_person.tga",
+		_("Show the passenger catchment areas of all stations"))
+end
+
+function catchment.cargo_button()
+	return button("cargo", "::/gui/layers/icons/symbol_cargo.tga", _("Show the cargo catchment areas of all stations"))
 end
 
 --- Called from the react-replacement-config before the UI starts.

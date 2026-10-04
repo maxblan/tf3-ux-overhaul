@@ -23,6 +23,7 @@
         "ui_overhaul/gui/catchment.res.lua",
         "ui_overhaul/gui/catchment.script.lua",
         "ui_overhaul/gui/catchment_buttons.res.lua",
+        "ui_overhaul/gui/catchment_buttons_cargo.res.lua",
         "ui_overhaul/gui/cleanup.lua",
         "ui_overhaul/gui/construction.css.lua",
         "ui_overhaul/gui/construction.lua",
