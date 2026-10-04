@@ -6,8 +6,8 @@
 --   * the hover card is the base card of the shown notification, with "2 of 3" next to the title
 -- A group of one looks and behaves like the base icon.
 -- Subsidy icons show their state: offers and active subsidies keep the base purple shades, a
--- subsidy whose effect is active turns green and a missed one grey; the timer ring is drawn
--- opaque and turns amber below half and red below a quarter of the time left (notifications.css.lua).
+-- subsidy whose effect is active turns green and a missed one grey; the timer ring is drawn in
+-- plain white (notifications.css.lua).
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
 -- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown.
@@ -209,21 +209,11 @@ local SUBSIDY = "::/game_mechanics/notifications/types/subvention_notification.s
 local SUBSIDY_MISSED = "::/game_mechanics/notifications/types/subvention_missed.script"
 local SUBSIDY_STATUS = { "uio-subsidy-offer", "uio-subsidy-active", "uio-subsidy-complete" }
 
---- css classes of a subsidy icon: its state (offer, active, effect active, missed) and, while time
--- runs out on an offer or an active subsidy, the urgency of its timer ring. nil for other icons.
-function notifications.subsidy_class(notification_type, status, percentage)
+--- css class of a subsidy icon: its state (offer, active, effect active, missed); nil for other icons.
+function notifications.subsidy_class(notification_type, status)
 	if notification_type == SUBSIDY_MISSED then return "uio-subsidy-missed" end
 	if notification_type ~= SUBSIDY then return nil end
-	local class = SUBSIDY_STATUS[status]
-	if not class then return nil end
-	if status ~= 3 and percentage then
-		if percentage < 0.25 then
-			class = class .. ", uio-ring-urgent"
-		elseif percentage < 0.5 then
-			class = class .. ", uio-ring-warning"
-		end
-	end
-	return class
+	return SUBSIDY_STATUS[status]
 end
 
 local function icon(dataState, guiType, notification)
@@ -247,7 +237,7 @@ local function icon(dataState, guiType, notification)
 		}
 	end
 	local status = notification and type(notification.params) == "table" and notification.params.status or nil
-	local class = notifications.subsidy_class(notification and notification.type, status, percentage)
+	local class = notifications.subsidy_class(notification and notification.type, status)
 	if not class then return node end
 	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
 end
