@@ -55,6 +55,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
+- Entity windows (vehicle, line, station, town, industry ...) have a minimize button in the top right corner of their content: it folds the window to its title bar and a restore button, and keeps its place.
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
 

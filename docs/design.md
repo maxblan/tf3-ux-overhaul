@@ -31,6 +31,7 @@ The player-facing list is in the [README](../README.md#what-changes). This table
 | Statistics | Lines, Vehicles and Stations tabs: quick filters, totals, sorting fixes | `statistics_lines.lua`, `statistics_vehicles.lua`, `statistics_stations.lua`, `statistics_common.lua` | Lua conversions of the base tabs, replacing them |
 | Statistics | Warehouses tab: cargo icons with quantities, cargo picker that filters and sorts, quick filters, totals | `statistics_warehouses.lua` | Lua conversion of the base tab, replacing it |
 | Windows | tool windows side by side, kept open on map clicks | `tool_stack.lua` | replaces `builtin.ToolStack` |
+| Entity windows | minimize to the title bar | `minimize.lua` | wraps `make_entity_window.makeEntityWindowContent`: the content recipe renders inside `UioMinimizable` (not `builtin.Window`: window wrapper recipes registered later would no longer find the builtin, and the game crashes) |
 | Entity windows | sections stay open; *Sell* needs a second click | `window_tweaks.lua` | patches `content_card.makeContentCardsCollapsibleFunctions`; replaces `entity_window_util.ActionButtonBar` |
 | Map | vehicle hover tooltip: line, next stop, speed, load, condition, delivery quality | `vehicle_tooltip.lua`, `vehicle_info.lua` | replaces `game_tooltips.DefaultEntityToolTip`, calls the original |
 | Line Manager, line window | load and condition in vehicle rows, the five figures in the tooltip | `lvm_rows.lua`, `line_vehicles.lua`, `vehicle_info.lua` | as the rows and Vehicles card above |
