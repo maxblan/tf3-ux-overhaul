@@ -1,7 +1,7 @@
 --- Statistics window, "Warehouses" tab, with additions to the vanilla tab:
 --   * the Stocks column shows each cargo's icon with its quantity, the largest first (base: icons
 --     only, in no particular order); more than four go behind a "+N" whose tooltip lists them all
---   * cargo icons above the table: picking one lists the warehouses that hold or take that cargo
+--   * a cargo drop-down next to the quick filters: picking a cargo lists the warehouses that hold it
 --     and sorts the Stocks column by its quantity ("Any cargo": every warehouse, sorted by the total)
 --   * quick filters All / Full / Empty and the totals of the rows shown: count, stored of capacity,
 --     upkeep
@@ -82,9 +82,7 @@ end
 function statistics_warehouses.passes(data, filter, cargo)
 	if filter == "full" and not (data.capacity > 0 and data.stored / data.capacity >= FULL) then return false end
 	if filter == "empty" and data.stored > 0 then return false end
-	if cargo and cargo >= 0 then
-		return data.all or data.takes[cargo] or statistics_warehouses.count_of(data, cargo) > 0
-	end
+	if cargo and cargo >= 0 then return statistics_warehouses.count_of(data, cargo) > 0 end
 	return true
 end
 
@@ -197,26 +195,26 @@ local WarehouseCoverageCell = number_cell("WarehouseCoverageCell", utilization_o
 local WarehouseUpkeepCell = number_cell("WarehouseUpkeepCell", upkeep_of,
 	function(v) return api.util.formatMoney(v) end)
 
--- Cargo picker --------------------------------------------------------------------------------------
+-- Cargo picker ---------------------------------------------------------------------------------------
 
--- "Any cargo" and one icon per cargo stored anywhere, as toggle buttons.
+-- A drop-down list: "Any cargo", then every cargo stored anywhere, by name. (A drop-down entry may
+-- only be a text or an image: an icon with a text in a layout crashes the game, observed in game.)
 local function cargo_picker(cargo_ids, selected, on_select)
-	local buttons, selected_index = {
-		{ content = builtin.TextView{ meta = { class = "font-scale-body" }, text = _("Any cargo") },
-			meta = { tag = "uio.statistics.warehouses.cargo.any" } },
-	}, 1
-	for i, id in ipairs(cargo_ids) do
-		buttons[#buttons + 1] = {
-			content = cargo_react_util.makeCargoIcon(id, "uio-warehouse-cargo-pick"),
-			meta = { tag = "uio.statistics.warehouses.cargo." .. tostring(id), tooltip = _(cargo_name(id)) },
-		}
-		if id == selected then selected_index = i + 1 end
+	local function item(value, label)
+		return builtin.ComboBoxItem{ value = value,
+			content = builtin.TextView{ meta = { class = "font-scale-body" }, text = label } }
 	end
-	return builtin.ToggleButtonGroup{
-		meta = { class = "uio-warehouse-cargo-picker" },
-		buttons = buttons,
-		selected = selected_index,
-		onValueChange = function(index) on_select(index == 1 and -1 or cargo_ids[index - 1]) end,
+	local items = { item("-1", _("Any cargo")) }
+	local found = selected < 0
+	for _i, id in ipairs(cargo_ids) do
+		items[#items + 1] = item(tostring(id), _(cargo_name(id)))
+		if id == selected then found = true end
+	end
+	return builtin.ComboBox{
+		meta = { class = "uio-warehouse-cargo-picker", tag = "uio.statistics.warehouses.cargo" },
+		value = found and tostring(selected) or "-1",
+		items = items,
+		onValueChange = function(value) on_select(tonumber(value) or -1) end,
 	}
 end
 
@@ -347,11 +345,7 @@ local function render(params)
 						{ stored = lang_util.formatInt(totals.stored), capacity = lang_util.formatInt(totals.capacity) }),
 				amountLabel = _("Upkeep"),
 				amount = totals.upkeep,
-			},
-			builtin.BoxLayout{
-				meta = { class = "uio-statistics-quick-filters" },
-				orientation = builtin.type.Orientation.Horizontal,
-				children = { cargo_picker(tableState:old().cargoIds, cargo, setCargo), gui_react_util.makeHorizontalSpacer() },
+				extra = cargo_picker(tableState:old().cargoIds, cargo, setCargo),
 			},
 			builtin.DataTable(react.ref(tableRef), {
 				meta = { id = "menu.statistics.warehouses" },

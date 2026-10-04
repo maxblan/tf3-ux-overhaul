@@ -6,8 +6,7 @@ function data()
 	local result = {}
 	local add = ssu.makeAdder(result)
 	add("R::WarehouseCargoTypesCell TextView!uio-warehouse-count", { margin = { 0, 8, 0, 2 }, gravity = { 0, 0.5 } })
-	add("ToggleButtonGroup!uio-warehouse-cargo-picker ImageView!uio-warehouse-cargo-pick",
-		{ size = { 18, 18 }, gravity = { 0.5, 0.5 } })
-	add("BoxLayout!uio-statistics-quick-filters ToggleButtonGroup!uio-warehouse-cargo-picker", { margin = { 0, 0, 4, 0 } })
+	-- the cargo drop-down next to the quick filters
+	add("ComboBox!uio-warehouse-cargo-picker", { margin = { 0, 0, 0, 12 }, minSize = { 200, -1 }, gravity = { 0, 0.5 } })
 	return result
 end

@@ -54,6 +54,7 @@ end
 -- opts.amountLabel  label in front of the amount ("Balance")
 -- opts.amount       money value
 -- opts.amountClass  style classes of the amount (default "font-scale-body")
+-- opts.extra        optional node after the filters (for example a drop-down list)
 function statistics_common.QuickFilterBar(opts)
 	local buttons, selectedIndex = {}, 1
 	for i, filter in ipairs(opts.filters) do
@@ -73,6 +74,7 @@ function statistics_common.QuickFilterBar(opts)
 					if filter then opts.onSelect(filter.key) end
 				end,
 			},
+			opts.extra,
 			gui_react_util.makeHorizontalSpacer(),
 			builtin.TextView{ meta = { class = "font-scale-body", id = opts.totalsId }, text = opts.totalsText },
 			builtin.TextView{ meta = { class = "font-scale-body" }, text = opts.amountLabel },

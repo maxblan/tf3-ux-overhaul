@@ -38,8 +38,8 @@ describe("statistics warehouses", function()
 		assert.is_false(warehouses.passes(full, "empty", -1))
 		assert.is_true(warehouses.passes(full, "all", 4))
 		assert.is_false(warehouses.passes(full, "all", 7))
-		assert.is_true(warehouses.passes(empty, "all", 7)) -- takes it, holds none yet
-		assert.is_true(warehouses.passes(any, "all", 9)) -- takes every cargo
+		assert.is_false(warehouses.passes(empty, "all", 7)) -- takes it, but holds none
+		assert.is_false(warehouses.passes(any, "all", 9)) -- takes every cargo, holds none
 		assert.are.equal(95, warehouses.count_of(full, 4))
 		assert.are.equal(0, warehouses.count_of(full, 5))
 	end)
