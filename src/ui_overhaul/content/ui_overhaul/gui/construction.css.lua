@@ -6,10 +6,13 @@
 -- the game bar or off the top of the screen. The Settings window is 460 px high above a 360 px
 -- margin, more than a small screen at a large UI scale offers.
 -- Here both get a height limit relative to the screen, so their scroll areas scroll instead, and the
--- bottom panel more room above the game bar when the text is scaled up.
+-- bottom panel more room above the game bar when the text is scaled up. Both lie in windows (the
+-- construction menu's and the Settings window), which carry the class of the feature while it is
+-- shown (styles.lua): without it the panels are the game's.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
-local BOTTOM_PARAMS = "R::ConstructionParamsContent#menu.construction.bottomparams.react"
+local ON = "uio-on-construction" -- styles.on("construction")
+local BOTTOM_PARAMS = "Window!" .. ON .. " R::ConstructionParamsContent#menu.construction.bottomparams.react"
 
 ---@return table
 function data()
@@ -22,6 +25,6 @@ function data()
 	add("!font-medium " .. BOTTOM_PARAMS, { padding = { 8, 8, 76, 8 } })
 	add("!font-large " .. BOTTOM_PARAMS, { padding = { 8, 8, 88, 8 } })
 
-	add("Window!construct-settings", { maxSize = { 400, "45vh" } })
+	add("Window!construct-settings!" .. ON, { maxSize = { 400, "45vh" } })
 	return result
 end

@@ -1,8 +1,15 @@
 -- Line Manager "Select Terminals" popover: the usage buttons take the place of the base drop-down list
 -- (line_vehicle_mgmt.css.lua: R::TerminalSelection ComboBox, 100 / 110 / 120 wide, 28 high), so the
 -- rows are wider than the base rows (416) by about the buttons' extra width.
+-- The popover window is the game's (also for the base popover and other mods' popovers in it), the
+-- station window's stop list too: their rules apply only through the class windows carry while this
+-- mod's popover, or its buttons in that list, are shown (styles.lua). The rest selects the mod's own
+-- classes.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 local color_util = require("::/gui/main/color_util.tl")
+
+local OWN_POPOVER = "uio-own-terminals" -- styles.own("terminals"): no mod that comes first takes it over
+local STATION_BUTTONS = "Window!uio-on-station_terminals" -- styles.on("station_terminals")
 
 ---@return table
 function data()
@@ -17,14 +24,16 @@ function data()
 	-- the popover window is 440 wide for every popover (popover_react_util.css.lua), narrower than these
 	-- rows, which cut off the last usage button (observed in game at large text): the rows plus the
 	-- scroll area's margins and padding
-	add("!font-small Window!select-terminal!popover", { size = { 560, -1 } })
-	add("!font-medium Window!select-terminal!popover", { size = { 630, -1 } })
-	add("!font-large Window!select-terminal!popover", { size = { 700, -1 } })
+	add("!font-small Window!select-terminal!popover!" .. OWN_POPOVER, { size = { 560, -1 } })
+	add("!font-medium Window!select-terminal!popover!" .. OWN_POPOVER, { size = { 630, -1 } })
+	add("!font-large Window!select-terminal!popover!" .. OWN_POPOVER, { size = { 700, -1 } })
 
-	add("R::TerminalSelection ToggleButtonGroup", { margin = { 0, 0, 0, 0 }, gravity = { 1, 0.5 } })
-	add("R::TerminalSelection ToggleButtonGroup ToggleButton", { size = { -1, 28 }, padding = { 2, 8, 2, 8 } })
+	-- the usage buttons by their class: other mods' popovers have the recipe name TerminalSelection too
+	local usage = "R::TerminalSelection ToggleButtonGroup!uio-terminal-usage"
+	add(usage, { margin = { 0, 0, 0, 0 }, gravity = { 1, 0.5 } })
+	add(usage .. " ToggleButton", { size = { -1, 28 }, padding = { 2, 8, 2, 8 } })
 	-- as the Line Manager's other toggle group (R::CargoFilterContent), so unchecked buttons stand out
-	add("R::TerminalSelection ToggleButtonGroup!horizontal ToggleButton!unchecked", {
+	add(usage .. "!horizontal ToggleButton!unchecked", {
 		backgroundColor1 = colorDefault.BaseDark,
 	})
 
@@ -57,9 +66,11 @@ function data()
 	-- text (observed in game); the name column gives up the 56 the button and the alert need
 	add("R::TerminalStops Component!uio-station-terminal", { minSize = { 34, -1 }, gravity = { -1, 0.5 } })
 	add("R::TerminalStops Component!uio-station-terminal-alert", { minSize = { 56, -1 } })
-	add("R::TerminalStops R::StationGroupViaLabel, R::TerminalStops R::LineStopButton", { size = { 178, -1 } })
-	add("R::TerminalStops R::LineStopButton Button", { maxSize = { 170, -1 } })
-	add("R::TerminalStops R::LineStopButton Button TextView", { maxSize = { 162, -1 } })
+	-- the game's own line names in that list
+	local list = STATION_BUTTONS .. " R::TerminalStops "
+	add(list .. "R::StationGroupViaLabel, " .. list .. "R::LineStopButton", { size = { 178, -1 } })
+	add(list .. "R::LineStopButton Button", { maxSize = { 170, -1 } })
+	add(list .. "R::LineStopButton Button TextView", { maxSize = { 162, -1 } })
 	-- a line that cannot reach this stop: the alert icon in front of its terminal button
 	add("R::TerminalStops ImageView!uio-station-stop-alert",
 		{ size = { 16, 16 }, gravity = { 0, 0.5 }, margin = { 0, 0, 0, 6 } })

@@ -128,7 +128,8 @@ local BASE_NAME = "TerminalSelection"
 ---@type uo.gui.terminals.Usage[]
 local USAGES = { "Unused", "Alternative", "Main" }
 
--- The base recipe, taken from the first terminal popover; shown if this one fails.
+-- The base recipe, taken from the first terminal popover of the Line Manager (it is file-local there,
+-- and the game's debug library cannot reach it otherwise); until then `Vanilla` stands in for it.
 ---@type react.Recipe<uo.gui.terminals.Params>?
 local base_recipe
 
@@ -260,6 +261,9 @@ local function usage_buttons(params, terminalData)
 	end
 	return builtin.ToggleButtonGroup{
 		meta = {
+			-- the class scopes this popover's rules (terminals.css.lua): other mods' popovers have the
+			-- base recipe's name too
+			class = "uio-terminal-usage",
 			id = "uio.terminals.usage." .. tostring(terminalData.number),
 			tooltip = _("Set Terminal Usage"),
 		},
@@ -865,9 +869,325 @@ end
 -- session (fallback.lua): a choice per render would mount one and then the other.
 terminals.switch = fallback.switch("terminal popover")
 local TerminalSelection = fallback.replacement(terminals.switch, BASE_NAME, render, nil, {
-	render_base = function(params) return base_recipe and base_recipe(params) or nil end,
+	render_base = function(params)
+		local base = base_recipe or terminals.Vanilla
+		return base(params)
+	end,
 })
 terminals.TerminalSelection = TerminalSelection
+
+-- The base popover, as a stand-in ---------------------------------------------------------------------
+
+--- The label of a terminal as the base popover gives it: what it takes, a specialised cargo terminal
+-- its cargo class's name and colour.
+---@param terminalData uo.gui.terminals.TerminalData
+---@return string text
+---@return Vec3f? colour
+function terminals.base_label(terminalData)
+	if terminalData.isPassengerTerminal then
+		return terminalData.isCargoTerminal and _("Passenger and Cargo") or _("Passenger"), nil
+	end
+	if terminalData.terminalSpecialization == "UNIVERSAL" then return _("All Cargo Types"), nil end
+	local cargoClassId = api.res.cargoClassRep.getCargoClassId(terminalData.terminalSpecialization)
+	if cargoClassId == -1 then return _("Passenger and Cargo"), nil end
+	local specializationData = api.res.cargoClassRep.get(cargoClassId)
+	return specializationData.name, specializationData.color
+end
+
+--- The base recipe TerminalSelection, converted to Lua line by line (line_manager_panel.tl), for where
+-- it cannot be reached before the Line Manager opened a popover once: with Select Terminals off (or a
+-- mod that comes first having the last word in it), the station and line window buttons show this,
+-- as the Line Manager shows the base one. Under the base name, so the base stylesheet applies and mods
+-- that swap the base popover by name take it too. Only the terminal reader is the shared one (the base
+-- getter, its overlength check once per stop).
+---@param params uo.gui.terminals.Params
+---@return react.TreeNodeId?
+local function render_vanilla(params)
+	if not params.viaState or not params.viaState:old() then
+		return nil
+	end
+
+	local terminalsState = engine_react_util.useStepState(function() return read_terminals(params) end)
+
+	local selectTerminalsHeader = builtin.Component{
+		meta = {
+			class = "select-terminals-header",
+		},
+		layout = builtin.BoxLayout{
+			orientation = builtin.type.Orientation.Horizontal,
+			children = {
+				builtin.TextView{
+					meta = {
+						class = "font-scale-headline",
+					},
+					text = lang_util.format(_("Terminals for Stop {stopnumber}"), {
+						stopnumber = lang_util.formatInt(params.stopNumber),
+					}),
+				},
+			},
+		},
+	}
+
+	local index2problems = params.index2problems or {}
+	---@type react.TreeNodeId[]
+	local children = {}
+	for terminalNumber, terminalData in ipairs(terminalsState:old()) do
+		local terminalText, bubbleColor = terminals.base_label(terminalData)
+
+		local problemsPrev = index2problems[(params.stopNumber - 1) % params.stopCount]
+		if not problemsPrev then
+			problemsPrev = {}
+		end
+		local problemsThis = index2problems[params.stopNumber]
+		if not problemsThis then
+			problemsThis = {}
+		end
+		local problemPrev = false
+		local problemThis = false
+		local problemTooltipPrev = nil
+		local problemTooltipThis = nil
+		for _i, problem in ipairs(problemsPrev) do
+			if params.stopNumber % params.stopCount == problem.stopAndTerminalNext.stop % params.stopCount then
+				if terminalNumber == problem.stopAndTerminalNext.terminal then
+					problemPrev = true
+					problemTooltipPrev = problem.tooltip
+				end
+			end
+		end
+		for _i, problem in ipairs(problemsThis) do
+			if params.stopNumber == problem.stopAndTerminalThis.stop then
+				if terminalNumber % params.stopCount == problem.stopAndTerminalThis.terminal % params.stopCount then
+					problemThis = true
+					problemTooltipThis = problem.tooltip
+				end
+			end
+		end
+
+		local valueUnused = "Unused"
+		local valueAlternative = "Alternative"
+		local valueMain = "Main"
+
+		---@param value string
+		local onTerminalUsageValueChange = function(value)
+			if value == valueAlternative then
+				params.commonParams.selectAlternativeTerminal(
+					params.stopNumber,
+					terminalData.stationIndex1,
+					terminalData.terminalIndex1,
+					true
+				)
+			elseif value == valueMain then
+				params.commonParams.changeMainTerminal(
+					params.stopNumber,
+					terminalData.stationIndex1,
+					terminalData.terminalIndex1
+				)
+			else
+				params.commonParams.selectAlternativeTerminal(
+					params.stopNumber,
+					terminalData.stationIndex1,
+					terminalData.terminalIndex1,
+					false
+				)
+			end
+		end
+
+		---@type react.TreeNodeId[]
+		local terminalUsageItems = {
+			builtin.ComboBoxItem{
+				value = valueUnused,
+				content = builtin.TextView{
+					meta = {
+						class = "font-scale-annotation",
+					},
+					text = _("Don't Use"),
+				},
+			},
+			builtin.ComboBoxItem{
+				value = valueAlternative,
+				content = builtin.TextView{
+					meta = {
+						class = "font-scale-annotation",
+					},
+					text = _("Alternative"),
+				},
+			},
+			builtin.ComboBoxItem{
+				value = valueMain,
+				content = builtin.TextView{
+					meta = {
+						class = "font-scale-annotation",
+					},
+					text = _("Preferred"),
+				},
+			},
+		}
+
+		-- (a hook per terminal, as the base declares it)
+		---@type react.State<string>
+		local terminalUsageValueState = engine_react_util.useStepState(function()
+			if terminalData.current then
+				return valueMain
+			elseif terminalData.alternativeHere then
+				return valueAlternative
+			end
+			return valueUnused
+		end)
+
+		---@type react.TreeNodeId[]
+		local floatingChildren = {}
+
+		table.insert(floatingChildren, builtin.FloatingLayoutChild{
+			h = -1,
+			v = -1,
+			item = builtin.Component{
+				meta = {
+					class = "main",
+				},
+				layout = builtin.BoxLayout{
+					orientation = builtin.type.Orientation.Horizontal,
+					children = {
+						builtin.Component{
+							meta = {
+								class = "problem-spacer-terminal",
+							},
+						},
+						line_react_util.makeTerminalIndicator(terminalData.number, true),
+						builtin.TextView {
+							meta = {
+								tooltip = terminalText, -- this text gets clipped when too long, so show the tooltip always
+								class = (bubbleColor and "bubble, " or "") .. "font-scale-body, terminal-label-compact",
+								styleSheet = bubbleColor and styleutil.makeStyle{
+									color = gui_react_util.textColorForColor(api.type.Vec4f.new(bubbleColor, 1.0)),
+									backgroundColor1 = {
+										bubbleColor.x,
+										bubbleColor.y,
+										bubbleColor.z,
+										1.0
+									},
+								} or nil,
+							},
+							text = terminalText,
+						},
+						gui_react_util.makeHorizontalSpacer(),
+						builtin.TextView{
+							meta = {
+								class = "font-scale-body, terminal-length, " ..
+									(terminalData.terminalLength == 0 and "invisible" or ""),
+							},
+							text = api.util.formatLength(terminalData.terminalLength),
+						},
+						builtin.ComboBox{
+							meta = {
+								tooltip = _("Set Terminal Usage"),
+								enabled = terminalUsageValueState:old() ~= "Main",
+							},
+							value = terminalUsageValueState:old(),
+							onValueChange = onTerminalUsageValueChange,
+							items = terminalUsageItems,
+						},
+					},
+				},
+			},
+		})
+
+		table.insert(floatingChildren, builtin.FloatingLayoutChild{
+			h = 0,
+			v = -1,
+			item = builtin.Component{
+				meta = {
+					class = "problem-spacer-terminal",
+				},
+				layout = builtin.BoxLayout{
+					orientation = builtin.type.Orientation.Vertical,
+					children = {
+						problemPrev and builtin.ImageView{
+							meta = {
+								class = "terminal-problem, top",
+								tooltip = problemTooltipPrev,
+							},
+							path = params.commonParams.iconPaths.problemArrow,
+							scaling = builtin.type.ImageViewScaling.AutoFit,
+						} or builtin.Component{
+							meta = {
+								class = "terminal-problem",
+							},
+						},
+						problemThis and builtin.ImageView{
+							meta = {
+								class = "terminal-problem, bottom",
+								tooltip = problemTooltipThis,
+							},
+							path = params.commonParams.iconPaths.problemArrow,
+							scaling = builtin.type.ImageViewScaling.AutoFit,
+						} or builtin.Component{
+							meta = {
+								class = "terminal-problem",
+							},
+						},
+					},
+				},
+			}
+		})
+
+		table.insert(floatingChildren, builtin.FloatingLayoutChild{
+			h = 0,
+			v = -1,
+			item = builtin.Component{
+				meta = {
+					class = "problem-terminal-length",
+				},
+				layout = builtin.BoxLayout{
+					orientation = builtin.type.Orientation.Horizontal,
+					children = {
+						terminalData.hasOverlength and builtin.ImageView{
+							meta = {
+								class = "terminal-length-alert",
+								tooltip = _("Terminal is too short for some vehicles."),
+							},
+							path = params.commonParams.iconPaths.problemAlert,
+							scaling = builtin.type.ImageViewScaling.AutoFit,
+						} or nil,
+					},
+				},
+			}
+		})
+
+		table.insert(children, builtin.FloatingLayout{
+			children = floatingChildren,
+		})
+	end
+
+	return builtin.BoxLayout{
+		orientation = builtin.type.Orientation.Vertical,
+		children = {
+			selectTerminalsHeader,
+			builtin.ScrollArea{
+				horizontalPolicy = builtin.type.ScrollBarPolicy.AlwaysOff,
+				verticalPolicy = builtin.type.ScrollBarPolicy.AsNeeded,
+				content = builtin.Component{
+					layout = builtin.BoxLayout{
+						orientation = builtin.type.Orientation.Vertical,
+						children = children,
+					},
+				},
+			},
+		},
+	}
+end
+
+-- A failure shows nothing for the rest of the session (fallback.lua), not a broken UI.
+terminals.vanilla_switch = fallback.switch("base terminal popover stand-in")
+---@type react.Recipe<uo.gui.terminals.Params>
+terminals.Vanilla = fallback.replacement(terminals.vanilla_switch, BASE_NAME, render_vanilla, nil, {
+	render_base = function() return nil end,
+})
+
+--- The base popover: the base recipe once the Line Manager handed it over, else its stand-in.
+---@return react.Recipe<uo.gui.terminals.Params>
+function terminals.base_popover()
+	return base_recipe or terminals.Vanilla
+end
 
 -- Keeping the popover on the screen ------------------------------------------------------------------
 
@@ -939,7 +1259,9 @@ end)
 ---@param recipe_name fun(recipe: function): string
 ---@return (game.gui.main.popover_react_util.PopoverWindowParam|react.RefFill)? # `p`, or a copy with this recipe
 function terminals.swap(p, recipe_name)
-	if type(p) ~= "table" or p.recipe == nil or p.recipe == TerminalSelection then return p end
+	if type(p) ~= "table" or p.recipe == nil or p.recipe == TerminalSelection or p.recipe == terminals.Vanilla then
+		return p
+	end
 	if recipe_name(p.recipe) ~= BASE_NAME then return p end
 	local params = p.params
 	if type(params) ~= "table" or params.viaState == nil or params.commonParams == nil then return p end
@@ -1108,10 +1430,15 @@ function terminals.open(line, stop_index0, position, title)
 			.. (windows and "" or " (no window api)"))
 		return
 	end
-	-- Where a mod that comes first in the mod list wraps the popover (Easy Terminal Assignment), or the
-	-- popover feature is off, it gets the base recipe's name, which such a mod swaps for its own.
+	-- Where the popover feature is off, or a mod that comes first in the mod list wraps the popover
+	-- (Easy Terminal Assignment), it is the base popover, as the Line Manager opens it: such a mod swaps
+	-- it by name for its own.
 	local own = priority.active("terminals") and not priority.outranked("terminals")
-	local recipe = own and terminals.Popover or TerminalSelection
+	local recipe = own and terminals.Popover or terminals.base_popover()
+	if not own then
+		debugPrint("[ui_overhaul] terminal popover: the game's own", base_recipe and "" or " (its stand-in)",
+			" (Select Terminals ", priority.active("terminals") and "has a mod that comes first" or "is off", ")")
+	end
 	---@param x number
 	---@param y number
 	local function show(x, y)

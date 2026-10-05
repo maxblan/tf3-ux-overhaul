@@ -56,7 +56,8 @@ Inside `install`:
 
 - Replace a recipe with `replacement_api.ReplaceRecipe` as usual: the installer hands in a stand-in that `priority.lua` applies later, unless a mod that comes first in the mod list replaced the same recipe.
 - Wrap a module function with `priority.chain(module, "field", function(previous) return wrapper end)`, never by assigning the field. Pass `true` as the fourth argument for a function many mods wrap for their own reasons (widgets, `react.fireEvent`, `react.useState`). Wrap a `builtin.*` widget with `builtin_wraps.wrap`.
-- Where another mod shows the same thing in its own way without sharing a recipe or a function, add it to `priority.OVERLAPS`.
+- Where another mod shows the same thing in its own way without sharing a recipe or a function, and changes nothing else, add it to `priority.OVERLAPS`: where UI Overhaul comes first, all its GUI changes are held back.
+- A stylesheet rule must select something only this mod puts there: a `uio-` class or an `R::Uio` recipe. The game runs stylesheets before it knows the settings, so a rule on the game's own elements in a window starts with `Window!uio-on-<feature> ` (add the feature to `styles.FEATURES`); `make test` checks every rule.
 
 A replacement recipe should call the original recipe whenever it can (`react.CallOriginalRecipe`) and change only what it has to, so that game updates break as little as possible. Logic that does not need the engine goes in `core/`, with specs in `spec/` against the mock engine.
 

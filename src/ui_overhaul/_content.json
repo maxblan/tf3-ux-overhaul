@@ -65,6 +65,7 @@
         "ui_overhaul/gui/statistics_warehouses.css.lua",
         "ui_overhaul/gui/statistics_warehouses.lua",
         "ui_overhaul/gui/store_tweaks.lua",
+        "ui_overhaul/gui/styles.lua",
         "ui_overhaul/gui/subsidies.lua",
         "ui_overhaul/gui/terminals.css.lua",
         "ui_overhaul/gui/terminals.lua",

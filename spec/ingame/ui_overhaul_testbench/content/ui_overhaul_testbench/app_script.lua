@@ -30,6 +30,18 @@ local function ordered_mods()
 	return list
 end
 
+-- The value of "Off" in a feature's param, as the game takes it in modParams: 1-based, as
+-- getModParams hands it over (observed in game: 2 switched the feature off, 1 left it on).
+local OFF_VALUE = 2
+
+--- This mod's params for the features fixture.off names (run.sh --off), each set to "Off".
+---@return table<string, integer>
+local function own_params()
+	local params = {} ---@type table<string, integer>
+	for _i, feature in ipairs(fixture.off or {}) do params["uio_" .. feature] = OFF_VALUE end
+	return params
+end
+
 local MODS = { "urbangames_no_costs_1" }
 for _i, name in ipairs(ordered_mods()) do MODS[#MODS + 1] = name end
 
@@ -54,6 +66,8 @@ local function start_test_game()
 	params.climateGenerator = "::/climates/temperate/temperate.clima"
 	params.economy = "::/economy/temperate.eco"
 	params.mods = MODS
+	local own = own_params()
+	if next(own) ~= nil then params.modParams = { ui_overhaul_1 = own } end
 	params.seed = "ui-overhaul"
 	params.generateTowns = true
 	params.generateIndustries = false
@@ -110,6 +124,21 @@ local function load_fixture_game()
 		end
 	end
 	details.mods = mods
+	local own = own_params()
+	if next(own) ~= nil then
+		-- the savegame's own params of every mod, with this mod's switches on top
+		local params = {} ---@type table<string, table<string, integer>>
+		pcall(function()
+			for mod, values in pairs(details.modParams) do
+				local copy = {} ---@type table<string, integer>
+				for key, value in pairs(values) do copy[key] = value end
+				params[mod] = copy
+			end
+		end)
+		params.ui_overhaul_1 = params.ui_overhaul_1 or {}
+		for key, value in pairs(own) do params.ui_overhaul_1[key] = value end
+		details.modParams = params
+	end
 	log("loading savegame", fixture.save, "with mods", table.concat(names, ", "))
 	app.loadGame(load.id, false, details)
 end

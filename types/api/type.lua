@@ -438,6 +438,8 @@ function SaveGameId.new() end
 
 ---@class SaveGameData.SaveGameDetails
 ---@field mods Mod.ModId[]
+---Mod params by mod id, then param key: the chosen value's index (api/tealdef/api/type.d.tl).
+---@field modParams table<string, table<string, integer>>
 local SaveGameDetails = {}
 
 ---@param copy SaveGameData.SaveGameDetails
@@ -461,6 +463,8 @@ function SaveGameDetails.new(copy) end
 ---@field generateTowns boolean
 ---@field generateIndustries boolean
 ---@field generateAssets boolean
+---Mod params by mod id, then param key: the chosen value's index.
+---@field modParams table<string, table<string, integer>>
 local StartGameParams = {}
 
 ---@return StartGameParams

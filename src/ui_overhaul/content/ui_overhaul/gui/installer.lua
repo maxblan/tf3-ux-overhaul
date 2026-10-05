@@ -1,16 +1,18 @@
 --- Installs the mod's features, in two react-replacement-configs (installer.script.lua):
 --   * installer_early.res.lua (order -1e9), before every other mod's config: priority.lua learns the
 --     mods and their activation order, then each feature the player left on installs (its wraps go in
---     as the innermost link, its recipe replacements are only noted);
+--     as the innermost link, its recipe replacements are only noted), then priority.ready notes what
+--     the other configs may change where a duplicating mod may be held back;
 --   * installer_late.res.lua (order 1e9), after every other mod's config: priority.lua decides, feature
 --     by feature, which mod wins where both change the same part (the one that comes first in the mod
---     list), and applies the result.
+--     list), holds back the duplicates that come later, applies the result and settles every switch.
 -- Each feature's install runs in pcall: one that fails leaves that part of the game vanilla and logs
 -- one line; the others are not affected.
 -- @module ui_overhaul.gui.installer
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 local settings = require("ui_overhaul_1::/ui_overhaul/gui/settings.lua")
+local styles = require("ui_overhaul_1::/ui_overhaul/gui/styles.lua")
 
 ---@class uo.gui.installer
 local installer = {}
@@ -61,6 +63,10 @@ function installer.early(replacement_api)
 	early_done = true
 	debugPrint("[ui_overhaul] settings: ", settings.describe())
 	priority.early(replacement_api, settings.enabled)
+	-- the window classes the stylesheets select by (styles.lua): first, so that the features' wraps
+	-- of builtin.Window lie above it, where they can be settled
+	local styled, style_err = pcall(styles.install)
+	if not styled then debugPrint("[ui_overhaul] window classes not installed: ", tostring(style_err)) end
 	for _i, install in ipairs(installer.INSTALLS) do
 		local enabled = settings.enabled(install.feature)
 		priority.begin(install.feature, enabled)
@@ -78,11 +84,9 @@ function installer.early(replacement_api)
 		end
 		priority.finish(ok)
 	end
-	-- the mods that duplicate a feature which installed (priority.OVERLAPS)
-	local held_ok, held_err = pcall(priority.hold_back)
-	if not held_ok then debugPrint("[ui_overhaul] holding back duplicates failed: ", tostring(held_err)) end
-	local ok, err = pcall(priority.filter_plugins)
-	if not ok then debugPrint("[ui_overhaul] plugin filter not installed: ", tostring(err)) end
+	-- what the other mods' configs change from here on, where one may be held back (priority.OVERLAPS)
+	local ok, err = pcall(priority.ready)
+	if not ok then debugPrint("[ui_overhaul] load order: ", tostring(err)) end
 end
 
 --- After every other mod's replacement config.
@@ -91,6 +95,8 @@ function installer.late(_replacement_api)
 	if late_done then return end
 	late_done = true
 	priority.late()
+	local ok, err = pcall(styles.decide)
+	if not ok then debugPrint("[ui_overhaul] window classes: ", tostring(err)) end
 end
 
 return installer

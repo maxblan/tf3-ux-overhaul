@@ -44,6 +44,19 @@ local function wins(mod)
 	return theirs ~= nil and ours ~= nil and theirs < ours
 end
 
+--- Whether feature `key` of the mod is switched off in its settings for this run (run.sh --off): that
+-- part is expected vanilla.
+---@param key string
+---@return boolean
+local function off(key)
+	for _i, feature in ipairs(fixture.off or {}) do
+		if feature == key then return true end
+	end
+	return false
+end
+local TERMINALS_OFF = off("terminals")
+local STATION_TERMINALS_OFF = off("station_terminals")
+
 -- Replaces the station window and brings its own terminal buttons there.
 local TERMINAL_SELECTOR = wins("terminal_selector")
 -- Takes over every popover named TerminalSelection.
@@ -822,6 +835,9 @@ local checks = {
 			if not ctx.terminal_line then return true, "skipped: no line" end
 			local shown = visible("uio.terminals.usage.1")
 			if EASY_TERMINALS then return not shown, "Easy Terminal Assignment's popover, ours visible=" .. tostring(shown) end
+			if TERMINALS_OFF then
+				return not shown, "Select Terminals off: the base popover, ours visible=" .. tostring(shown)
+			end
 			return shown, "usage buttons of terminal 1 visible=" .. tostring(shown)
 		end,
 	},
@@ -867,6 +883,7 @@ local checks = {
 		check = function(ctx)
 			if not ctx.terminal_station then return true, "skipped: no line" end
 			local shown = visible("uio.terminals.station." .. tostring(ctx.terminal_line) .. ".0")
+			if STATION_TERMINALS_OFF then return not shown, "station window buttons off, ours visible=" .. tostring(shown) end
 			if TERMINAL_SELECTOR then
 				return not shown, "Terminal Selector's station window, ours visible=" .. tostring(shown)
 			end
@@ -899,6 +916,10 @@ local checks = {
 			if not ctx.terminal_line then return true, "skipped: no line" end
 			local shown = visible("uio.terminals.usage.1")
 			if EASY_TERMINALS then return not shown, "Easy Terminal Assignment's popover, ours visible=" .. tostring(shown) end
+			-- the log line "[ui_overhaul] terminal popover: the game's own" and the shot show the base one
+			if TERMINALS_OFF then
+				return not shown, "Select Terminals off: the base popover, ours visible=" .. tostring(shown)
+			end
 			return shown, "usage buttons of terminal 1 visible=" .. tostring(shown)
 		end,
 	},
@@ -908,7 +929,7 @@ local checks = {
 		wait = 30,
 		shot = "terminal_rows",
 		check = function(ctx)
-			if not ctx.terminal_line or EASY_TERMINALS then return true, "skipped" end
+			if not ctx.terminal_line or EASY_TERMINALS or TERMINALS_OFF then return true, "skipped" end
 			local shown = visible("uio.terminals.row.1")
 			return shown, "row of terminal 1 visible=" .. tostring(shown)
 		end,
@@ -929,7 +950,7 @@ local checks = {
 		wait = 60,
 		shot = "terminal_popover_on_screen",
 		check = function(ctx)
-			if not ctx.terminal_line or EASY_TERMINALS then return true, "skipped" end
+			if not ctx.terminal_line or EASY_TERMINALS or TERMINALS_OFF then return true, "skipped" end
 			local shown = visible("uio.terminals.usage.1")
 			local screen = ctx.screen or { x = 0, y = 0 }
 			return shown, string.format("screen %dx%d, popover visible=%s (see the placement log line and the shot)",

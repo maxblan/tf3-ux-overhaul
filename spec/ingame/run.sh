@@ -8,6 +8,8 @@
 #                  copy is called uio_fixture; it and its autosaves are deleted afterwards.
 #   --only CHECK   run only the GUI checks of that name (and the fixture facts); repeatable
 #   --mods-first   put the --with-mod mods before this mod in the activation order (default: after)
+#   --off FEATURE  switch that feature of the mod off in its settings (a key of gui/settings.lua, e.g.
+#                  terminals); repeatable. The GUI checks expect that part vanilla.
 #   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
 #                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
 #   --gallery      shoot the gallery scenes (gui_checks.lua) instead of running the checks, paused and
@@ -28,6 +30,7 @@ keep_testbench=0
 save=""
 with_mods=()
 only=()
+off=()
 gallery=0
 vanilla=0
 mods_first=0
@@ -44,6 +47,7 @@ while [ $# -gt 0 ]; do
 		--with-mod) with_mods+=("$2"); shift 2 ;;
 		--mods-first) mods_first=1; shift ;;
 		--only) only+=("$2"); shift 2 ;;
+		--off) off+=("$2"); shift 2 ;;
 		--gallery) gallery=1; shift ;;
 		--vanilla) vanilla=1; shift ;;
 		--language) language="$2"; shift 2 ;;
@@ -151,19 +155,27 @@ if [ -n "$save" ]; then
 	fixture_save="\"$fixture_name\""
 	echo "running on a copy of savegame '$save' ($fixture_name)"
 fi
-if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ "$gallery" -eq 1 ]; then
+if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ ${#off[@]} -gt 0 ] \
+	|| [ "$gallery" -eq 1 ]; then
 	extra=""
 	for m in "${with_mods[@]}"; do extra="$extra\"$m\", "; done
 	only_list=""
 	for c in "${only[@]}"; do only_list="$only_list\"$c\", "; done
+	off_list=""
+	for f in "${off[@]}"; do
+		grep -q "^	\"$f\", --" "$mod_dir/content/$mod/gui/settings.lua" \
+			|| { echo "unknown feature $f (see settings.FEATURES in gui/settings.lua)" >&2; exit 2; }
+		off_list="$off_list\"$f\", "
+	done
 	staged_fixture="$userdata/staging_area/${mod}_testbench/content/${mod}_testbench/fixture.lua"
 	flags=""
 	[ "$gallery" -eq 1 ] && flags="$flags gallery = true,"
 	[ "$vanilla" -eq 1 ] && flags="$flags vanilla = true,"
 	[ "$mods_first" -eq 1 ] && flags="$flags mods_first = true,"
-	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s},%s }\n' "$fixture_save" \
-		"$extra" "$only_list" "$flags" > "$staged_fixture"
+	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s}, off = { %s},%s }\n' \
+		"$fixture_save" "$extra" "$only_list" "$off_list" "$flags" > "$staged_fixture"
 	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
+	if [ ${#off[@]} -gt 0 ]; then echo "features off: ${off[*]}"; fi
 fi
 
 launched_at=$(date +%s)

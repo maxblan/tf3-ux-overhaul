@@ -33,23 +33,26 @@ local function is_recipe(fn)
 end
 
 -- The registered builtin `name` when the field holds another mod's plain wrap that this module cannot
--- unwind: looked up by the builtin's recipe id in react.lua's recipe table (an upvalue of
--- GetRecipeId). nil where the debug library or the table is not there.
+-- unwind: looked up by the builtin's recipe id in react.lua's recipe table (recipeFnToRecipeId, the
+-- upvalue of GetRecipeId). nil where the debug library or the table is not there.
 ---@param name string
 ---@return function?
 local function registered_builtin(name)
 	local ok, found = pcall(function()
 		local id = _react.builtin[name]
 		if id == nil or type(debug) ~= "table" then return nil end
+		-- the one table GetRecipeId keeps, found by its value: base scripts may carry no upvalue names
+		local ids ---@type table<function, integer>?
 		for i = 1, 16 do
 			local upvalue, value = debug.getupvalue(react.GetRecipeId, i)
-			if upvalue == nil then return nil end
-			if upvalue == "recipeFnToRecipeId" and type(value) == "table" then
-				for fn, fn_id in pairs(value --[[@as table<function, integer>]]) do
-					if fn_id == id then return fn end
-				end
-				return nil
+			if upvalue == nil then break end
+			if type(value) == "table" then
+				if ids then return nil end
+				ids = value --[[@as table<function, integer>]]
 			end
+		end
+		for fn, fn_id in pairs(ids or {}) do
+			if fn_id == id then return fn end
 		end
 		return nil
 	end)
@@ -102,7 +105,8 @@ local function wrap_registration()
 end
 
 --- Replaces builtin[`name`] by make(base), where base is the current function. Returns base. The
--- replacement calls base instead while the feature being installed is not shown (priority.gated).
+-- replacement is a link of the feature being installed (priority.chain): once the load order is
+-- decided it is make(base) itself, or base while that feature is not shown.
 ---@param name string the builtin's field, e.g. "Window"
 ---@param make fun(base: function): function
 ---@return function base
@@ -114,11 +118,16 @@ function builtin_wraps.wrap(name, make)
 		local found = unwind(base)
 		builtin_of[name] = (not is_recipe(found) and registered_builtin(name)) or found
 	end
-	-- the base while the installing feature is not shown (priority.lua)
-	local replacement = priority.gated(make)(base)
-	base_of[replacement] = base
-	name_of[replacement] = name
-	builtin_by_name[name] = replacement
+	---@param replacement function
+	local function remember(replacement)
+		base_of[replacement] = base
+		name_of[replacement] = name
+	end
+	local installed = priority.chain(builtin, name, make, true, function(_old, new)
+		-- base itself, where the feature is not shown, is base_of's already or a registered recipe
+		if new ~= base then remember(new) end
+	end)
+	remember(installed)
 	return base
 end
 

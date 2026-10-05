@@ -116,13 +116,17 @@ local click_handlers = {}
 
 -- Hover card (1:1 from the base, plus the position in the group) ---------------------------------
 
--- `node` inside a layout with the subsidy state class `class` (notifications.css.lua), or `node`.
+-- `node` (an icon) inside a component of class uio-notification-icon, and of the subsidy state class
+-- `class` if given (notifications.css.lua: the icon colours apply only inside it).
 ---@param node? react.TreeNodeId
 ---@param class? string
 ---@return react.TreeNodeId?
 local function with_state(node, class)
-	if not (class and node) then return node end
-	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
+	if not node then return nil end
+	return builtin.Component{
+		meta = { class = class and ("uio-notification-icon, " .. class) or "uio-notification-icon" },
+		layout = builtin.BoxLayout{ children = { node } },
+	}
 end
 
 ---@param params uo.gui.notifications.GuiData

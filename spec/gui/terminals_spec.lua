@@ -12,8 +12,10 @@
 ---@class spec.terminals.CargoClassRep
 ---@field getCargoClassId fun(cargoClass: string): integer
 ---@field get fun(id: integer): CargoClass
+-- recipe -> name, under the name react.lua gives its table (terminals.base_popover finds it as an
+-- upvalue of GetRecipeName)
 ---@type table<function, string>
-local registered = {}
+local recipeFnToRecipeName = {}
 ---@param p any the popover params, whatever the caller passed
 ---@return { popover: any }
 local base_popover = function(p) return { popover = p } end
@@ -49,12 +51,12 @@ package.loaded["::/gui/main/react.lua"] = {
 	---@return function
 	RegisterRecipe = function(name, fn)
 		local recipe = function(...) return fn(...) end
-		registered[recipe] = name
+		recipeFnToRecipeName[recipe] = name
 		return recipe
 	end,
 	---@param recipe function
 	---@return string
-	GetRecipeName = function(recipe) return registered[recipe] end,
+	GetRecipeName = function(recipe) return recipeFnToRecipeName[recipe] end,
 }
 _G.debugPrint = _G.debugPrint or function() end
 
@@ -147,6 +149,30 @@ describe("terminals", function()
 		assert.are.equal(terminals.Popover, result.popover.recipe)
 		local other = { recipe = cargo_filter }
 		assert.are.equal(other, popover_react_util.PopoverWindowContent(other).popover)
+	end)
+
+	it("labels terminals as the base popover does", function()
+		local globals = _G ---@type table<string, any>
+		globals._ = globals._ or function(text) return text end
+		globals.api = { res = { cargoClassRep = {
+			getCargoClassId = function(class) return class == "COAL" and 3 or -1 end,
+			get = function() return { name = "Coal", color = { x = 0.1, y = 0.1, z = 0.1 } } end,
+		} } }
+		assert.are.equal("Passenger", (terminals.base_label(terminal_data({ isPassengerTerminal = true }))))
+		assert.are.equal("Passenger and Cargo",
+			(terminals.base_label(terminal_data({ isPassengerTerminal = true, isCargoTerminal = true }))))
+		assert.are.equal("All Cargo Types", (terminals.base_label(terminal_data({ terminalSpecialization = "UNIVERSAL" }))))
+		local text, colour = terminals.base_label(terminal_data({ terminalSpecialization = "COAL" }))
+		assert.are.equal("Coal", text)
+		assert.is_true(colour ~= nil)
+	end)
+
+	it("opens the base popover the Line Manager handed over, else its stand-in", function()
+		-- the specs above passed the base recipe through the wrap, as the Line Manager does
+		assert.are.equal(base_terminals, terminals.base_popover())
+		-- a stand-in under the base name, which the mod's own wrap leaves alone
+		local p = { recipe = terminals.Vanilla, params = { viaState = {}, commonParams = {} } }
+		assert.are.equal(p, terminals.swap(p, react.GetRecipeName))
 	end)
 
 	it("reads the usage like the base drop-down list", function()

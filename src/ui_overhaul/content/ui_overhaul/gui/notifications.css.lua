@@ -8,7 +8,14 @@
 -- yellow Caution had 1.6:1, its green Achievement 2.5:1, its red Problem and blue Info 5.4:1.
 -- Subsidy icons (notifications.lua) get one such colour per state instead of the game's purple.
 -- The timer ring of a subsidy is plain white (base: 75 %).
+-- The icon colours apply in this mod's ridge and hover cards, where every icon lies in a component of
+-- class uio-notification-icon (notifications.lua), and in windows (Line Manager, entity windows,
+-- notification log) while the feature is shown, which carry its class then (styles.lua). Without it,
+-- or once the ridge falls back to the base one, the icons are the game's.
 local ssu = require("::/gui/main/stylesheetutil.lua")
+
+-- where the colours apply: this mod's icons, and windows while the feature is shown
+local SCOPES = { "R::Component!uio-notification-icon ", "Window!uio-on-notifications " } -- styles.on("notifications")
 
 -- contrast to white: base / hover / pressed
 ---@type table<string, string[]>
@@ -51,11 +58,20 @@ function data()
 
 	-- the icon carries "icon-size" next to its type class: one class more than the base rules
 	---@param type_class string
-	---@param prefix string
+	---@param prefix string "" or a state such as "Button:hover ", inside a scope
 	---@return string
 	local function type_selectors(type_class, prefix)
-		return prefix .. "R::NotificationProgressIcon R::Component!icon-size!" .. type_class .. ", "
-			.. prefix .. "R::NotificationSimpleIcon ImageView!icon-size!" .. type_class
+		local list = {} ---@type string[]
+		for _i, scope in ipairs(SCOPES) do
+			list[#list + 1] = scope .. prefix .. "R::NotificationProgressIcon R::Component!icon-size!" .. type_class
+			list[#list + 1] = scope .. prefix .. "R::NotificationSimpleIcon ImageView!icon-size!" .. type_class
+			-- the hovered or pressed button around the scope (in the ridge the button is outside it)
+			if prefix ~= "" then
+				list[#list + 1] = prefix .. scope .. "R::NotificationProgressIcon R::Component!icon-size!" .. type_class
+				list[#list + 1] = prefix .. scope .. "R::NotificationSimpleIcon ImageView!icon-size!" .. type_class
+			end
+		end
+		return table.concat(list, ", ")
 	end
 	for type_class, shades in pairs(TYPES) do
 		add(type_selectors(type_class, ""), { backgroundColor1 = rgb(shades[1]) })

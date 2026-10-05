@@ -14,6 +14,7 @@ local function world(order)
 	end
 	local globals = _G ---@type table<string, any> the game's globals, stand-ins here
 	globals._react = { extensionPoints = { ["::IndustryEowExtensionPoint"] = true }, recipeReplace = {} }
+	globals._ug_loadedModules = {} -- the loader's registry of modules loaded with require (base/init.lua)
 	globals.api = {
 		res = { genericRep = {
 			getAllOfType = function(type_name)
@@ -55,12 +56,17 @@ local function load_priority()
 	return require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 end
 
---- The game's replacement api: records the final replacement per recipe.
+--- The game's replacement api: sets the replacement in the registry the game keeps (_react.recipeReplace,
+-- by recipe id), as GloballyReplaceRecipeBeforeInitInternal does.
 ---@return react.ReplacementApi api
----@return table<function, function?> replaced
+---@return table<function, function?> replaced the replacement per recipe, read from that registry
 local function game_api()
-	local replaced = {} ---@type table<function, function?>
-	return { ReplaceRecipe = function(original, replacement) replaced[original] = replacement end }, replaced
+	local replaced = setmetatable({}, { __index = function(_t, original)
+		return _react.recipeReplace[recipe_ids[original]]
+	end }) ---@type table<function, function?>
+	return { ReplaceRecipe = function(original, replacement)
+		_react.recipeReplace[recipe_ids[original]] = replacement
+	end }, replaced
 end
 
 -- Code of another mod: functions whose source names that mod, as the game's require gives them.
@@ -194,74 +200,237 @@ describe("priority", function()
 		local priority = load_priority()
 		local api_, replaced = game_api()
 		local a, b = recipe("A"), recipe("B")
-		local module = { f = function(x) return x end }
+		local module = { f = function(x) return x end, g = function(x) return x end }
 		priority.early(api_, function() return true end)
 		priority.begin("statistics", true) -- the first module installs in full
 		priority.replacement_api(api_).ReplaceRecipe(a, recipe("A2"))
 		priority.finish(true)
-		priority.begin("statistics", true) -- the second fails after a replacement, a wrap and a gated wrap
+		priority.begin("statistics", true) -- the second fails after a replacement, a wrap and a widget wrap
 		priority.replacement_api(api_).ReplaceRecipe(b, recipe("B2"))
 		priority.chain(module, "f", function(previous) return function(x) return previous(x) .. " half" end end)
-		local gated = priority.gated(function(base) return function(x) return base(x) .. " half" end end)(
-			function(x) return x end)
+		priority.chain(module, "g", function(previous) return function(x) return previous(x) .. " half" end end, true)
 		priority.finish(false)
 		priority.late()
 		assert.is_true(priority.active("statistics"))
 		assert.is_true(replaced[a] ~= nil)
 		assert.is_nil(replaced[b])
 		assert.are.equal("x", module.f("x"))
-		assert.are.equal("x", gated("x"))
+		assert.are.equal("x", module.g("x"))
+	end)
+
+	describe("settles every switch once the order is decided", function()
+		---@param x string
+		---@return string
+		local function original(x) return x end
+		---@param previous fun(x: string): string
+		---@return fun(x: string): string
+		local function ours(previous) return function(x) return previous(x) .. " ours" end end
+
+		it("puts the wrap itself in the field, or the function it wrapped where the feature is off", function()
+			world({ "ui_overhaul_1" })
+			local priority = load_priority()
+			local on, off = { f = original }, { f = original }
+			priority.early(game_api(), function(feature) return feature == "on" end)
+			priority.begin("on", true)
+			local slot = priority.chain(on, "f", ours)
+			priority.finish(true)
+			priority.begin("off", false)
+			priority.chain(off, "f", ours)
+			priority.finish(true)
+			priority.late()
+			assert.is_true(slot ~= on.f)
+			assert.are.equal("x ours", on.f("x"))
+			assert.are.equal(original, off.f)
+		end)
+
+		it("leaves the switch under another mod's wrap (no debug.setupvalue in the game)", function()
+			world({ "ui_overhaul_1", "other_mod" })
+			local priority = load_priority()
+			local module = { f = original }
+			local told = {} ---@type function[]
+			priority.early(game_api(), function() return true end)
+			priority.begin("feature", true)
+			local slot = priority.chain(module, "f", ours, true, function(_old, new) told[#told + 1] = new end)
+			priority.finish(true)
+			mod_code("other_mod", [[return function(module)
+				local previous = module.f
+				module.f = function(x) return previous(x) .. " theirs" end
+			end]])(module)
+			priority.late()
+			assert.are.equal("x ours theirs", module.f("x"))
+			assert.are.equal(0, #told)
+			local found = false
+			for n = 1, 10 do
+				local _name, value = debug.getupvalue(module.f, n)
+				found = found or slot == value
+			end
+			assert.is_true(found)
+		end)
+
+		it("builds this mod's own links on one function anew from below, and tells who asked", function()
+			for _i, a_on in ipairs({ true, false }) do
+				world({ "ui_overhaul_1" })
+				local priority = load_priority()
+				local module = { f = original }
+				local told = {} ---@type function[]
+				priority.early(game_api(), function(feature) return feature == "b" or a_on end)
+				priority.begin("a", a_on)
+				local a_slot = priority.chain(module, "f", function(previous)
+					return function(x) return previous(x) .. " a" end
+				end)
+				priority.finish(true)
+				priority.begin("b", true)
+				priority.chain(module, "f", function(previous) return function(x) return previous(x) .. " b" end end,
+					false, function(_old, new) told[#told + 1] = new end)
+				priority.finish(true)
+				priority.late()
+				assert.are.equal(a_on and "x a b" or "x b", module.f("x"))
+				assert.are.same({ module.f }, told)
+				for n = 1, 10 do
+					local _name, value = debug.getupvalue(module.f, n)
+					assert.is_true(value ~= a_slot)
+				end
+			end
+		end)
+
+		it("settles two features' wraps of the same function and an outer link", function()
+			world({ "ui_overhaul_1", "other_mod" })
+			local priority = load_priority()
+			local module = { f = original }
+			priority.early(game_api(), function() return true end)
+			priority.begin("a", true)
+			priority.chain(module, "f", function(previous) return function(x) return previous(x) .. " a" end end)
+			priority.finish(true)
+			priority.begin("b", true)
+			priority.chain(module, "f", function(previous) return function(x) return previous(x) .. " b" end end, true)
+			priority.finish(true)
+			mod_code("other_mod", [[return function(module)
+				local previous = module.f
+				module.f = function(x) return previous(x) .. " theirs" end
+			end]])(module)
+			priority.late()
+			-- a: outermost (it comes first), b: generic, innermost
+			assert.are.equal("x b theirs a", module.f("x"))
+		end)
 	end)
 
 	describe("a mod that duplicates a feature (OVERLAPS)", function()
-		it("holds it back when this mod comes first", function()
-			world({ "ui_overhaul_1", "gleisbauanzeige_tf3" })
-			local construction_react_util = {}
-			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
+		---construction_react_util as the specs fill it.
+		---@class spec.priority.Construction
+		---@field getActionParams fun(x: string): string
+		---@field gleisbauanzeige_helper? fun(): string
+
+		---@param x string
+		---@return string
+		local function action_params(x) return x end
+
+		--- this mod's build_info wrap and Track & Road Build Info's, as its config makes it
+		---@param order string[]
+		---@param enabled boolean
+		---@param ok? boolean the install
+		---@return uo.gui.priority priority
+		---@return spec.priority.Construction construction
+		local function build_info(order, enabled, ok)
+			world(order)
+			---@type spec.priority.Construction
+			local construction = { getActionParams = action_params }
+			_ug_loadedModules["::/gui/construction/construction_react_util.tl"] = construction
 			local priority = load_priority()
-			priority.early(game_api(), function() return true end)
-			priority.begin("build_info", true)
-			priority.finish(true)
-			priority.hold_back()
-			assert.is_true(construction_react_util.__gleisbauanzeigeInstalled)
+			priority.early(game_api(), function() return enabled end)
+			priority.begin("build_info", enabled)
+			if enabled then
+				priority.chain(construction, "getActionParams",
+					function(previous) return function(x) return previous(x) .. " ours" end end)
+			end
+			priority.finish(ok ~= false and enabled)
+			priority.ready()
+			mod_code("gleisbauanzeige_tf3", [[return function(construction)
+				local original = construction.getActionParams
+				local function report(reason) return reason end
+				construction.getActionParams = function(x) report(x) return original(x) .. " theirs" end
+				construction.gleisbauanzeige_helper = function() return report("helper") end
+			end]])(construction)
+			priority.late()
+			return priority, construction
+		end
+
+		it("takes its wraps out when this mod comes first", function()
+			local priority, construction = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, true)
+			assert.are.equal("x ours", construction.getActionParams("x"))
+			assert.is_true(priority.held_back("gleisbauanzeige_tf3"))
+			-- a function it added is its own, not a wrap: it stays
+			local helper = assert(construction.gleisbauanzeige_helper)
+			assert.are.equal("helper", helper())
 		end)
 
-		it("does not hold it back when this mod's feature failed to install", function()
-			world({ "ui_overhaul_1", "gleisbauanzeige_tf3" })
-			local construction_react_util = {}
-			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
-			local priority = load_priority()
-			priority.early(game_api(), function() return true end)
-			priority.begin("build_info", true)
-			priority.finish(false)
-			priority.hold_back()
-			assert.is_nil(construction_react_util.__gleisbauanzeigeInstalled)
+		it("is held back neither when this mod's feature failed to install nor when it is off", function()
+			local failed_priority, failed = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, true, false)
+			assert.are.equal("x theirs", failed.getActionParams("x"))
+			assert.is_false(failed_priority.held_back("gleisbauanzeige_tf3"))
+			local off_priority, off = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, false)
+			assert.are.equal("x theirs", off.getActionParams("x"))
+			assert.is_false(off_priority.held_back("gleisbauanzeige_tf3"))
 		end)
 
 		it("gives way to it when it comes first", function()
-			world({ "cayde_industry_enhanced_1", "ui_overhaul_1" })
+			local priority, construction = build_info({ "gleisbauanzeige_tf3", "ui_overhaul_1" }, true)
+			assert.are.equal("x theirs", construction.getActionParams("x"))
+			assert.is_false(priority.active("build_info"))
+			assert.are.equal("gleisbauanzeige_tf3", priority.winner("build_info"))
+		end)
+
+		it("leaves its wrap under a later mod's wrap (no debug.setupvalue in the game)", function()
+			world({ "ui_overhaul_1", "gleisbauanzeige_tf3", "other_mod" })
+			local construction = { getActionParams = action_params }
+			_ug_loadedModules["::/gui/construction/construction_react_util.tl"] = construction
 			local priority = load_priority()
 			priority.early(game_api(), function() return true end)
-			priority.begin("industry", true)
+			priority.begin("build_info", true)
+			priority.chain(construction, "getActionParams",
+				function(previous) return function(x) return previous(x) .. " ours" end end)
 			priority.finish(true)
+			priority.ready()
+			for _i, mod in ipairs({ "gleisbauanzeige_tf3", "other_mod" }) do
+				mod_code(mod, [[return function(construction, name)
+					local original = construction.getActionParams
+					construction.getActionParams = function(x) return original(x) .. " " .. name end
+				end]])(construction, mod)
+			end
 			priority.late()
-			assert.is_false(priority.active("industry"))
-			assert.are.equal("cayde_industry_enhanced_1", priority.winner("industry"))
+			-- both wraps stay, inside this mod's (which has the last word: it comes first)
+			assert.are.equal("x gleisbauanzeige_tf3 other_mod ours", construction.getActionParams("x"))
+			assert.is_true(priority.held_back("gleisbauanzeige_tf3"))
 		end)
 
-		it("does not hold it back when the feature is switched off", function()
-			world({ "ui_overhaul_1", "gleisbauanzeige_tf3" })
-			local construction_react_util = {}
-			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
+		it("takes back its recipe replacement and its wraps of modules it loads itself", function()
+			world({ "ui_overhaul_1", "terminal_selector", "other_mod" })
+			local station_group, theirs, other = recipe("StationGroupWindowContent"), recipe("Theirs"), recipe("Other")
+			local window = recipe("Window")
 			local priority = load_priority()
-			priority.early(game_api(), function(feature) return feature ~= "build_info" end)
-			priority.begin("build_info", false)
-			priority.finish(false)
-			priority.hold_back()
-			assert.is_nil(construction_react_util.__gleisbauanzeigeInstalled)
+			local api_, replaced = game_api()
+			priority.early(api_, function() return true end)
+			priority.begin("station_terminals", true)
+			priority.finish(true)
+			priority.ready()
+			-- a module loaded by its config, after this mod's installs: its own function, then their wrap
+			---@type { call: fun(r: function): function }
+			local late_module = assert(load("return { call = function(r) return r end }", "::/gui/main/late.lua"))()
+			_ug_loadedModules["::/gui/main/late.lua"] = late_module
+			mod_code("other_mod", "return function(api, a, b) api.ReplaceRecipe(a, b) end")(api_, window, other)
+			mod_code("terminal_selector", [[return function(api, module, original, replacement, window, theirs)
+				api.ReplaceRecipe(original, replacement)
+				api.ReplaceRecipe(window, theirs)
+				local call = module.call
+				module.call = function(r) if r == original then return replacement end return call(r) end
+			end]])(api_, late_module, station_group, theirs, window, theirs)
+			priority.late()
+			assert.is_nil(replaced[station_group])
+			-- the replacement it made over another mod's: that one is used again
+			assert.are.equal(other, replaced[window])
+			assert.are.equal(station_group, late_module.call(station_group))
 		end)
 
-		it("leaves its plugins out of the extension point when this mod comes first", function()
+		it("leaves its plugins out of every extension point when this mod comes first", function()
 			world({ "ui_overhaul_1", "cayde_industry_enhanced_1" })
 			local own_card, their_card = function() end, function() end
 			package.loaded["::/scripts/util.tl"] = { useFn = function(path)
@@ -274,10 +443,11 @@ describe("priority", function()
 			priority.early(game_api(), function() return true end)
 			priority.begin("industry", true)
 			priority.finish(true)
+			priority.ready()
 			priority.late()
-			priority.filter_plugins()
 			local shown = fake_react.getPlugins({ id = "::IndustryEowExtensionPoint" })
 			assert.are.same({ { recipe = own_card } }, shown)
+			-- an extension point where it has no plugins: all stay
 			assert.are.equal(2, #fake_react.getPlugins({ id = "::LineEowExtensionPoint" }))
 		end)
 
@@ -287,14 +457,15 @@ describe("priority", function()
 			package.loaded["::/scripts/util.tl"] = { useFn = function() return their_card end }
 			---@param _point { id: string }?
 			---@return { recipe: function }[]
-			fake_react.getPlugins = function(_point) return { { recipe = their_card } } end
+			local get_plugins = function(_point) return { { recipe = their_card } } end
+			fake_react.getPlugins = get_plugins
 			local priority = load_priority()
 			priority.early(game_api(), function() return true end)
 			priority.begin("industry", true)
 			priority.finish(false)
+			priority.ready()
 			priority.late()
-			priority.filter_plugins()
-			assert.are.equal(1, #fake_react.getPlugins({ id = "::IndustryEowExtensionPoint" }))
+			assert.are.equal(get_plugins, fake_react.getPlugins)
 		end)
 	end)
 end)
