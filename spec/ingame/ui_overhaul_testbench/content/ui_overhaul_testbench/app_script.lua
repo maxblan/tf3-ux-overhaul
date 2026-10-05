@@ -12,9 +12,17 @@ local TAG = "[testbench]"
 local START_AFTER_FRAMES = 120
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
-local MODS = fixture.vanilla and { "urbangames_no_costs_1", "ui_overhaul_testbench_1" }
-	or { "urbangames_no_costs_1", "ui_overhaul_1", "ui_overhaul_testbench_1" }
-for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
+-- The fixture's extra mods come after this mod, or before it with fixture.mods_first (to check that
+-- the activation order decides which mod wins).
+local MODS = { "urbangames_no_costs_1" }
+if fixture.mods_first then
+	for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
+end
+if not fixture.vanilla then MODS[#MODS + 1] = "ui_overhaul_1" end
+MODS[#MODS + 1] = "ui_overhaul_testbench_1"
+if not fixture.mods_first then
+	for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
+end
 
 local frames, started = 0, false
 ---@class uo.testbench.PendingLoad
@@ -74,8 +82,15 @@ local function load_fixture_game()
 			listed[mod.name] = true
 		end
 	end
-	local added = fixture.vanilla and { "ui_overhaul_testbench_1" } or { "ui_overhaul_1", "ui_overhaul_testbench_1" }
-	for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
+	local added = {} ---@type string[]
+	if fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
+	end
+	if not fixture.vanilla then added[#added + 1] = "ui_overhaul_1" end
+	added[#added + 1] = "ui_overhaul_testbench_1"
+	if not fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
+	end
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
 	for _, name in ipairs(added) do

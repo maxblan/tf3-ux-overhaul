@@ -13,13 +13,45 @@
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
 
--- Mods the run added (run.sh --with-mod): checks expect what they change.
-local with_mod = {} ---@type table<string, true>
-for _i, name in ipairs(fixture.mods or {}) do with_mod[name] = true end
+-- Where UI Overhaul and another mod change the same part, the one that comes first in the mod list
+-- wins (gui/priority.lua). The position of a mod, read the way priority.lua reads it: its smallest
+-- generic resource id (ids follow the activation order); nil when it is not active.
+---@param mod string
+---@return integer?
+local function position(mod)
+	local types = { "react-replacement-config" }
+	for _i, point in ipairs({ "ModEntryPointExtension", "LineEowExtensionPoint", "IndustryEowExtensionPoint",
+		"MainModButtonAreaExtension", "StationGroupEowExtensionPoint", "VehicleEowExtensionPoint",
+		"GameBarInfoDisplayExtension" }) do
+		types[#types + 1] = "react-plugin ::" .. point
+	end
+	local best ---@type integer?
+	for _i, type_name in ipairs(types) do
+		for _j, id in ipairs(api.res.genericRep.getAllOfType(type_name)) do
+			if api.res.genericRep.getName(id):sub(1, #mod + 2) == mod .. "::" and (best == nil or id < best) then
+				best = id
+			end
+		end
+	end
+	return best
+end
+
+--- Whether `mod` is active and comes before UI Overhaul in the mod list: then it wins the part both change.
+---@param mod string
+---@return boolean
+local function wins(mod)
+	local theirs, ours = position(mod), position("ui_overhaul_1")
+	return theirs ~= nil and ours ~= nil and theirs < ours
+end
+
 -- Replaces the station window and brings its own terminal buttons there.
-local TERMINAL_SELECTOR = with_mod.terminal_selector
--- Takes over every popover named TerminalSelection, the mod's included.
-local EASY_TERMINALS = with_mod.zhenya_easy_terminal_assignment
+local TERMINAL_SELECTOR = wins("terminal_selector")
+-- Takes over every popover named TerminalSelection.
+local EASY_TERMINALS = wins("zhenya_easy_terminal_assignment")
+-- Replaces the Finances table with statements of its own.
+local FINANCIAL_STATEMENTS = wins("tcoleman_financial_statements_1")
+-- Development and lines cards in the industry window.
+local INDUSTRY_ENHANCED = wins("cayde_industry_enhanced_1")
 
 ---@param id string
 ---@return boolean
@@ -192,6 +224,7 @@ end
 ---@field clone_before? integer
 ---@field town? Engine.Entity
 ---@field industry? Engine.Entity
+---@field screen? { x: integer, y: integer } screen size in pixels
 ---@field industry_blocked? boolean
 ---@field models_line? Engine.Entity
 ---@field models_why? string
@@ -223,6 +256,8 @@ end
 local checks = {
 	{
 		name = "gui_fixture_facts",
+		-- the mod logs its features and which mod won where both change the same part
+		act = function() api.gui.fireReactEvent("uio.debug.priority", nil) end,
 		wait = 120,
 		shot = "game_bar",
 		check = function()
@@ -617,6 +652,7 @@ local checks = {
 		check = function(ctx)
 			if not ctx.industry then return true, "skipped: no industry" end
 			local shown = visible("uio.industry.development." .. tostring(ctx.industry))
+			if INDUSTRY_ENHANCED then return not shown, "Industry UI Enhanced comes first, ours visible=" .. tostring(shown) end
 			return shown, "development card visible=" .. tostring(shown) .. " (see the industry log lines)"
 		end,
 	},
@@ -878,6 +914,28 @@ local checks = {
 		end,
 	},
 	{
+		-- opened at the screen's bottom right corner, as from a stop button near the edge on a wide screen:
+		-- the popover moves onto the screen (see "[ui_overhaul] terminal popover at ... moved to")
+		name = "terminal_popover_on_screen",
+		act = function(ctx)
+			local screen = api.gui.camera.getSize()
+			ctx.screen = { x = screen.x, y = screen.y }
+			if ctx.terminal_line then
+				-- positions are parts of the screen (0..1), as a button's getPosition gives them
+				api.gui.fireReactEvent("uio.debug.terminal_button", { line = ctx.terminal_line, x = 0.97, y = 0.9 })
+			end
+		end,
+		wait = 60,
+		shot = "terminal_popover_on_screen",
+		check = function(ctx)
+			if not ctx.terminal_line or EASY_TERMINALS then return true, "skipped" end
+			local shown = visible("uio.terminals.usage.1")
+			local screen = ctx.screen or { x = 0, y = 0 }
+			return shown, string.format("screen %dx%d, popover visible=%s (see the placement log line and the shot)",
+				screen.x, screen.y, tostring(shown))
+		end,
+	},
+	{
 		name = "stops_reach",
 		act = function(ctx)
 			if ctx.terminal_line then api.gui.fireReactEvent("uio.debug.reach", ctx.terminal_line) end
@@ -968,6 +1026,7 @@ local checks = {
 		shot = "finance_income",
 		check = function()
 			local shown = visible("uio.finances.views")
+			if FINANCIAL_STATEMENTS then return not shown, "Real Financial Statements comes first, ours=" .. tostring(shown) end
 			return shown, "statement views visible=" .. tostring(shown) .. " (see the finances log line)"
 		end,
 	},
@@ -976,20 +1035,20 @@ local checks = {
 		act = function() api.gui.fireReactEvent("uio.finances.view", "cashflow") end,
 		wait = 60,
 		shot = "finance_cash_flow",
-		check = function() return visible("uio.finances.views"), "cash flow" end,
+		check = function() return visible("uio.finances.views") ~= FINANCIAL_STATEMENTS, "cash flow" end,
 	},
 	{
 		name = "finance_balance_sheet",
 		act = function() api.gui.fireReactEvent("uio.finances.view", "balance") end,
 		wait = 60,
 		shot = "finance_balance_sheet",
-		check = function() return visible("uio.finances.views"), "balance sheet" end,
+		check = function() return visible("uio.finances.views") ~= FINANCIAL_STATEMENTS, "balance sheet" end,
 	},
 	{
 		name = "finance_details",
 		act = function() api.gui.fireReactEvent("uio.finances.view", "details") end,
 		wait = 60,
-		check = function() return visible("uio.finances.views"), "the game's table" end,
+		check = function() return visible("uio.finances.views") ~= FINANCIAL_STATEMENTS, "the game's table" end,
 	},
 	{
 		name = "construction_rail_menu",

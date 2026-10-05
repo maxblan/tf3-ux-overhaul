@@ -282,7 +282,8 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		if type(p) == "table" then
 			line, position = p.line, { x = p.x, y = p.y }
 		else
-			line, position = p, { x = 1000, y = 250 }
+			-- parts of the screen (0..1), as a button's getPosition gives them
+			line, position = p, { x = 0.5, y = 0.2 }
 		end
 		-- open() reads only x and y, as of the Vec2f a button's getPosition returns
 		if line then mod_terminals().open(line, 0, position --[[@as Vec2f]], "Select Terminals") end

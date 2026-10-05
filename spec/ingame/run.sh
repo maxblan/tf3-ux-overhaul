@@ -7,6 +7,7 @@
 #   --save NAME    run on a copy of the savegame NAME (without .sav) instead of a new small map. The
 #                  copy is called uio_fixture; it and its autosaves are deleted afterwards.
 #   --only CHECK   run only the GUI checks of that name (and the fixture facts); repeatable
+#   --mods-first   put the --with-mod mods before this mod in the activation order (default: after)
 #   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
 #                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
 #   --gallery      shoot the gallery scenes (gui_checks.lua) instead of running the checks, paused and
@@ -14,6 +15,11 @@
 #                  at the top edge before each shot, so nothing shows a hover state.
 #   --vanilla      with --gallery: without the mod, for the "before" shots
 #   --language CODE  run in that game language (e.g. en); the profile is restored afterwards
+#   --no-shots     take no screenshots
+#   --window WxH   run in a window of that size (e.g. 1280x720) instead of the configured screen mode
+#   --font SIZE    text size SMALL, MEDIUM or LARGE
+#   --ui-scale F   a fixed UI scale (e.g. 1.5) instead of the automatic one
+#                  (window, font and scale: settings.lua is restored afterwards)
 # Requires: Steam running, Transport Fever 3 not running, steam_appid.txt in the game folder.
 set -euo pipefail
 
@@ -24,17 +30,27 @@ with_mods=()
 only=()
 gallery=0
 vanilla=0
+mods_first=0
 language=""
+no_shots=0
+window=""
+font=""
+ui_scale=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--timeout) timeout="$2"; shift 2 ;;
 		--keep-testbench) keep_testbench=1; shift ;;
 		--save) save="$2"; shift 2 ;;
 		--with-mod) with_mods+=("$2"); shift 2 ;;
+		--mods-first) mods_first=1; shift ;;
 		--only) only+=("$2"); shift 2 ;;
 		--gallery) gallery=1; shift ;;
 		--vanilla) vanilla=1; shift ;;
 		--language) language="$2"; shift 2 ;;
+		--no-shots) no_shots=1; shift ;;
+		--window) window="$2"; shift 2 ;;
+		--font) font="$2"; shift 2 ;;
+		--ui-scale) ui_scale="$2"; shift 2 ;;
 		*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 done
@@ -99,6 +115,20 @@ if [ "$gallery" -eq 1 ]; then
 	sed -i -E 's/^(\s*)fontScaleClass = "[A-Z]+",/\1fontScaleClass = "LARGE",/; s/^(\s*)resolutionScale = [0-9.]+,/\1resolutionScale = 1,/' \
 		"$settings"
 fi
+# --window, --font, --ui-scale: other screen sizes and text sizes (settings.lua, put back afterwards)
+if [ -n "$window$font$ui_scale" ]; then
+	if [ -z "$settings_backup" ]; then
+		settings_backup="$(mktemp)"
+		cp "$settings" "$settings_backup"
+	fi
+	if [ -n "$window" ]; then
+		w="${window%x*}"; h="${window#*x}"
+		sed -i -E 's/^(\s*)screenMode = "[A-Z]+",/\1screenMode = "WINDOWED",/; s/^(\s*)windowSize = \{[^}]*\},/\1windowSize = { '"$w"', '"$h"', },/' "$settings"
+	fi
+	[ -z "$font" ] || sed -i -E 's/^(\s*)fontScaleClass = "[A-Z]+",/\1fontScaleClass = "'"$font"'",/' "$settings"
+	[ -z "$ui_scale" ] || sed -i -E 's/^(\s*)uiAutoScaling = (true|false),/\1uiAutoScaling = false,/; s/^(\s*)uiscaling = [0-9.]+,/\1uiscaling = '"$ui_scale"',/' "$settings"
+	echo "screen for this run: window=${window:-as configured} font=${font:-as configured} ui scale=${ui_scale:-auto}"
+fi
 if [ -n "$language" ]; then
 	profile_backup="$(mktemp)"
 	cp "$profile" "$profile_backup"
@@ -130,6 +160,7 @@ if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ "$
 	flags=""
 	[ "$gallery" -eq 1 ] && flags="$flags gallery = true,"
 	[ "$vanilla" -eq 1 ] && flags="$flags vanilla = true,"
+	[ "$mods_first" -eq 1 ] && flags="$flags mods_first = true,"
 	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s},%s }\n' "$fixture_save" \
 		"$extra" "$only_list" "$flags" > "$staged_fixture"
 	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
@@ -140,9 +171,16 @@ shots_dir="$results_dir/shots-$(date +%Y%m%d-%H%M%S)"
 if [ "$gallery" -eq 1 ]; then shots_dir="$results_dir/gallery-$([ "$vanilla" -eq 1 ] && echo vanilla || echo mod)"; fi
 
 # Screenshots for visual review: the testbench logs "[testbench] SHOT <name>" and holds still for a
-# few seconds; this captures the primary screen (where the game runs, in front) into
-# $shots_dir/<name>.png. Other monitors are left out on purpose.
+# few seconds; this saves the game window's content (window_shot.ps1, PrintWindow) to
+# $shots_dir/<name>.png. Only the game window is captured, also while other windows lie in front of it.
+# The gallery captures the primary screen instead (it moves the cursor over the game, which must be in front).
+window_shot_ps1="$(wslpath -w "$repo/spec/ingame/window_shot.ps1")"
 capture_screen() {
+	if [ "$gallery" -eq 0 ]; then
+		powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$window_shot_ps1" -out "$1" \
+			< /dev/null > /dev/null 2>&1
+		return
+	fi
 	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Left,\$b.Top,0,0,\$bmp.Size); \$bmp.Save('$1')" < /dev/null > /dev/null 2>&1
 }
 # The cursor at the top edge, half way across (edge scrolling is off in the settings): no hover state.
@@ -184,6 +222,7 @@ watch_shots() {
 					MOUSE) mouse_at "${step[1]}" "${step[2]}"; hovering=1 ;;
 					CLICK) mouse_at "${step[1]}" "${step[2]}" click; hovering=1 ;;
 					SHOT)
+						if [ "$no_shots" -eq 1 ]; then done_count=$((done_count + 1)); continue; fi
 						mkdir -p "$shots_dir"
 						# the cursor out of the way, unless the shot shows what it hovers
 						if [ "$gallery" -eq 1 ] && [ "$hovering" -eq 0 ]; then park_cursor; sleep 1.5; fi
@@ -248,7 +287,8 @@ echo "--- engine errors ---"
 # "React: ..." errors (e.g. a duplicate component id) leave the UI running but in a broken state.
 gui_failures=$(grep -ac "ReactFramework::Load() failed\|Script component root failed\|\] *+\? *React: " "$saved" || true)
 # A mod module that failed and fell back to vanilla logs "[ui_overhaul] disabled ..." or "... failed".
-mod_failures=$(grep -ac "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" || true)
+# (not the testbench's own lines, which may quote such a line)
+mod_failures=$(grep -a "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" | grep -vc "\[testbench\]" || true)
 grep -a -A6 "ProposalData error\|Lua error\|Error while running lua app script\|Fatal error\|ReactFramework::Load() failed\|React: " \
 	"$saved" | cut -c1-300 | head -60 || true
 
@@ -261,5 +301,5 @@ if [ "$outcome" = "crash" ]; then
 	grep -a -B12 "MinidumpCallback\|Calling HandleCrash" "$saved" | cut -c1-200 | head -14 || true
 fi
 [ "$gui_failures" -eq 0 ] || echo "GUI failed to load ($gui_failures times), see engine errors above"
-[ "$mod_failures" -eq 0 ] || { echo "mod modules fell back to vanilla ($mod_failures lines):"; grep -a "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" | cut -c1-300 | head; }
+[ "$mod_failures" -eq 0 ] || { echo "mod modules fell back to vanilla ($mod_failures lines):"; grep -a "\[ui_overhaul\] disabled\|\[ui_overhaul\] .* failed" "$saved" | grep -v "\[testbench\]" | cut -c1-300 | head; }
 [ "$outcome" = "done" ] && [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ] && [ "$gui_failures" -eq 0 ] && [ "$mod_failures" -eq 0 ]
