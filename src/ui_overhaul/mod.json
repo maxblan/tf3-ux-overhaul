@@ -3,14 +3,235 @@
     "incompatibilities": null,
     "modId": "ui_overhaul_1",
     "options": null,
-    "params": null,
+    "params": [
+        {
+            "key": "uio_line_manager",
+            "name": "Line Manager",
+            "tooltip": "Cargo, vehicle count and balance in line rows; load, condition and age in vehicle rows; the model row above the vehicles; a question before cloning or replacing several vehicles.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_terminals",
+            "name": "Select Terminals",
+            "tooltip": "Three buttons per terminal instead of the drop-down list; the preferred terminal highlighted; terminals the line cannot use or reach greyed, with the reason.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_station_terminals",
+            "name": "Station window: Select Terminals",
+            "tooltip": "A Select Terminals button for each line stop in the station window's terminal list.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_line_window",
+            "name": "Line window",
+            "tooltip": "Load and condition of each vehicle, Add Vehicle and Remove Vehicle, and the Stops card with what waits at each stop.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_vehicle_tooltip",
+            "name": "Vehicle hover on the map",
+            "tooltip": "Line, next stop, speed, load, condition and delivery quality under a vehicle's name.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_performance",
+            "name": "Vehicle performance",
+            "tooltip": "The Performance card in the vehicle window and the slope speeds in the vehicle store.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_statistics",
+            "name": "Statistics",
+            "tooltip": "Quick filters, totals and corrected sorting in the Lines, Vehicles, Stations and Warehouses tabs.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_finances",
+            "name": "Finances",
+            "tooltip": "Income statement, cash flow and balance sheet in the Finances tab.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_windows",
+            "name": "Windows side by side",
+            "tooltip": "Statistics, Line Manager, Finances, Company and the notification log stay open side by side and when you click the map.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_minimize",
+            "name": "Minimize button",
+            "tooltip": "A button in the title bar of every window that folds it to its title bar.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_entity_windows",
+            "name": "Entity windows",
+            "tooltip": "Sections stay open, Sell needs a second click, the town window names what limits growth, a locked perk says when a promotion is pending.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_industry",
+            "name": "Industry window",
+            "tooltip": "The Development and Served by cards, and the switch for the red area of a blocked expansion.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_construction",
+            "name": "Construction menus",
+            "tooltip": "Rail and Tracks, Road and Roads show each other's tabs; fastest track first; Configure opens the right tab; the bulldozer warns before removing a station that lines stop at.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_build_info",
+            "name": "Build tooltip measurements",
+            "tooltip": "Steepest gradient, tightest curve radius, height range, bridge height and tunnel depth while you draw track or road.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_sliders",
+            "name": "Sliders",
+            "tooltip": "The mouse wheel moves a slider one step, and a value can be typed.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_notifications",
+            "name": "Notifications",
+            "tooltip": "Notifications of the same kind share one icon with a count, in darker colours with more contrast.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_catchment",
+            "name": "Catchment area buttons",
+            "tooltip": "Two buttons in the game bar that keep the passenger and the cargo catchment areas of all stations on the map.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_subsidies",
+            "name": "Subsidies",
+            "tooltip": "Subsidy icons coloured by state, with the time until an offer ends and the time left.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_earnings",
+            "name": "Earnings tooltip",
+            "tooltip": "The cash flow of the last 30 days and of the 30 days before in the Earnings tooltip.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_vehicle_store",
+            "name": "Vehicle store: newest first",
+            "tooltip": "The vehicle store lists the newest models first and preselects the newest one.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        }
+    ],
     "postRunScript": {
         "fileName": ""
     },
     "preRunScript": {
         "fileName": ""
     },
-    "revision": 2,
+    "revision": 3,
     "runScript": {
         "fileName": ""
     },

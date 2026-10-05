@@ -12,7 +12,7 @@
 -- the timer ring is drawn in plain white (notifications.css.lua). The hover card's icon matches.
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
--- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown for
+-- react-replacement-config (installer.lua). If rendering fails, the base ridge is shown for
 -- the rest of the session (fallback.lua), without a Resolve for the icons it takes over.
 -- Which notifications exist, are hidden or are dismissed is left to the game: this module only
 -- sends the base "dismiss" and "initialSound" events, as the base ridge does.
@@ -116,13 +116,17 @@ local click_handlers = {}
 
 -- Hover card (1:1 from the base, plus the position in the group) ---------------------------------
 
--- `node` inside a layout with the subsidy state class `class` (notifications.css.lua), or `node`.
+-- `node` (an icon) inside a component of class uio-notification-icon, and of the subsidy state class
+-- `class` if given (notifications.css.lua: the icon colours apply only inside it).
 ---@param node? react.TreeNodeId
 ---@param class? string
 ---@return react.TreeNodeId?
 local function with_state(node, class)
-	if not (class and node) then return node end
-	return builtin.Component{ meta = { class = class }, layout = builtin.BoxLayout{ children = { node } } }
+	if not node then return nil end
+	return builtin.Component{
+		meta = { class = class and ("uio-notification-icon, " .. class) or "uio-notification-icon" },
+		layout = builtin.BoxLayout{ children = { node } },
+	}
 end
 
 ---@param params uo.gui.notifications.GuiData
@@ -787,7 +791,7 @@ local Replacement = fallback.replacement(notifications.switch, "NotificationPopu
 	end,
 })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function notifications.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_popups, Replacement)

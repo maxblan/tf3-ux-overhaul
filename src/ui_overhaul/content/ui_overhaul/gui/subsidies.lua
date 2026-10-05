@@ -11,6 +11,7 @@
 local subvention_util = require("::/game_mechanics/subventions/subvention_util.tl")
 local util = require("::/scripts/util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---`subvention_util.makeDefaultCardData`; a wrapper passes any further arguments on unchanged.
 ---@alias uo.gui.subsidies.MakeCardData fun(
@@ -80,21 +81,26 @@ function subsidies.extend(card, state)
 	return card
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function subsidies.install(_replacement_api)
 	-- the previous function in the chain (the game's, or another mod's wrapper around it), called with
 	-- whatever the wrapper got
-	---@type uo.gui.subsidies.MakeCardData
-	local original = subvention_util.makeDefaultCardData
-	if type(original) ~= "function" then error("subvention_util.makeDefaultCardData not found") end
-	---@type uo.gui.subsidies.MakeCardData
-	subvention_util.makeDefaultCardData = function(state, icon, ...)
-		local card = original(state, icon, ...)
-		local ok, err = pcall(subsidies.extend, card, state)
-		if not ok then debugPrint("[ui_overhaul] subsidy texts failed: ", tostring(err)) end
-		return card
+	if type(subvention_util.makeDefaultCardData) ~= "function" then
+		error("subvention_util.makeDefaultCardData not found")
 	end
+	priority.chain(subvention_util, "makeDefaultCardData",
+	---@param original uo.gui.subsidies.MakeCardData
+	---@return uo.gui.subsidies.MakeCardData
+	function(original)
+		---@type uo.gui.subsidies.MakeCardData
+		return function(state, icon, ...)
+			local card = original(state, icon, ...)
+			local ok, err = pcall(subsidies.extend, card, state)
+			if not ok then debugPrint("[ui_overhaul] subsidy texts failed: ", tostring(err)) end
+			return card
+		end
+	end)
 	debugPrint("[ui_overhaul] subsidy texts installed")
 end
 

@@ -41,7 +41,14 @@ function orderedPairs(t) end
 ---@field builtin table<string, integer>
 ---Per wrapper recipe (react.RegisterWrapperRecipe): the id of the recipe it wraps.
 ---@field recipeMetas table<integer, { innerRecipeId: integer }?>
+---The registered extension points by fully qualified name ("::LineEowExtensionPoint" ...).
+---@field extensionPoints table<string, true>
 _react = {}
+
+---The loader's modules loaded with require, by resolved path ("::/gui/main/react.lua",
+---"<mod id>::/x.lua"): each module's own table, or whatever else it returned (base/base/init.lua).
+---@type table<string, any>
+_ug_loadedModules = {}
 
 ---Reads a whole file (tools/lua/run.js, for the tools only).
 ---@param path string

@@ -48,6 +48,8 @@
 ---@field getCameraData fun(): Gui.CameraData
 ---Screen pixel of a world position.
 ---@field world2Screen fun(position: Vec3f): { x: integer, y: integer }
+---Width and height of the viewport, in pixels.
+---@field getSize fun(): { x: integer, y: integer }
 
 ---@class Gui.Sound
 ---@field playRandomSoundEffect fun(paths: FilePath[])

@@ -6,7 +6,7 @@
 --   * the Age cell turns red once the lifetime is reached, with the lifetime tooltip of the line window
 -- A Lua conversion of the base tab (gui/statistics/statistic_vehicles.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_vehicles.script.lua). If rendering fails, the base tab is shown for the
+-- (installer.lua). If rendering fails, the base tab is shown for the
 -- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_vehicles
 local builtin = require("::/gui/main/builtin.lua")
@@ -518,7 +518,7 @@ statistics_vehicles.switch = fallback.switch("statistics vehicles tab")
 local Replacement = fallback.replacement(statistics_vehicles.switch, "VehiclesStatistic", render,
 	base_vehicles_statistic, { focus = true })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function statistics_vehicles.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_vehicles_statistic, Replacement)

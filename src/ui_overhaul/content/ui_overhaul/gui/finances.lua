@@ -11,7 +11,7 @@
 -- The choice is kept for the session. The statements are built from the same
 -- computeFinanceTable data as the game's table (core/statements.lua) and drawn with the table's
 -- own cells and classes (the recipe ViewCell is registered under the base name).
--- Replaces the exported recipe of finances_table.tl (react-replacement-config, finances.script.lua);
+-- Replaces the exported recipe of finances_table.tl (react-replacement-config, installer.lua);
 -- if rendering fails, the game's table is shown for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.finances
 local builtin = require("::/gui/main/builtin.lua")
@@ -373,7 +373,7 @@ end
 finances.switch = fallback.switch("finance statements")
 local Replacement = fallback.replacement(finances.switch, "FinancesTable", render, base_finances_table)
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function finances.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_finances_table, Replacement)

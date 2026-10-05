@@ -104,22 +104,50 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 - The Earnings tooltip also shows the cash flow of the last 30 days and of the 30 days before.
 - The vehicle store lists the newest models first and preselects the newest one. Your sort choice is kept until you leave the game. This applies to the list layout; the table layout keeps the vanilla order.
 
+## Settings
+
+Every part of the mod can be switched off on its own, in the mod's settings: the gear next to UI Overhaul in the game's mod list, also when you load a savegame. A part you switch off is vanilla again, and other mods that change it work as without UI Overhaul.
+
+| Setting | What it switches |
+|---|---|
+| Line Manager | line and vehicle rows, the model row, the questions before cloning or replacing several vehicles, the add-stop hint, reopening on the last line (needs Windows side by side) |
+| Select Terminals | the terminal popover's buttons, highlighting and greying |
+| Station window: Select Terminals | the button per line stop in the station window |
+| Line window | the Vehicles card's rows and buttons, the Stops card |
+| Vehicle hover on the map | the vehicle tooltip on the map |
+| Vehicle performance | the Performance card and the store tooltip |
+| Statistics | the four Statistics tabs |
+| Finances | the statements in the Finances tab |
+| Windows side by side | the tool windows staying open |
+| Minimize button | the minimize button |
+| Entity windows | sections staying open, Sell, the town and perk texts |
+| Industry window | the Development and Served by cards, the red-area switch |
+| Construction menus | the merged menus, track order, Configure, the bulldozer warning |
+| Build tooltip measurements | gradient, radius and heights while building |
+| Sliders | mouse wheel and typed values |
+| Notifications | the grouped notification icons and their colours |
+| Catchment area buttons | the two catchment buttons |
+| Subsidies | subsidy colours and texts |
+| Earnings tooltip | the 30-day figures |
+| Vehicle store: newest first | the store's order |
+
 ## Compatibility
 
 - You can add the mod to a savegame and remove it again. It changes only the user interface and adds no game script.
-- It uses the game's UI extension points and replaces some vanilla UI parts. If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
-- Two mods cannot replace the same vanilla part. This mod replaces the industry window (calling the original) and:
+- If one of its changes fails, that screen falls back to vanilla and the rest of the game's UI keeps working.
+- **The mod list decides.** Where UI Overhaul and another mod change the same part of the UI, the mod that comes first in the mod list (the lower activation number, loaded first) wins; the other one's version of that part is left out, and everything else of both mods stays. Move a mod up or down in the list to choose. In detail:
+  - A screen both replace (for example the Finances table): the one that comes first is shown. If that is the other mod, UI Overhaul leaves this part alone, as if it were switched off.
+  - A function both extend (for example the build tooltip or the terminal popover): both changes stay, and the one that comes first has the last word. (Where mods before and after UI Overhaul extend the same function, a later one can still come last, as it would without UI Overhaul.)
+  - Mods that show the same information in their own way are recognised: Industry UI Enhanced (industry window cards), Track & Road Build Info (build tooltip measurements), Terminal Selector (station window terminal buttons), Easy Terminal Assignment (terminal popover) and Real Financial Statements (Finances table). The one that comes first is shown, the other is held back.
+  - The game log (`stdout.txt`) names each decision in lines starting with `[ui_overhaul]`.
+- Tested together, in both orders, with Timetables, Auto Line Namer, Auto Assign Terminals, Terminal Selector, Real Financial Statements, Track & Road Build Info, Industry UI Enhanced, Dark UI, Auto Signals, Parallel Tracks, Parallel Roads, Realistic Train Brakes and Tunnel Portal Fix.
+- Screens: tested at 1024x768 (4:3), 1280x720, 1920x1080 (16:9), 2560x1080 and 3440x1440 (21:9), with small, medium and large text and a fixed UI scale of 1.5. Popovers that the game would place past the edge of the screen are moved onto it.
+- The parts of the game it replaces (another mod that replaces the same one is decided by the mod list):
   - the Line Manager's vehicle list, row icons and add-stop hover;
   - the Statistics Lines, Vehicles, Stations and Warehouses tabs;
   - the line window's Vehicles card and the Finances tab's table;
-  - the map's entity hover tooltip;
+  - the map's entity hover tooltip and the industry window (calling the original);
   - the game bar's Earnings display, the notification icons, the window stack and the entity windows' action bar.
-
-  Other mods that replace one of these will conflict. Timetables and Auto Line Namer work alongside it.
-- It also wraps some vanilla functions, which other mods can wrap as well: the popover window content (terminal buttons; works together with Auto Assign Terminals), the slider widget and the construction sliders, windows (minimize, and window recipe registration), the subsidy card texts, the default map action (catchment areas) and the store's performance rating.
-- Terminal mods:
-  - [Terminal Selector](https://mod.io/g/transportfever3/m/terminal-selector) first put a terminal button into the station window. With it active, its station window and buttons are used.
-  - [Easy Terminal Assignment](https://mod.io/g/transportfever3/m/easy-terminal-assignment) has its own one-click design for the terminal popover. With it active, all terminal popovers are its, including the ones this mod's buttons open.
 - English, German, French, Italian, Spanish, Dutch, Japanese, Korean, Polish, Brazilian Portuguese, Russian and Chinese (simplified and traditional): all the game's languages.
 
 ## Development
@@ -131,6 +159,10 @@ make deps                          # once
 make lint typecheck test           # luacheck, strict type check and offline specs
 make test-ingame                   # in-game checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
+make test-ingame SAVE="My Save" WITH="celmi_timetables terminal_selector" MODS_FIRST=1
+                                   # with installed mods, before this one in the mod list
+make test-ingame WINDOW=1280x720 FONT=LARGE UI_SCALE=1.5 NO_SHOTS=1
+                                   # another screen size, text size or UI scale; no screenshots
 make validate                      # the game's mod validator
 make gallery                       # the mod.io gallery cards (docs/gallery.md)
 ```
@@ -141,7 +173,7 @@ The in-game checks take screenshots of every changed screen into `spec/ingame/re
 
 | Path | Content |
 |---|---|
-| `src/ui_overhaul/content/ui_overhaul/gui/` | one module per change; each is installed through a small guarded stub (`*.script.lua`, `guard.lua`) |
+| `src/ui_overhaul/content/ui_overhaul/gui/` | one module per change, installed by `installer.lua`; `priority.lua` decides where another mod changes the same part, `settings.lua` reads the player's switches |
 | `docs/inventory/` | inventory of the game's UI, read from its source |
 | `docs/improvements.md` | ranked improvement candidates, with status |
 | `docs/api_cookbook.md` | engine API notes for GUI work |

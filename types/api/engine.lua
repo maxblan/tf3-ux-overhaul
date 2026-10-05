@@ -192,7 +192,14 @@ function Line.new() end
 ---@field isOnWater fun(position: Vec2f): boolean
 ---@field getBoundingBox fun(): Box2f
 
+---The game's configuration (`api.engine.config`).
+---@class Engine.Config
+---Parameters of every active mod by mod id: parameter key -> value (the 1-based index of the chosen
+---value, or its number where the parameter has numbers). Mods without parameters have an empty table.
+---@field getModParams fun(): table<string, table<string, number>>
+
 ---@class Engine
+---@field config Engine.Config
 ---@field system System
 ---@field terrain UtilTerrain
 ---@field util EngineUtil

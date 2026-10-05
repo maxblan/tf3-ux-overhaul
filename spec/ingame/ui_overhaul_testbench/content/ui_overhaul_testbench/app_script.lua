@@ -12,9 +12,38 @@ local TAG = "[testbench]"
 local START_AFTER_FRAMES = 120
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
-local MODS = fixture.vanilla and { "urbangames_no_costs_1", "ui_overhaul_testbench_1" }
-	or { "urbangames_no_costs_1", "ui_overhaul_1", "ui_overhaul_testbench_1" }
-for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
+
+--- This mod (unless vanilla), the testbench and the fixture's extra mods, in activation order: the
+-- extra mods after this mod, or before it with fixture.mods_first (to check that the activation order
+-- decides which mod wins).
+---@return string[]
+local function ordered_mods()
+	local list = {} ---@type string[]
+	if fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do list[#list + 1] = name end
+	end
+	if not fixture.vanilla then list[#list + 1] = "ui_overhaul_1" end
+	list[#list + 1] = "ui_overhaul_testbench_1"
+	if not fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do list[#list + 1] = name end
+	end
+	return list
+end
+
+-- The value of "Off" in a feature's param, as the game takes it in modParams: 1-based, as
+-- getModParams hands it over (observed in game: 2 switched the feature off, 1 left it on).
+local OFF_VALUE = 2
+
+--- This mod's params for the features fixture.off names (run.sh --off), each set to "Off".
+---@return table<string, integer>
+local function own_params()
+	local params = {} ---@type table<string, integer>
+	for _i, feature in ipairs(fixture.off or {}) do params["uio_" .. feature] = OFF_VALUE end
+	return params
+end
+
+local MODS = { "urbangames_no_costs_1" }
+for _i, name in ipairs(ordered_mods()) do MODS[#MODS + 1] = name end
 
 local frames, started = 0, false
 ---@class uo.testbench.PendingLoad
@@ -37,6 +66,8 @@ local function start_test_game()
 	params.climateGenerator = "::/climates/temperate/temperate.clima"
 	params.economy = "::/economy/temperate.eco"
 	params.mods = MODS
+	local own = own_params()
+	if next(own) ~= nil then params.modParams = { ui_overhaul_1 = own } end
 	params.seed = "ui-overhaul"
 	params.generateTowns = true
 	params.generateIndustries = false
@@ -65,28 +96,49 @@ local function load_fixture_game()
 	local data = load.info:get()
 	local details = api.type.SaveGameDetails.new(data.info)
 	local mods, names, listed = {}, {}, {} ---@type Mod.ModId[], string[], table<string, true>
+	local added = ordered_mods()
+	local wanted = {} ---@type table<string, true>
+	for _i, name in ipairs(added) do wanted[name] = true end
+	-- with mods_first, the savegame's own entries of these mods are listed again below, in that order
+	-- (a savegame made with this mod lists it before mods added now)
+	local moved = {} ---@type table<string, Mod.ModId>
 	for _, mod in ipairs(details.mods) do
 		-- the gallery shows this mod alone: of the savegame's mods only the game's own content stays
 		local keep = not fixture.gallery or mod.name:sub(1, #"urbangames_") == "urbangames_"
 		if fixture.vanilla and mod.name == "ui_overhaul_1" then keep = false end
-		if keep then
+		if keep and fixture.mods_first and wanted[mod.name] then
+			moved[mod.name] = mod
+		elseif keep then
 			mods[#mods + 1], names[#names + 1] = mod, mod.name
 			listed[mod.name] = true
 		end
 	end
-	local added = fixture.vanilla and { "ui_overhaul_testbench_1" } or { "ui_overhaul_1", "ui_overhaul_testbench_1" }
-	for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
 	for _, name in ipairs(added) do
 		if not listed[name] then
-			local mod = api.type.ModId.new()
+			local mod = moved[name] or api.type.ModId.new()
 			mod.name = name
 			mods[#mods + 1], names[#names + 1] = mod, name
 			listed[name] = true
 		end
 	end
 	details.mods = mods
+	local own = own_params()
+	if next(own) ~= nil then
+		-- the savegame's own params of every mod, with this mod's switches on top
+		local params = {} ---@type table<string, table<string, integer>>
+		pcall(function()
+			for mod, values in pairs(details.modParams) do
+				local copy = {} ---@type table<string, integer>
+				for key, value in pairs(values) do copy[key] = value end
+				params[mod] = copy
+			end
+		end)
+		params.ui_overhaul_1 = params.ui_overhaul_1 or {}
+		for key, value in pairs(own) do params.ui_overhaul_1[key] = value end
+		details.modParams = params
+	end
 	log("loading savegame", fixture.save, "with mods", table.concat(names, ", "))
 	app.loadGame(load.id, false, details)
 end

@@ -23,7 +23,7 @@
 -- window opens (observed in game). Windows without a title bar
 -- (compact: the Line Manager), without a close button, with a header of their own, dialogs and
 -- popovers stay as they are.
--- Installed by minimize.script.lua.
+-- Installed by installer.lua.
 -- @module ui_overhaul.gui.minimize
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
@@ -297,7 +297,7 @@ local function wrap_window(base)
 	end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function minimize.install(_replacement_api)
 	-- builtin_wraps also keeps window recipes registered later on the base builtin

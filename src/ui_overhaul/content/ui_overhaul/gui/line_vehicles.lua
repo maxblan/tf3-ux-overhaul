@@ -6,7 +6,7 @@
 -- its load and a condition icon between the name and the vehicle icon; their tooltip names the
 -- next stop, speed, load, condition and delivery quality (vehicle_info.lua).
 -- Replaces the exported base plugin recipe line_eow.LineVehiclesPlugin (react-replacement-config,
--- see line_vehicles.script.lua). The vehicle table is a copy of the base one, registered under the
+-- see installer.lua). The vehicle table is a copy of the base one, registered under the
 -- base recipe names so the base stylesheet applies unchanged. If the card fails, the base card is
 -- shown for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.line_vehicles
@@ -252,7 +252,7 @@ local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
 	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
 end)
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function line_vehicles.install(replacement_api)
 	replacement_api.ReplaceRecipe(line_eow.LineVehiclesPlugin, Replacement)

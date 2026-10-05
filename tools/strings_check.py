@@ -14,6 +14,9 @@ STRINGS = "src/ui_overhaul/strings.json"
 used = set()
 for path in glob.glob("src/ui_overhaul/content/**/*.lua", recursive=True):
     used.update(re.findall(r'_\(\s*"((?:[^"\\]|\\.)*)"\s*\)', open(path, encoding="utf-8").read()))
+# the mod's settings (mod.json params): the game translates their names, tooltips and values
+for param in json.load(open("src/ui_overhaul/mod.json", encoding="utf-8")).get("params") or []:
+    used.update([param["name"], param["tooltip"], *param["values"]])
 mod = json.load(open(STRINGS, encoding="utf-8"))
 if "--no-game" in sys.argv:
     problems = []

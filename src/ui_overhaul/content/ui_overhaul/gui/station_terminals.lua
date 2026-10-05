@@ -12,7 +12,7 @@
 --     line with one stop here, once per stop otherwise): the spacer is returned with the button in it.
 -- Both act only while the recipe TerminalStops renders, and only while the station window is the base
 -- one: a mod that replaces it (Terminal Selector) brings its own buttons. On any error the row stays
--- as it is and one line is logged. Installed by station_terminals.script.lua.
+-- as it is and one line is logged. Installed by installer.lua.
 -- @module ui_overhaul.gui.station_terminals
 local builtin = require("::/gui/main/builtin.lua")
 local gui_react_util = require("::/gui/main/gui_react_util.tl")
@@ -21,6 +21,7 @@ local station_group = require("::/gui/entity_window/station_group/station_group.
 local terminals = require("ui_overhaul_1::/ui_overhaul/gui/terminals.lua")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---@class uo.gui.station_terminals
 local station_terminals = {}
@@ -189,7 +190,7 @@ function station_terminals.wrap_spacer(previous, in_list, button)
 	end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function station_terminals.install(_replacement_api)
 	if type(orderedPairs) ~= "function" then error("orderedPairs not found") end
@@ -198,9 +199,13 @@ function station_terminals.install(_replacement_api)
 	local function in_list()
 		return station_terminals.in_base_list(current_recipe, station_window_replaced)
 	end
-	orderedPairs = station_terminals.wrap_ordered_pairs(orderedPairs, in_list)
-	gui_react_util.makeHorizontalSpacer = station_terminals.wrap_spacer(
-		gui_react_util.makeHorizontalSpacer, in_list, terminals.TerminalButton)
+	-- generic: helpers the whole UI uses, changed here only while the station window's stop list renders
+	priority.chain(_G, "orderedPairs", function(previous)
+		return station_terminals.wrap_ordered_pairs(previous, in_list)
+	end, true)
+	priority.chain(gui_react_util, "makeHorizontalSpacer", function(previous)
+		return station_terminals.wrap_spacer(previous, in_list, terminals.TerminalButton)
+	end, true)
 	debugPrint("[ui_overhaul] station terminal buttons installed")
 end
 

@@ -15,11 +15,12 @@
 --     tightest curve radius, each with the type's build limit, the height range, and how high
 --     bridges and how deep tunnels run above or below the ground (core/geometry.lua)
 -- Patches the exported functions construction_react_util.getMenuCategories and getActionParams
--- before the UI starts (construction.script.lua); any error leaves the base result unchanged.
+-- before the UI starts (installer.lua); any error leaves the base result unchanged.
 -- @module ui_overhaul.gui.construction
 local construction_react_util = require("::/gui/construction/construction_react_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
 local geometry = require("/ui_overhaul/core/geometry.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 local construction = {}
 
@@ -179,13 +180,17 @@ local function adjust(result)
 end
 
 local function patch_menu_categories()
-	local original = construction_react_util.getMenuCategories
-	construction_react_util.getMenuCategories = function(...)
-		local result = original(...)
-		local ok, err = pcall(adjust, result)
-		if not ok then debugPrint("[ui_overhaul] construction menu adjustments failed: ", tostring(err)) end
-		return result
-	end
+	priority.chain(construction_react_util, "getMenuCategories",
+	---@param original fun(...: any): game.gui.construction.construction_react_util.MenuCategories
+	---@return fun(...: any): game.gui.construction.construction_react_util.MenuCategories
+	function(original)
+		return function(...)
+			local result = original(...)
+			local ok, err = pcall(adjust, result)
+			if not ok then debugPrint("[ui_overhaul] construction menu adjustments failed: ", tostring(err)) end
+			return result
+		end
+	end)
 end
 
 -- Bulldozer warning ---------------------------------------------------------------------------------
@@ -400,32 +405,50 @@ local function add_strings(action, extra, first)
 	end
 end
 
-local function patch_proposal_tooltips()
-	local original = construction_react_util.getActionParams
-	construction_react_util.getActionParams = function(...)
-		local result = original(...)
-		local action = result and result.constructionActionParams
-		if action and type(action.getProposalStringsFn) == "function" then
-			if action.bulldozer ~= nil then
-				add_strings(action, station_warnings, true)
-			elseif action.trackEdgeBuilder ~= nil then
-				local res_name = action.trackEdgeBuilder.resName
-				add_strings(action, function(proposal) return measurement_strings(proposal, 1, res_name) end)
-			elseif action.streetEdgeBuilder ~= nil then
-				local res_name = action.streetEdgeBuilder.resName
-				add_strings(action, function(proposal) return measurement_strings(proposal, 0, res_name) end)
+--- Wraps getActionParams so that `extend(action)` sees the action of each tool (its tooltip lines).
+---@param extend fun(action: builtin.ConstructionActionParam)
+local function patch_action_params(extend)
+	priority.chain(construction_react_util, "getActionParams",
+	---@param original fun(...: any): game.gui.construction.construction_menu.ConstructionMenuActionParams
+	---@return fun(...: any): game.gui.construction.construction_menu.ConstructionMenuActionParams
+	function(original)
+		---@param ... any the game's arguments, passed on unchanged
+		---@return game.gui.construction.construction_menu.ConstructionMenuActionParams
+		return function(...)
+			local result = original(...)
+			local action = result and result.constructionActionParams
+			if action and type(action.getProposalStringsFn) == "function" then
+				local ok, err = pcall(extend, action)
+				if not ok then debugPrint("[ui_overhaul] construction tooltip failed: ", tostring(err)) end
 			end
+			return result
 		end
-		return result
-	end
+	end)
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function construction.install(_replacement_api)
 	patch_menu_categories()
-	patch_proposal_tooltips()
+	patch_action_params(function(action)
+		if action.bulldozer ~= nil then add_strings(action, station_warnings, true) end
+	end)
 	debugPrint("[ui_overhaul] construction menu patch installed")
+end
+
+--- The build tooltip's measurements (a feature of its own, see settings.lua).
+---@param _replacement_api react.ReplacementApi
+function construction.install_build_info(_replacement_api)
+	patch_action_params(function(action)
+		if action.trackEdgeBuilder ~= nil then
+			local res_name = action.trackEdgeBuilder.resName
+			add_strings(action, function(proposal) return measurement_strings(proposal, 1, res_name) end)
+		elseif action.streetEdgeBuilder ~= nil then
+			local res_name = action.streetEdgeBuilder.resName
+			add_strings(action, function(proposal) return measurement_strings(proposal, 0, res_name) end)
+		end
+	end)
+	debugPrint("[ui_overhaul] build tooltip measurements installed")
 end
 
 return construction

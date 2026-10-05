@@ -7,7 +7,7 @@
 --     upkeep
 -- A Lua conversion of the base tab (gui/statistics/statistic_warehouses.tl), registered under the
 -- base recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_warehouses.script.lua). If rendering fails, the base tab is shown for the
+-- (installer.lua). If rendering fails, the base tab is shown for the
 -- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_warehouses
 local builtin = require("::/gui/main/builtin.lua")
@@ -526,7 +526,7 @@ statistics_warehouses.switch = fallback.switch("statistics warehouses tab")
 local Replacement = fallback.replacement(statistics_warehouses.switch, "WarehousesStatistic", render,
 	base_warehouses_statistic, { focus = true })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function statistics_warehouses.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_warehouses_statistic, Replacement)

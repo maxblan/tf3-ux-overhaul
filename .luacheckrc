@@ -43,3 +43,11 @@ files["src/ui_overhaul/content/ui_overhaul/gui/minimize.lua"] = {
 files["src/ui_overhaul/content/ui_overhaul/gui/builtin_wraps.lua"] = {
 	read_globals = { "api", "app", "debugPrint", "_", "_react" },
 }
+-- Reads the React registry _react (base/init.lua): the registered extension points; and the loader's
+-- registry of loaded modules _ug_loadedModules (base/init.lua).
+-- It also watches what the other mods' configs write there, and puts the modules loaded meanwhile back.
+files["src/ui_overhaul/content/ui_overhaul/gui/priority.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" }, globals = { "_ug_loadedModules" },
+}
+-- Stand in for the loader's registry of loaded modules and the React registry.
+files["spec/gui/priority_spec.lua"] = { std = "+busted", globals = { "_ug_loadedModules", "_react" } }

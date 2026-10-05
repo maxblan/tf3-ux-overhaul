@@ -16,7 +16,7 @@
 --     to select its model (lvm_models.lua); a new line started from vehicles of two or more lines
 --     starts empty, like one started with several lines selected
 -- The confirmation wraps react.fireEvent for "duplicateVehicles" (installed before the UI starts,
--- see lvm_tweaks.script.lua); the memory uses the tool stack's pop hook (tool_stack.lua) and the
+-- see installer.lua); the memory uses the tool stack's pop hook (tool_stack.lua) and the
 -- entry point's per-frame step (entry.lua).
 -- @module ui_overhaul.gui.lvm_tweaks
 local react = require("::/gui/main/react.lua")
@@ -30,6 +30,7 @@ local tool_stack = require("/ui_overhaul/gui/tool_stack.lua")
 local lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local table_util = require("::/scripts/table_util.tl")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 local lvm_tweaks = {}
 
@@ -70,22 +71,27 @@ local function confirm_clone(original_fire, src, param)
 end
 
 local function install_confirmation()
-	local original_fire = react.fireEvent ---@type uo.gui.lvm_tweaks.Previous
-	---@param src react.RefWrap?
-	---@param name string
-	---@param param? any the event's payload, any value
-	---@param ... any passed on unchanged to the previous function
-	---@return any ... whatever the previous function returns
-	react.fireEvent = function(src, name, param, ...)
-		if name == "duplicateVehicles" and type(param) == "table" and not param.uioConfirmed
-			and type(param.addFeedback) == "function" and type(param.vehicleEntities) == "table"
-			and #param.vehicleEntities > 1 then
-			local ok, err = pcall(confirm_clone, original_fire, src, param)
-			if ok then return end
-			debugPrint("[ui_overhaul] clone confirmation failed, cloning directly: ", tostring(err))
+	-- many mods wrap react.fireEvent for their own events: generic, never a conflict
+	priority.chain(react, "fireEvent",
+	---@param original_fire uo.gui.lvm_tweaks.Previous
+	---@return uo.gui.lvm_tweaks.Previous
+	function(original_fire)
+		---@param src react.RefWrap?
+		---@param name string
+		---@param param? any the event's payload, any value
+		---@param ... any passed on unchanged to the previous function
+		---@return any ... whatever the previous function returns
+		return function(src, name, param, ...)
+			if name == "duplicateVehicles" and type(param) == "table" and not param.uioConfirmed
+				and type(param.addFeedback) == "function" and type(param.vehicleEntities) == "table"
+				and #param.vehicleEntities > 1 then
+				local ok, err = pcall(confirm_clone, original_fire, src, param)
+				if ok then return end
+				debugPrint("[ui_overhaul] clone confirmation failed, cloning directly: ", tostring(err))
+			end
+			return original_fire(src, name, param, ...)
 		end
-		return original_fire(src, name, param, ...)
-	end
+	end, true)
 end
 
 -- Common params of the open Line Manager -------------------------------------------------------------
@@ -240,33 +246,37 @@ local function replace_cost(changes)
 end
 
 local function patch_handle_vehicle_changes()
-	local original = vehicle_react_util.HandleVehicleChanges ---@type uo.gui.lvm_tweaks.Previous
-	---@param changes game.gui.line_vehicle_mgmt.vehicle_react_util.VehicleChange[]
-	---@param ... any passed on unchanged to the previous function
-	---@return any ... whatever the previous function returns
-	vehicle_react_util.HandleVehicleChanges = function(changes, ...)
-		local args = table.pack(...) -- may hold nils (getFirstStopToSendTo without a line context)
-		local replaces = 0
-		for _i, change in ipairs(changes or {}) do
-			if change.vehicleEntity >= 0 and #change.config.vehicles > 0 then replaces = replaces + 1 end
+	priority.chain(vehicle_react_util, "HandleVehicleChanges",
+	---@param original uo.gui.lvm_tweaks.Previous
+	---@return uo.gui.lvm_tweaks.Previous
+	function(original)
+		---@param changes game.gui.line_vehicle_mgmt.vehicle_react_util.VehicleChange[]
+		---@param ... any passed on unchanged to the previous function
+		---@return any ... whatever the previous function returns
+		return function(changes, ...)
+			local args = table.pack(...) -- may hold nils (getFirstStopToSendTo without a line context)
+			local replaces = 0
+			for _i, change in ipairs(changes or {}) do
+				if change.vehicleEntity >= 0 and #change.config.vehicles > 0 then replaces = replaces + 1 end
+			end
+			local common = current
+			if replaces > 1 and common and type(common.addFeedback) == "function" then
+				local ok = pcall(function()
+					local cost = replace_cost(changes)
+					local text = cost > 0
+						and lang_util.format(_("Replace {count} vehicles for {cost}?"),
+							{ count = replaces, cost = api.util.formatMoney(cost) })
+						or lang_util.format(_("Replace {count} vehicles?"), { count = replaces })
+					common.addFeedback(text, "Question", {
+						onAccept = function() original(changes, table.unpack(args, 1, args.n)) end,
+						acceptText = _("Replace"),
+					}, 2)
+				end)
+				if ok then return end
+			end
+			return original(changes, ...)
 		end
-		local common = current
-		if replaces > 1 and common and type(common.addFeedback) == "function" then
-			local ok = pcall(function()
-				local cost = replace_cost(changes)
-				local text = cost > 0
-					and lang_util.format(_("Replace {count} vehicles for {cost}?"),
-						{ count = replaces, cost = api.util.formatMoney(cost) })
-					or lang_util.format(_("Replace {count} vehicles?"), { count = replaces })
-				common.addFeedback(text, "Question", {
-					onAccept = function() original(changes, table.unpack(args, 1, args.n)) end,
-					acceptText = _("Replace"),
-				}, 2)
-			end)
-			if ok then return end
-		end
-		return original(changes, ...)
-	end
+	end)
 end
 
 -- Add-stop hover ----------------------------------------------------------------------------------
@@ -384,6 +394,8 @@ end
 -- on the next step (after the base handler has reset it).
 ---@param param? game.gui.line_vehicle_mgmt.manager_window.ManagerWindowEventParam
 function lvm_tweaks.on_open(param)
+	-- the Line Manager feature switched off or given up to a mod that comes first (priority.lua)
+	if not priority.active("line_manager") then return end
 	param = param or {}
 	if param.openWithLineEntity or param.openWithVehicleEntities or param.openWithDepotEntity or param.sendToLineMode then
 		return
@@ -399,7 +411,7 @@ function lvm_tweaks.step()
 	if api.engine.entityExists(line) then react.fireEvent(nil, "openVehicleManager", { openWithLineEntity = line }) end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function lvm_tweaks.install(replacement_api)
 	install_confirmation()

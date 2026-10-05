@@ -7,7 +7,7 @@
 --     (base: by { used, capacity })
 -- A Lua conversion of the base tab (gui/statistics/statistic_stations.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_stations.script.lua). If rendering fails, the base tab is shown for the
+-- (installer.lua). If rendering fails, the base tab is shown for the
 -- rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_stations
 local builtin = require("::/gui/main/builtin.lua")
@@ -496,7 +496,7 @@ statistics_stations.switch = fallback.switch("statistics stations tab")
 local Replacement = fallback.replacement(statistics_stations.switch, "StationsStatistic", render,
 	base_stations_statistic, { focus = true })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function statistics_stations.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_stations_statistic, Replacement)

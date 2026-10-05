@@ -10,7 +10,7 @@
 -- While another tool is on top (construction, bulldozer, layers ...), window tools and entity windows
 -- are hidden as before and come back afterwards.
 -- A copy of the vanilla builtin.ToolStack (gui/main/builtin.lua) with these rules marked "UIO";
--- installed through a react-replacement-config (tool_stack.script.lua). If rendering fails, the
+-- installed through a react-replacement-config (installer.lua). If rendering fails, the
 -- vanilla tool stack is used for the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.tool_stack
 local react = require("::/gui/main/react.lua")
@@ -385,7 +385,7 @@ local Replacement = fallback.replacement(tool_stack.switch, "ToolStack", render,
 	end,
 })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function tool_stack.install(replacement_api)
 	replacement_api.ReplaceRecipe(builtin.ToolStack, Replacement)

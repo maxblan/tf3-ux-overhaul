@@ -15,7 +15,7 @@
 -- blocker row has an eye button that shows or hides it, so the ground underneath can be seen. For
 -- that the exported recipe IndustryWindow (industry.tl) is replaced and calls the original; while the
 -- map action it hands to setActionFn renders, builtin.LayerConfig drops the overlay's triangles if
--- the area is switched off (industry_window.res.lua, industry_cards.script.lua).
+-- the area is switched off (installer.lua).
 -- @module ui_overhaul.gui.industry_cards
 local builtin = require("::/gui/main/builtin.lua")
 local content_card = require("::/gui/main/content_card.tl")
@@ -496,7 +496,7 @@ local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
 	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_industry_window, copy) } }
 end)
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function industry_cards.install(replacement_api)
 	builtin_wraps.wrap("LayerConfig", function(base)

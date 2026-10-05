@@ -2,7 +2,7 @@
 -- load, condition and delivery quality (vehicle_info.lua). Hovering a carriage shows its train.
 -- Replaces the exported recipe game_tooltips.DefaultEntityToolTip and calls the original first, so
 -- the name and the notification lines stay the game's. Other entities look exactly as before.
--- Installed by vehicle_tooltip.script.lua; if the block fails, the base tooltip stays.
+-- Installed by installer.lua; if the block fails, the base tooltip stays.
 -- @module ui_overhaul.gui.vehicle_tooltip
 local builtin = require("::/gui/main/builtin.lua")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
@@ -64,7 +64,7 @@ local Tooltip = react.RegisterRecipe("DefaultEntityToolTip", function(param)
 	}
 end)
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function vehicle_tooltip.install(replacement_api)
 	replacement_api.ReplaceRecipe(game_tooltips.DefaultEntityToolTip, Tooltip)

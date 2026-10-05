@@ -8,7 +8,7 @@
 -- integration), so they match the rating the store shows. The card is a plugin of
 -- ::VehicleEowExtensionPoint (performance_card.res); the cart tooltip wraps
 -- vehicle_util.getPowerRatingTextAndToolTip and builtin.TextView while the cart renders
--- (performance.res, react-replacement-config).
+-- (installed by installer.lua).
 -- @module ui_overhaul.gui.performance
 local builtin = require("::/gui/main/builtin.lua")
 local content_card = require("::/gui/main/content_card.tl")
@@ -20,6 +20,7 @@ local romberg = require("::/scripts/util/romberg.tl")
 local vehicle_slopes = require("/ui_overhaul/core/vehicle_slopes.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---@class uo.gui.performance
 local performance = {}
@@ -279,11 +280,11 @@ local function wrap_text_view(original)
 	end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function performance.install(_replacement_api)
 	if type(vehicle_util.getPowerRatingTextAndToolTip) ~= "function" then error("rating function not found") end
-	vehicle_util.getPowerRatingTextAndToolTip = wrap_rating(vehicle_util.getPowerRatingTextAndToolTip)
+	priority.chain(vehicle_util, "getPowerRatingTextAndToolTip", wrap_rating)
 	builtin_wraps.wrap("TextView", wrap_text_view)
 	debugPrint("[ui_overhaul] performance tooltip installed")
 end

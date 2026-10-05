@@ -14,6 +14,7 @@ local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
 local selector_react_util = require("::/gui/main/selector_react_util.tl")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 local catchment = {}
 
@@ -174,12 +175,13 @@ function catchment.cargo_button()
 	return button("cargo", "::/gui/layers/icons/symbol_cargo.tga", _("Show the cargo catchment areas of all stations"))
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function catchment.install(_replacement_api)
-	local original = selector_react_util.makeDefaultSelectorCombinedFn
-	if type(original) ~= "function" then error("makeDefaultSelectorCombinedFn not found") end
-	selector_react_util.makeDefaultSelectorCombinedFn = wrap_combined_fn(original)
+	if type(selector_react_util.makeDefaultSelectorCombinedFn) ~= "function" then
+		error("makeDefaultSelectorCombinedFn not found")
+	end
+	priority.chain(selector_react_util, "makeDefaultSelectorCombinedFn", wrap_combined_fn)
 	debugPrint("[ui_overhaul] catchment overlay installed")
 end
 
