@@ -4,11 +4,12 @@
 --   react.useState({ mode = "YearFrom", ascending = true, groupTypes = true })
 -- (line_vehicle_mgmt/vehicle_store_window.tl). The wrapped react.useState recognises exactly that
 -- initial value (three keys, these values) and starts from the remembered or the newest-first sort.
--- Any other state is untouched. Installed before the UI starts (store_tweaks.script.lua).
+-- Any other state is untouched. Installed before the UI starts (installer.lua).
 -- The table layout of the store keeps the base sorting.
 -- @module ui_overhaul.gui.store_tweaks
 local react = require("::/gui/main/react.lua")
 local table_util = require("::/scripts/table_util.tl")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 local store_tweaks = {}
 
@@ -55,23 +56,28 @@ local function remembering(state)
 	return wrapped
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function store_tweaks.install(_replacement_api)
-	-- the previous useState in the chain (the game's, or another mod's wrapper around it)
-	local original = react.useState ---@type fun(...: any): any
-	---@param initial any any hook's initial value
-	---@param ... any passed on unchanged to the previous function
-	---@return any ... whatever the previous function returns
-	react.useState = function(initial, ...)
-		if not is_store_sort(initial) then return original(initial, ...) end
-		if not logged then
-			logged = true
-			debugPrint("[ui_overhaul] vehicle store sort: newest first")
+	-- the previous useState in the chain (the game's, or another mod's wrapper around it); generic:
+	-- every recipe uses it, this mod changes one state only
+	priority.chain(react, "useState",
+	---@param original fun(...: any): any
+	---@return fun(...: any): any
+	function(original)
+		---@param initial any any hook's initial value
+		---@param ... any passed on unchanged to the previous function
+		---@return any ... whatever the previous function returns
+		return function(initial, ...)
+			if not is_store_sort(initial) then return original(initial, ...) end
+			if not logged then
+				logged = true
+				debugPrint("[ui_overhaul] vehicle store sort: newest first")
+			end
+			local start = remembered and copy(remembered) or { mode = "YearFrom", ascending = false, groupTypes = true }
+			return remembering(original(start, ...))
 		end
-		local start = remembered and copy(remembered) or { mode = "YearFrom", ascending = false, groupTypes = true }
-		return remembering(original(start, ...))
-	end
+	end, true)
 end
 
 return store_tweaks

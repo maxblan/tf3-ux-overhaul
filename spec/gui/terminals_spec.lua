@@ -82,17 +82,20 @@ local function calls()
 end
 
 describe("terminals", function()
-	it("hands the terminal popover our recipe and keeps everything else", function()
+	it("hands the terminal popover our recipe, under a name of its own, and keeps everything else", function()
 		local params = { lineEntity = 1, stopIndex = 0, viaState = {}, commonParams = {} }
 		local p = { meta = { forceFocusable = true }, recipe = base_terminals, params = params, onClose = print }
 		local swapped = terminals.swap(p, react.GetRecipeName)
 		---@cast swapped game.gui.main.popover_react_util.PopoverWindowParam -- the copy of p
-		assert.are.equal(terminals.TerminalSelection, swapped.recipe)
+		assert.are.equal(terminals.Popover, swapped.recipe)
 		assert.are.equal(params, swapped.params)
 		assert.are.equal(p.meta, swapped.meta)
 		assert.are.equal(print, swapped.onClose)
 		assert.are.equal(base_terminals, p.recipe) -- the caller's table is not changed
-		assert.are.equal("TerminalSelection", react.GetRecipeName(swapped.recipe)) -- base stylesheet applies
+		-- not the base name, which other mods swap by (Easy Terminal Assignment); the selection inside it
+		-- has the base name, so the base stylesheet applies
+		assert.are.equal("UioTerminalPopover", react.GetRecipeName(swapped.recipe))
+		assert.are.equal("TerminalSelection", react.GetRecipeName(terminals.TerminalSelection))
 	end)
 
 	it("passes other popovers and odd arguments through unchanged", function()
@@ -104,6 +107,27 @@ describe("terminals", function()
 		assert.are.equal("ref", terminals.swap("ref", react.GetRecipeName))
 		local ours = { recipe = terminals.TerminalSelection }
 		assert.are.equal(ours, terminals.swap(ours, react.GetRecipeName))
+		local host = { recipe = terminals.Popover }
+		assert.are.equal(host, terminals.swap(host, react.GetRecipeName))
+	end)
+
+	it("moves a popover that reaches past the right or bottom edge back onto the screen", function()
+		-- opened at 0.9 on a 21:9 screen, laid out wider than the game assumed (observed in game)
+		local x, y = terminals.placement(0.9, 0.1, { left = 0.829, top = 0.1, right = 1.047, bottom = 0.218 }, 3440, 1440)
+		assert.is_true(x ~= nil and y ~= nil)
+		---@cast x number
+		---@cast y number
+		assert.is_true(math.abs(x - (1 - 8 / 3440 - 0.218)) < 1e-6)
+		assert.are.equal(0.1, y)
+		-- near the bottom: above the game bar
+		local _x2, y2 = terminals.placement(0.3, 0.9, { left = 0.3, top = 0.9, right = 0.5, bottom = 1.02 }, 1920, 1080)
+		---@cast y2 number
+		assert.is_true(math.abs(y2 - (1 - 0.07 - 0.12)) < 1e-6)
+		-- fits: stays
+		assert.is_nil((terminals.placement(0.5, 0.5, { left = 0.5, top = 0.5, right = 0.7, bottom = 0.6 }, 1920, 1080)))
+		-- taller or wider than the screen: its top left corner stays on it
+		local x3, y3 = terminals.placement(0.5, 0.5, { left = 0.5, top = 0.5, right = 1.7, bottom = 1.8 }, 1000, 1000)
+		assert.are.same({ 0.008, 0.008 }, { x3, y3 })
 	end)
 
 	it("leaves popovers of the base name with other parameters to their mod", function()
@@ -120,7 +144,7 @@ describe("terminals", function()
 		local result = popover_react_util.PopoverWindowContent{
 			recipe = base_terminals, params = { viaState = {}, commonParams = {} },
 		}
-		assert.are.equal(terminals.TerminalSelection, result.popover.recipe)
+		assert.are.equal(terminals.Popover, result.popover.recipe)
 		local other = { recipe = cargo_filter }
 		assert.are.equal(other, popover_react_util.PopoverWindowContent(other).popover)
 	end)
@@ -330,7 +354,7 @@ describe("terminals popover fallback", function()
 		-- the base popover the Line Manager opened, taken over
 		local swapped = module.swap({ recipe = base, params = params }, fake.react.GetRecipeName)
 		---@cast swapped game.gui.main.popover_react_util.PopoverWindowParam -- the copy of the base popover's
-		assert.are.equal(module.TerminalSelection, swapped.recipe)
+		assert.are.equal(module.Popover, swapped.recipe)
 
 		local parent = fake.mount(module.TerminalSelection)
 		---@type spec.FakeNode the fallback parent's child: the mod's recipe

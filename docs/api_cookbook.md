@@ -1492,3 +1492,43 @@ return builtin.BoxLayout{ children = {
 - `useStepStateTimerWithCommit(get, interval, makeCommand, …)`: the notification ridge uses it (`NM/gui/notification_popups.tl:277`).
 - `useStepStateParallel(useFnName, params, finalize, …)` / `useStepStateParallelSimple(useFnName, params)`: the work
   runs in another thread, and the result is applied next frame.
+
+## 9. Load order and other mods
+
+Observed in game (build 40408, 2026-10-05, with 13 mod.io mods active in both orders).
+
+### 9.1 Load order
+- The mod list's activation order (the numbers in the game's mod list, `StartGameParams.mods`, a savegame's
+  mod list) is the order in which mods load. Generic resource ids follow it: the game's own resources first,
+  then mod by mod. `api.res.genericRep.getAllOfType(type)` returns ids, `getName(id)` names such as
+  `ui_overhaul_1::/ui_overhaul/gui/entry.res` (`::/...` for the game's). A mod's smallest id gives its
+  position (`gui/priority.lua`).
+- The game has no rule of its own for two mods changing the same thing: `react-replacement-config`s run
+  sorted by `order` (`bootstrap_game.tl:22`, `table.sort`, not stable for equal orders), the last
+  `ReplaceRecipe` of a recipe wins, and module-field wraps nest in the order the configs ran.
+- `api.engine.config.getModParams()` lists every active mod with its params (an empty table for a mod
+  without params); it is readable in a replacement config, before the UI starts. A Button param's value is
+  the 1-based index of the chosen value.
+
+### 9.2 Who owns a function
+- The debug library is there in the GUI state (`debug.getinfo`, `debug.getupvalue`); `pcall`/`xpcall` too.
+- `debug.getinfo(fn, "S").source` is `<mod id>::/path.lua` for a module loaded with `require` (`::/path`
+  for the game's own) and the file's path on disk for a resource script loaded by the engine (a
+  `.script.lua` a res points at), e.g. `C:/Users/Public/mod.io/10640/mods/<id>/content/...` or
+  `.../staging_area/<folder>/content/...`. `getCurrentModId()` inside a doReplaceFn names the mod whose
+  file is on the require stack, not the config's mod.
+- A recipe registered with `react.RegisterRecipe` is a wrapper defined in `react.lua`: its source does not
+  tell the mod. Record the caller of `ReplaceRecipe` instead (the first frame on the stack from a mod file).
+- The `replacementApi` table is one table handed to every config in turn: a config that runs first can wrap
+  its `ReplaceRecipe` and see every later call.
+- `react.fireEvent` is `api.gui.react.fireEvent`, an engine function: `type()` need not be `"function"`.
+
+### 9.3 Window and node positions
+- `nodeRef:getPosition(gravityX, gravityY)` returns parts of the screen (0..1), not pixels; a window's
+  `initialX`/`initialY` are taken the same way, as the window's top left corner (a value above 1, e.g. a
+  pixel count, is clamped to the edge). `api.gui.camera.getSize()` gives the screen in pixels.
+- The game keeps a new window on the screen with the size it has before its content is laid out. A popover
+  opened near the right or bottom edge then reaches past it as its rows fill it (opened at 0.9 on a 3440x1440
+  screen, its content spans 0.829..1.047). Measure the content a few steps after it opened
+  (`getPosition(0, 0)` and `(1, 1)` of a node inside it, in `react.onStep`) and open it again further left
+  and up (`terminals.placement`).

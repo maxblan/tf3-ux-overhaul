@@ -15,6 +15,7 @@ make lint typecheck test           # luacheck, Lua 5.2 syntax rules, strict type
 make test-ingame                   # starts the game, runs the GUI checks on a small new map
 make test-ingame SAVE="My Save"    # the same on a temporary copy of a savegame
 make test-ingame SAVE="My Save" ONLY="check_a check_b"   # just those GUI checks (to bisect a crash)
+make test-ingame SAVE="My Save" WINDOW=1280x720 FONT=LARGE  # another screen and text size (UI_SCALE=1.5 too)
 make validate                      # the game's mod validator (close the game first)
 python3 tools/strings_check.py     # every text the mod uses exists in every language
 ```
@@ -45,24 +46,33 @@ The game's UI is Lua "recipes" in a React-like framework (`gui/main/react.lua`).
 
 ## How a change is built
 
-Each change is one module in `src/ui_overhaul/content/ui_overhaul/gui/`, plus two small files the engine loads:
+Each change is one module in `src/ui_overhaul/content/ui_overhaul/gui/` with an `install(replacement_api)` function, and one entry in each of three lists:
 
-- `<name>.res.lua` registers it, as a `react-plugin ::<ExtensionPoint>` or a `react-replacement-config`.
-- `<name>.script.lua` is the stub the resource points at. It loads the module through `guard.lua` with `pcall` and installs it. If loading or installing fails, the stub logs one `[ui_overhaul]` line and the game keeps its vanilla screen.
+- `installer.lua` (`INSTALLS`): the module, the feature it belongs to and a label for the log. The installer runs it before every other mod's replacement config, in `pcall`; if it fails, one `[ui_overhaul]` line is logged and the game keeps its vanilla screen.
+- `settings.lua` (`FEATURES`) and the `params` in `mod.json`, in the same order (`spec/gui/settings_spec.lua` checks it), with the param's name and tooltip in `strings.json` in every language. A feature is one switch for the player; several modules can share one.
+- A plugin also needs `<name>.res.lua` (`react-plugin ::<ExtensionPoint>`) and a stub in `<name>.script.lua` that registers its recipe through `guard.plugin(path, field, feature)`.
 
-Keep this split for new modules. A replacement recipe should call the original recipe whenever it can (`react.CallOriginalRecipe`) and change only what it has to, so that game updates break as little as possible. Logic that does not need the engine goes in `core/`, with specs in `spec/` against the mock engine.
+Inside `install`:
+
+- Replace a recipe with `replacement_api.ReplaceRecipe` as usual: the installer hands in a stand-in that `priority.lua` applies later, unless a mod that comes first in the mod list replaced the same recipe.
+- Wrap a module function with `priority.chain(module, "field", function(previous) return wrapper end)`, never by assigning the field. Pass `true` as the fourth argument for a function many mods wrap for their own reasons (widgets, `react.fireEvent`, `react.useState`). Wrap a `builtin.*` widget with `builtin_wraps.wrap`.
+- Where another mod shows the same thing in its own way without sharing a recipe or a function, add it to `priority.OVERLAPS`.
+
+A replacement recipe should call the original recipe whenever it can (`react.CallOriginalRecipe`) and change only what it has to, so that game updates break as little as possible. Logic that does not need the engine goes in `core/`, with specs in `spec/` against the mock engine.
 
 `docs/api_cookbook.md` lists the engine APIs this mod uses and how they behave. Check what an API does in the game before you write code that depends on it, and add what you find to the cookbook.
 
 ## Other mods
 
-Only one mod can replace a given recipe; the one that registers last wins. The README lists the recipes this mod replaces. Before you replace another one, see whether an extension point (`react-plugin`) or a wrapper around a module function can do the job, and add the recipe to the README's list if not.
+Where this mod and another change the same part, the one that comes first in the mod list wins (`priority.lua`, docs/design.md). Before you replace a recipe, see whether an extension point (`react-plugin`) or a wrapper around a module function can do the job, and add the recipe to the README's list if not. Check a change with the mods it touches, in both orders: `make test-ingame SAVE="..." WITH="mod_a mod_b"` and again with `MODS_FIRST=1`. The log lines `[ui_overhaul] feature ...` at the start of a run show what was decided.
 
 ## Checking what the player sees
 
 A change is not finished until you have looked at it in the game. `make test-ingame` writes a screenshot of every changed screen to `spec/ingame/results/` (the checks in `spec/ingame/ui_overhaul_testbench/` call `shot`). Compare them with the vanilla screen: sizes, spacing, fonts, nothing clipped or cut off. Use the game's widgets and style classes instead of your own colours and sizes.
 
-The screenshot covers the primary screen. Keep the game in front while the checks run, and delete the screenshots once you are done with them, since they can show whatever else is on that screen.
+The screenshot shows only the game window (`spec/ingame/window_shot.ps1`), also while other windows lie in front of it, so you can use the computer during a run. Only the gallery (`--gallery`) captures the primary screen and needs the game in front.
+
+Check other screen shapes and text sizes too (`WINDOW=1024x768`, `WINDOW=2560x1080`, `FONT=LARGE`, `UI_SCALE=1.5`): positions in the game's GUI are parts of the screen, and a window the game opens near an edge can grow past it once its content is laid out (docs/api_cookbook.md, 9.3).
 
 Hovers, second clicks and anything that needs a long game session can't be automated. List them under "Still unverified" in the pull request.
 

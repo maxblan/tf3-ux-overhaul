@@ -10,7 +10,7 @@
 --     is opened, while the game bar already shows the new rank)
 -- Wraps the module functions content_card.makeContentCardsCollapsibleFunctions, content_card.makeRecipeAndParam and
 -- company_util.getConstructionDisableReason (GUI state only), each calling the previous one, and replaces the recipe
--- entity_window_util.ActionButtonBar; installed before the UI starts (window_tweaks.script.lua).
+-- entity_window_util.ActionButtonBar; installed before the UI starts (installer.lua).
 -- @module ui_overhaul.gui.window_tweaks
 local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
@@ -25,6 +25,7 @@ local lang_util = require("::/scripts/lang_util.tl")
 local town_util = require("::/game_mechanics/towns/town_util.tl")
 local town_cargo_util = require("::/game_mechanics/towns/town_cargo_util.tl")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---@class uo.gui.window_tweaks
 local window_tweaks = {}
@@ -80,8 +81,7 @@ function window_tweaks.wrap_collapsible(previous)
 end
 
 local function patch_sections()
-	content_card.makeContentCardsCollapsibleFunctions =
-		window_tweaks.wrap_collapsible(content_card.makeContentCardsCollapsibleFunctions)
+	priority.chain(content_card, "makeContentCardsCollapsibleFunctions", window_tweaks.wrap_collapsible)
 end
 
 -- Sell confirmation -------------------------------------------------------------------------------
@@ -310,49 +310,59 @@ end)
 -- The town level card's content is a local recipe; it is created through makeRecipeAndParam while
 -- TownLevelPlugin renders, with the parameter { entityId } (the other card part uses { entity }).
 local function patch_town_level()
-	local original = content_card.makeRecipeAndParam
-	---@generic T
-	---@param recipe react.Recipe<T>
-	---@param param T
-	---@return game.gui.main.content_card.RecipeAndParamErased
-	content_card.makeRecipeAndParam = function(recipe, param)
-		local ok, is_level = pcall(function()
-			return type(param) == "table" and param.entityId ~= nil and param.entity == nil
-				and react.getCurrentRecipeName() == "TownLevelPlugin"
-		end)
-		if ok and is_level then
-			return original(TownLevelWithBottleneck, { inner = recipe, innerParam = param })
+	-- generic: a helper every card uses, wrapped here for one card only
+	priority.chain(content_card, "makeRecipeAndParam", function(original)
+		---@generic T
+		---@param recipe react.Recipe<T>
+		---@param param T
+		---@return game.gui.main.content_card.RecipeAndParamErased
+		return function(recipe, param)
+			local ok, is_level = pcall(function()
+				return type(param) == "table" and param.entityId ~= nil and param.entity == nil
+					and react.getCurrentRecipeName() == "TownLevelPlugin"
+			end)
+			if ok and is_level then
+				return original(TownLevelWithBottleneck, { inner = recipe, innerParam = param })
+			end
+			return original(recipe, param)
 		end
-		return original(recipe, param)
-	end
+	end, true)
 end
 
 -- Promotion pending -------------------------------------------------------------------------------
 
+---@alias uo.window_tweaks.Reason game.game_mechanics.company.company_util.ItemDisableReason
+---company_util.getConstructionDisableReason(res, metadata, cache)
+---@alias uo.window_tweaks.DisableReasonFn fun(...: any): uo.window_tweaks.Reason?
+
 local function patch_disable_reason()
-	local original = company_util.getConstructionDisableReason
-	---@param res ResName
-	---@param metadata ConstructionDescMetadata
-	---@param cache game.game_mechanics.company.company_util.ConstructionDisableCacheData
-	---@return game.game_mechanics.company.company_util.ItemDisableReason?
-	company_util.getConstructionDisableReason = function(res, metadata, cache)
-		local result = original(res, metadata, cache)
-		if not result or result.category ~= "company-rank" then return result end
-		local ok, pending = pcall(function()
-			local company = company_metadata.constructionDesc.get(metadata)
-			local min_rank = company and company_static_util.getMinRankConsideringPermits(company)
-			local state = company_progression_util.getCompanyProgressionState(api.engine.util.getPlayer())
-			return min_rank and state and state.potentialLevel and min_rank <= state.potentialLevel
-				and min_rank > cache.companyRank
-		end)
-		if ok and pending then
-			return { reason = _("Promotion pending - open the Company window to unlock"), category = result.category }
+	priority.chain(company_util, "getConstructionDisableReason",
+	---@param original uo.window_tweaks.DisableReasonFn
+	---@return function
+	function(original)
+		---@param res ResName
+		---@param metadata ConstructionDescMetadata
+		---@param cache game.game_mechanics.company.company_util.ConstructionDisableCacheData
+		---@return game.game_mechanics.company.company_util.ItemDisableReason?
+		return function(res, metadata, cache)
+			local result = original(res, metadata, cache)
+			if not result or result.category ~= "company-rank" then return result end
+			local ok, pending = pcall(function()
+				local company = company_metadata.constructionDesc.get(metadata)
+				local min_rank = company and company_static_util.getMinRankConsideringPermits(company)
+				local state = company_progression_util.getCompanyProgressionState(api.engine.util.getPlayer())
+				return min_rank and state and state.potentialLevel and min_rank <= state.potentialLevel
+					and min_rank > cache.companyRank
+			end)
+			if ok and pending then
+				return { reason = _("Promotion pending - open the Company window to unlock"), category = result.category }
+			end
+			return result
 		end
-		return result
-	end
+	end)
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function window_tweaks.install(replacement_api)
 	patch_sections()

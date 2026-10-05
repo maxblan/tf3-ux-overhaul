@@ -3,7 +3,7 @@
 -- without opening the finance window. Nothing else changes on screen.
 -- Copy of the base plugin recipe GameBarEarningsPlugin (game_bar_display_earnings.script.tl),
 -- registered under the same name so the base stylesheet applies; installed through a
--- react-replacement-config (earnings.script.lua). If rendering fails, the base display is shown for
+-- react-replacement-config (installer.lua). If rendering fails, the base display is shown for
 -- the rest of the session (fallback.lua).
 -- @module ui_overhaul.gui.earnings
 local builtin = require("::/gui/main/builtin.lua")
@@ -92,7 +92,7 @@ earnings.switch = fallback.switch("earnings display")
 local Replacement = fallback.replacement(earnings.switch, "GameBarEarningsPlugin", render,
 	earnings_plugin.GameBarEarningsPlugin, { nothing = function() return api.gui.game.isMapEditor() end })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function earnings.install(replacement_api)
 	replacement_api.ReplaceRecipe(earnings_plugin.GameBarEarningsPlugin, Replacement)

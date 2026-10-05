@@ -12,7 +12,7 @@
 -- the timer ring is drawn in plain white (notifications.css.lua). The hover card's icon matches.
 -- A Lua conversion of the base ridge (game_mechanics/notifications/gui/notification_popups.tl),
 -- registered under the base recipe names so the base stylesheet applies, installed through a
--- react-replacement-config (notifications.script.lua). If rendering fails, the base ridge is shown for
+-- react-replacement-config (installer.lua). If rendering fails, the base ridge is shown for
 -- the rest of the session (fallback.lua), without a Resolve for the icons it takes over.
 -- Which notifications exist, are hidden or are dismissed is left to the game: this module only
 -- sends the base "dismiss" and "initialSound" events, as the base ridge does.
@@ -787,7 +787,7 @@ local Replacement = fallback.replacement(notifications.switch, "NotificationPopu
 	end,
 })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function notifications.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_popups, Replacement)

@@ -17,8 +17,18 @@
 ---The id of the cargo class name, -1 if there is none.
 ---@field getCargoClassId fun(cargoClass: string): CargoClassId
 
+---Generic resources (*.res.lua: react plugins, react-replacement-config ...). Ids are given in the
+---order the resources were loaded: the game's own first, then each mod in its activation order
+---(observed in game).
+---@class GenericRep: ResTypeRep<integer, GenericGameRes>
+---Ids of all resources of a type, e.g. "react-replacement-config" or "react-plugin ::LineEowExtensionPoint".
+---@field getAllOfType fun(typeName: string, includeInvisible?: boolean): integer[]
+---The resource name, e.g. "ui_overhaul_1::/ui_overhaul/gui/entry.res" ("::/..." for the game's own).
+---@field getName fun(id: integer): string
+
 ---The resource repositories (`api.res`).
 ---@class Res
+---@field genericRep GenericRep
 ---@field cargoClassRep CargoClassRep
 ---@field cargoTypeRep CargoTypeRep
 ---@field modelRep ModelRep

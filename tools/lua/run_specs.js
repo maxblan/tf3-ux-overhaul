@@ -3,7 +3,7 @@
 // Usage (from anywhere): node tools/lua/run_specs.js [filter]
 const fs = require("fs");
 const path = require("path");
-const { lua, lauxlib, lualib, to_luastring } = require("fengari");
+const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require("fengari");
 
 const root = path.resolve(__dirname, "..", "..");
 const filter = process.argv[2] || "";
@@ -31,6 +31,13 @@ for (const spec of findSpecs("spec")) {
 	console.log(relative);
 	const L = lauxlib.luaL_newstate();
 	lualib.luaL_openlibs(L);
+	// fengari has no io.open: specs that read a data file (mod.json) use read_file, as tools/lua/run.js
+	lua.lua_pushjsfunction(L, (state) => {
+		const file = lauxlib.luaL_checkstring(state, 1);
+		lua.lua_pushstring(state, to_luastring(fs.readFileSync(to_jsstring(file), "utf8")));
+		return 1;
+	});
+	lua.lua_setglobal(L, to_luastring("read_file"));
 	try {
 		run(L, `BUSTED = dofile("tools/lua/busted.lua"); dofile("spec/support/setup.lua")`);
 		run(L, `dofile("${relative}")`);

@@ -43,3 +43,7 @@ files["src/ui_overhaul/content/ui_overhaul/gui/minimize.lua"] = {
 files["src/ui_overhaul/content/ui_overhaul/gui/builtin_wraps.lua"] = {
 	read_globals = { "api", "app", "debugPrint", "_", "_react" },
 }
+-- Reads the React registry _react (base/init.lua): the registered extension points.
+files["src/ui_overhaul/content/ui_overhaul/gui/priority.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}

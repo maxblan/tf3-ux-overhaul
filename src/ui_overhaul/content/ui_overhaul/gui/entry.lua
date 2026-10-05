@@ -53,6 +53,13 @@ function entry.render()
 		end
 		vehicle_react_util.HandleVehicleChanges(changes, actions.protected_entities(), nil, nil, nil, nil)
 	end)
+	-- testbench: which features are shown, and which mod won where both change the same part
+	react.onEvent("uio.debug.priority", function()
+		safely("priority", function()
+			local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
+			for _i, line in ipairs(priority.describe()) do debugPrint("[ui_overhaul] feature ", line) end
+		end)
+	end)
 	-- testbench: the bulldozer warning for a proposal that removes `entity`
 	---@param _e string
 	---@param entity Engine.Entity

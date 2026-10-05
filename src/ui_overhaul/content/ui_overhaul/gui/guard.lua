@@ -109,11 +109,25 @@ function guard.call(path, field, fallback, ...)
 end
 
 --- Recipe function for a plugin of an ordinary extension point: renders module[field](params).
+-- With `feature`: an empty layout while that feature is not shown (switched off in the mod's settings,
+-- or given up to a mod that comes first in the mod list, priority.lua). That is decided before the UI
+-- starts, so a plugin never changes between rendering and not rendering its hooks.
 ---@param path string
 ---@param field string
+---@param feature? string
 ---@return fun(...: any): react.TreeNodeId recipe its params are the plugin's, passed on unchanged
-function guard.plugin(path, field)
-	return function(...) return guard.call(path, field, nil, ...) end
+function guard.plugin(path, field, feature)
+	if feature == nil then
+		return function(...) return guard.call(path, field, nil, ...) end
+	end
+	return function(...)
+		local priority = guard.module("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
+		local settings = guard.module("ui_overhaul_1::/ui_overhaul/gui/settings.lua")
+		if priority == nil or settings == nil or not settings.enabled(feature) or not priority.active(feature) then
+			return guard.empty()
+		end
+		return guard.call(path, field, nil, ...)
+	end
 end
 
 return guard

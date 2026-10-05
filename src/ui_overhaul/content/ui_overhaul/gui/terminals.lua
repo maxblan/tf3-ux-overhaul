@@ -15,14 +15,17 @@
 -- registered under the base name so the base stylesheet applies. The base recipe is file-local, so it
 -- cannot be replaced: instead the exported module function popover_react_util.PopoverWindowContent,
 -- which PopoverWindow looks up each time it renders, is wrapped; for the terminal popover only, the
--- wrapper hands it this recipe instead of the base one. Other mods that replace the recipe
--- PopoverWindowContent (e.g. Auto Assign Terminals) still see the same parameters. If rendering fails,
--- the base popover is shown. Installed by terminals.script.lua.
+-- wrapper hands it Popover (this recipe inside a recipe of its own name) instead of the base one. Other
+-- mods that replace the recipe PopoverWindowContent (e.g. Auto Assign Terminals) still see the same
+-- parameters. A mod that swaps the base popover by name (Easy Terminal Assignment) and wraps the same
+-- function: the one that comes first in the mod list wins (priority.lua). If rendering fails, the base
+-- popover is shown. Installed by installer.lua.
 --
 -- TerminalButton opens the same popover outside the Line Manager (station window, line window). Its
 -- parameters have the shape of the Line Manager's, with the line read from the game and each change
--- sent as a line update, so a mod that swaps the base popover by name (Easy Terminal Assignment) shows
--- its own popover here too.
+-- sent as a line update. Where a mod that swaps the popover comes first, it gets the base name so that
+-- mod shows its own popover here too. Popover moves onto the screen once laid out, where the game left
+-- it reaching past the right or bottom edge (wide screens, stops near the edge).
 -- @module ui_overhaul.gui.terminals
 local builtin = require("::/gui/main/builtin.lua")
 local engine_react_util = require("::/gui/main/engine_react_util.tl")
@@ -37,6 +40,7 @@ local table_util = require("::/scripts/table_util.tl")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---@class uo.gui.terminals
 local terminals = {}
@@ -87,6 +91,8 @@ local terminals = {}
 ---@field stopCount integer
 ---@field index2problems? table<integer, uo.core.line_problems.Problem[]>
 ---@field onClose? fun()
+---@field place? fun(left: number, top: number, right: number, bottom: number) set by `open`: moves the popover so
+--- that its content, measured at this rectangle, lies on the screen
 
 ---What read_problems copies from the engine for line_problems.index2problems.
 ---@class uo.gui.terminals.ProblemData
@@ -863,6 +869,68 @@ local TerminalSelection = fallback.replacement(terminals.switch, BASE_NAME, rend
 })
 terminals.TerminalSelection = TerminalSelection
 
+-- Keeping the popover on the screen ------------------------------------------------------------------
+
+-- Gap to the screen's edges in pixels, and room kept free for the game bar at the bottom, in parts of
+-- the screen height (the game bar is about 6 % high at every resolution and text size, seen in game).
+local EDGE = 8
+local GAME_BAR = 0.07
+
+--- Where a popover opened at (x, y) goes so that all of it lies on a `width` x `height` pixel screen.
+-- Window positions and node positions are parts of the screen (0..1), the popover's top left corner
+-- at (x, y). The game keeps a new window on the screen with the size it has before its content is laid
+-- out, so a popover opened near the right or bottom edge reaches past it once the terminal rows fill it
+-- (observed in game: opened at 0.9, its content spans 0.829..1.047 on a 21:9 screen). `rect` is its
+-- content as laid out. It moves left and up only as far as needed. Returns nil if it already fits.
+---@param x number
+---@param y number
+---@param rect { left: number, top: number, right: number, bottom: number }
+---@param width number
+---@param height number
+---@return number? x
+---@return number? y
+function terminals.placement(x, y, rect, width, height)
+	local edge_x, edge_y = EDGE / math.max(width, 1), EDGE / math.max(height, 1)
+	local max_x = 1 - edge_x - (rect.right - rect.left)
+	local max_y = 1 - GAME_BAR - (rect.bottom - rect.top)
+	local left = math.min(x, rect.left)
+	local top = math.min(y, rect.top)
+	local new_x = math.max(edge_x, math.min(left, max_x))
+	local new_y = math.max(edge_y, math.min(top, max_y))
+	-- it fits while it is on the screen and above the game bar; a move leaves the gap EDGE
+	if rect.right <= 1 and rect.bottom <= 1 - GAME_BAR + edge_y then return nil, nil end
+	return new_x, new_y
+end
+
+--- The terminal popover as this mod opens it: the terminal selection, measured once it is laid out,
+-- then moved onto the screen if it reaches past an edge (a stop button near the right or bottom edge,
+-- a wide screen; the game does not keep windows on the screen). A recipe of its own name: mods that
+-- swap the base popover by name (TerminalSelection) leave it alone where this mod comes first in the
+-- mod list, and its parameters keep the shape of the base ones for mods that look at them.
+---@type react.Recipe<uo.gui.terminals.Params>
+terminals.Popover = react.RegisterRecipe("UioTerminalPopover",
+---@param params uo.gui.terminals.Params
+---@return react.TreeNodeId
+function(params)
+	local self_ref = react.useSelfRef()
+	local steps = react.useRef(0)
+	react.onStep(function()
+		local step = steps:get() or 0
+		if step > 2 then return end
+		steps:set(step + 1)
+		-- the layout is done after the first steps
+		if step ~= 2 or params.place == nil then return end
+		local ok, err = pcall(function()
+			local node = self_ref:get()
+			if node == nil then return end
+			local top_left, bottom_right = node:getPosition(0, 0), node:getPosition(1, 1)
+			params.place(top_left.x, top_left.y, bottom_right.x, bottom_right.y)
+		end)
+		if not ok then report("place", err) end
+	end)
+	return builtin.BoxLayout{ children = { TerminalSelection(params) } }
+end)
+
 --- Popover parameters with this recipe in place of the base terminal selection; other popovers' parameters
 -- are returned unchanged. `recipe_name` is react.GetRecipeName (a parameter for the specs).
 -- Other mods register popovers under the base name too (Terminal Selector, with parameters of its own),
@@ -877,7 +945,7 @@ function terminals.swap(p, recipe_name)
 	if type(params) ~= "table" or params.viaState == nil or params.commonParams == nil then return p end
 	base_recipe = p.recipe
 	local copy = guard.shallow_copy(p)
-	copy.recipe = TerminalSelection
+	copy.recipe = terminals.Popover
 	return copy
 end
 
@@ -1040,17 +1108,49 @@ function terminals.open(line, stop_index0, position, title)
 			.. (windows and "" or " (no window api)"))
 		return
 	end
-	popovers_opened = popovers_opened + 1
-	windows.removeAllWindows(popover_react_util.PopoverWindow)
-	windows.addWindow(popover_react_util.PopoverWindow, "uio.terminals." .. popovers_opened, {
-		onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
-		x = position.x,
-		y = position.y,
-		windowTitle = title,
-		windowClass = "select-terminal, management",
-		recipe = TerminalSelection,
-		params = params,
-	})
+	-- Where a mod that comes first in the mod list wraps the popover (Easy Terminal Assignment), or the
+	-- popover feature is off, it gets the base recipe's name, which such a mod swaps for its own.
+	local own = priority.active("terminals") and not priority.outranked("terminals")
+	local recipe = own and terminals.Popover or TerminalSelection
+	---@param x number
+	---@param y number
+	local function show(x, y)
+		popovers_opened = popovers_opened + 1
+		windows.removeAllWindows(popover_react_util.PopoverWindow)
+		windows.addWindow(popover_react_util.PopoverWindow, "uio.terminals." .. popovers_opened, {
+			onClose = function() windows.removeAllWindows(popover_react_util.PopoverWindow) end,
+			x = x,
+			y = y,
+			windowTitle = title,
+			windowClass = "select-terminal, management",
+			recipe = recipe,
+			params = params,
+		})
+	end
+	---@param left number
+	---@param top number
+	---@param right number
+	---@param bottom number
+	local function place(left, top, right, bottom)
+		params.place = nil -- once
+		local screen = api.gui.camera.getSize()
+		local rect = { left = left, top = top, right = right, bottom = bottom }
+		local x, y = terminals.placement(position.x, position.y, rect, screen.x, screen.y)
+		if x and y then
+			debugPrint(string.format("[ui_overhaul] terminal popover moved onto the screen: %.3f,%.3f -> %.3f,%.3f"
+				.. " (content %.3f..%.3f x %.3f..%.3f)", position.x, position.y, x, y, left, right, top, bottom))
+			-- the moved popover is measured once more, for the log
+			params.place = function(l, t, r, b)
+				params.place = nil
+				local fits = terminals.placement(x, y, { left = l, top = t, right = r, bottom = b }, screen.x, screen.y) == nil
+				debugPrint(string.format("[ui_overhaul] terminal popover now at content %.3f..%.3f x %.3f..%.3f: %s",
+					l, r, t, b, fits and "on the screen" or "still past an edge"))
+			end
+			show(x, y)
+		end
+	end
+	params.place = place
+	show(position.x, position.y)
 end
 
 --- Button that opens the terminal popover of stop `stopIndex0` (0-based, without waypoints) of `line`.
@@ -1096,12 +1196,10 @@ function terminals.wrap(previous)
 	end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function terminals.install(_replacement_api)
-	local previous = popover_react_util.PopoverWindowContent
-	if previous == nil then error("popover_react_util.PopoverWindowContent not found") end
-	popover_react_util.PopoverWindowContent = terminals.wrap(previous)
+	priority.chain(popover_react_util, "PopoverWindowContent", terminals.wrap)
 	debugPrint("[ui_overhaul] terminal usage buttons installed")
 end
 

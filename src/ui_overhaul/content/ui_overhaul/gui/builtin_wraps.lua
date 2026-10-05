@@ -11,6 +11,7 @@
 -- @module ui_overhaul.gui.builtin_wraps
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 ---@class uo.gui.builtin_wraps
 local builtin_wraps = {}
@@ -100,7 +101,8 @@ local function wrap_registration()
 	registration_wrapped = true
 end
 
---- Replaces builtin[`name`] by make(base), where base is the current function. Returns base.
+--- Replaces builtin[`name`] by make(base), where base is the current function. Returns base. The
+-- replacement calls base instead while the feature being installed is not shown (priority.gated).
 ---@param name string the builtin's field, e.g. "Window"
 ---@param make fun(base: function): function
 ---@return function base
@@ -112,7 +114,8 @@ function builtin_wraps.wrap(name, make)
 		local found = unwind(base)
 		builtin_of[name] = (not is_recipe(found) and registered_builtin(name)) or found
 	end
-	local replacement = make(base)
+	-- the base while the installing feature is not shown (priority.lua)
+	local replacement = priority.gated(make)(base)
 	base_of[replacement] = base
 	name_of[replacement] = name
 	builtin_by_name[name] = replacement

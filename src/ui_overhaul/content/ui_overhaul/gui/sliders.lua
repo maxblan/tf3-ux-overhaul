@@ -6,7 +6,7 @@
 -- label shows (height "2.5 m", incline "3 %"); a typed value picks the entry whose label is nearest,
 -- so it is always one the game offers.
 --
--- Two hooks, both installed before the UI starts (sliders.script.lua):
+-- Two hooks, both installed before the UI starts (installer.lua):
 --   * the module field builtin.Slider is wrapped: base recipes look it up when they render, so every
 --     slider is reached. The wrapper renders the base slider inside the recipe UioSlider, which adds
 --     the wheel and typing; the base slider keeps its parameters and classes.
@@ -23,6 +23,7 @@ local lang_util = require("::/scripts/lang_util.tl")
 local slider_values = require("/ui_overhaul/core/slider_values.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 
 local sliders = {}
 
@@ -421,7 +422,7 @@ local function wrap_build(original)
 	end
 end
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function sliders.install(_replacement_api)
 	local build = script_param_util.buildScriptParamCompSimple
@@ -430,7 +431,7 @@ function sliders.install(_replacement_api)
 		return wrapped_slider
 	end)
 	if type(build) == "function" and type(script_param_util.wrap) == "function" then
-		script_param_util.buildScriptParamCompSimple = wrap_build(build)
+		priority.chain(script_param_util, "buildScriptParamCompSimple", wrap_build)
 	end
 	debugPrint("[ui_overhaul] slider wheel and typing installed")
 end

@@ -60,16 +60,22 @@ src/ui_overhaul/content/ui_overhaul/
   gui/       one module per change, each with a .res.lua resource and a .script.lua stub
 ```
 
+### Installer, settings and the mod list
+
+All features install from two react-replacement-configs (`installer_early.res.lua`, order -1e9, and `installer_late.res.lua`, order 1e9), so the mod's own order no longer depends on the `order` numbers other authors pick (the game sorts configs by `order` only, and equal orders in no fixed way):
+
+- **Early, before every other mod's config** (`installer.lua`): `settings.lua` reads the player's switches (`api.engine.config.getModParams()`, the params in `mod.json`); a feature switched off is not installed at all. `priority.lua` learns the mods' activation order and starts recording which mod replaces which recipe. Then each feature installs: its wraps of module functions go in as the innermost link (`priority.chain`), its recipe replacements are only noted (`priority.replacement_api`).
+- **Late, after every other mod's config** (`priority.late`): for each feature, a mod that comes first in the mod list and replaces one of its recipes wins the whole feature (UI Overhaul's version stays off); otherwise the feature's replacements are applied over later mods'. A function that later mods wrapped too gets a second, outermost link, so UI Overhaul has the last word there; where a mod that comes first wrapped it, the inner link stays and that mod's wrap has the last word. Both changes stay in either case. Where mods on both sides wrap the same function, the inner link stays (the earlier mod has the last word over UI Overhaul; a later one may still wrap outside it, which only taking its wrap apart could change), and the log says so. A module whose install fails takes back what it did before the error (`priority.finish(false)`), so a feature of several modules keeps only the modules that installed in full.
+- **Duplicates** (`priority.OVERLAPS`): mods that show the same thing without touching the same recipe or function. The one that comes first is shown: Industry UI Enhanced's industry cards are left out of the extension point (`react.getPlugins`, only while UI Overhaul's cards are shown), Track & Road Build Info's config is skipped through its own install flag, Terminal Selector's station window replacement is taken back; or, when they come first, UI Overhaul's feature stays off.
+
+How it knows the order and the owners (all observed in game, see [api_cookbook.md](api_cookbook.md#9-load-order-and-other-mods)): generic resource ids are handed out in activation order and resource names start with their mod id; `debug.getinfo` gives a function's source, `<mod id>::/path` for a module loaded with `require` and the file's path on disk for a resource script; the files of a mod lie under one folder, found from the functions of its replacement configs. Without the debug library UI Overhaul goes first, as before.
+
 ### Guarded stubs
 
-A mistake in a GUI mod can take the whole game UI down: an error that escapes a recipe, or a module that fails to load, makes the engine drop every screen. So the engine never sees the mod's modules directly. Each change has two small files:
+A mistake in a GUI mod can take the whole game UI down: an error that escapes a recipe, or a module that fails to load, makes the engine drop every screen. So the engine never sees the mod's modules directly:
 
-- `<name>.res.lua` registers it, as a `react-plugin ::<ExtensionPoint>` or as a `react-replacement-config`.
-- `<name>.script.lua` is the stub the resource points at. It loads the module through `guard.lua` with `pcall`.
-
-For a plugin, the stub registers a recipe that renders `guard.plugin(path, field)`. If the module fails to load or the call raises an error, the recipe renders an empty `BoxLayout` and logs one `[ui_overhaul] disabled ...` line.
-
-For a replacement, the stub's `doReplaceFn` calls the module's `install(replacement_api)` inside `pcall`. If that fails, nothing is replaced, the game keeps its vanilla screen and the stub logs one `[ui_overhaul]` line. A replacement recipe that fails while rendering falls back to the base recipe for the rest of the session through `gui/fallback.lua`: the mod's render is a child recipe that owns its hooks, and a parent with fixed hooks shows the base (`react.CallOriginalRecipe`) from the GUI step after the failure, so no recipe instance changes the hooks it declares. The parent keeps what the game expects of the replaced node: the api the base recipe provides (the tool stack, the Statistics Lines tab), its focus child, the input actions the game forwards to it (the ridge's IA_NOTIFICATIONS_OPEN, game.tl:389-390), its component settings, and nothing at all where the base renders nothing (the Earnings display in the map editor). Its wrapper layout is unspaced and fills the node (`fallback.css.lua`), since base rules such as `R::GameBarEarningsPlugin BoxLayout` select every layout under the replaced recipe. Used by the notification ridge, the tool stack, the Earnings display, the Finances table, the four Statistics tabs, the terminal popover and (with its content recipe as the child) the line window's Vehicles card. The mod's own card recipes declare their hooks first and render an empty layout when the rest fails.
+- `installer.script.lua` is the stub of both installer configs; it loads `installer.lua` through `guard.lua` with `pcall`, and the installer runs each feature's `install` in `pcall`. If one fails, nothing of it is replaced, the game keeps its vanilla screen and one `[ui_overhaul]` line is logged.
+- Plugins (`<name>.res.lua` as `react-plugin ::<ExtensionPoint>`) point at a stub in `<name>.script.lua` that registers a recipe rendering `guard.plugin(path, field, feature)`. It renders an empty `BoxLayout` while the feature is not shown (switched off, or given up to a mod that comes first), and logs one `[ui_overhaul] disabled ...` line if the module fails to load or the call raises an error.
 
 ### Extension points, replacements and module-field wraps
 
@@ -115,28 +121,23 @@ The rules that break the whole UI when ignored (layout roots, Lua 5.2, GUI-threa
 
 ## Compatibility with other mods
 
-Community mods that use the same hooks:
+The rule: where UI Overhaul and another mod change the same part, the one that comes first in the mod list wins (see Installer, settings and the mod list above). Tested in game (`make test-ingame SAVE=... WITH=... [MODS_FIRST=1]`) with these mods, in both orders:
 
-- `celmi_timetables`
-  - replaces `line_manager_panel.LineManagerPanel`;
-  - adds plugins to the game bar, the mod button area, the radial menu, and the Line, Station and Vehicle windows.
-  - UI Overhaul must not replace `LineManagerPanel`, which rules out changing the stop rows through that recipe. The Stops card uses its own `order` in the line window.
-- `zhenya_auto_assign_terminals`
-  - replaces `popover_react_util.PopoverWindowContent` and a scroll container;
-  - patches `line_util.makeLineActionDescriptor` and `builtin.Button`.
-  - UI Overhaul does not replace those recipes. The terminal buttons wrap the module field `popover_react_util.PopoverWindowContent`, which `PopoverWindow` looks up on each render, so Auto Assign Terminals keeps its replacement and sees the same parameters.
-- `terminal_selector`
-  - replaces `station_group.StationGroupWindowContent` with a copy that has a terminal button per line stop;
-  - registers its own popover recipe under the name `TerminalSelection`, with parameters `lineEntity` and `stopIndex0`.
-  - UI Overhaul swaps only a `TerminalSelection` popover with the Line Manager's parameters (`viaState`, `commonParams`), so this popover keeps its own content. The station buttons turn off while the station window is replaced (`_react.recipeReplace`), so no row has two buttons.
-- `zhenya_easy_terminal_assignment`
-  - wraps `popover_react_util.PopoverWindowContent` (order 100) and swaps every popover named `TerminalSelection` for its own.
-  - UI Overhaul's popover is registered under that name, so Easy Terminal Assignment wins in either wrapping order. The popover that the station and line window buttons open has the Line Manager's parameters, and `commonParams.lineState:old()` returns the same table until a change, so its in-place edit before `changeMainTerminal` is kept.
-- `auto_line_namer` has only `rename_scheme` data and a game script, so it does not conflict.
+| Mod | What it changes | Shared part | Result |
+|---|---|---|---|
+| `celmi_timetables` (Timetables) | replaces `LineManagerPanel`; plugins in the game bar, mod buttons, radial menu, line, station and vehicle windows | none | both work |
+| `zhenya_auto_assign_terminals` | replaces `PopoverWindowContent` and `ContentWidgetScrollContainer`; wraps `line_util.makeLineActionDescriptor`, `makeNewStop`, `builtin.Button` | the terminal popover | both work: UI Overhaul wraps the module field `PopoverWindowContent`, which is called before the replaced recipe |
+| `terminal_selector` | replaces `StationGroupWindowContent` (a copy with terminal buttons) | station window terminal buttons | first in the list wins (OVERLAPS) |
+| `tcoleman_financial_statements_1` | replaces `FinancesTable` | the Finances table | first in the list wins |
+| `gleisbauanzeige_tf3` (Track & Road Build Info) | wraps `construction_react_util.getActionParams` (build tooltip lines) | build tooltip measurements | first in the list wins (OVERLAPS); the bulldozer warning and the menus stay, with both wraps nested by the list |
+| `cayde_industry_enhanced_1` | two industry window plugins (details, lines) | industry window cards | first in the list wins (OVERLAPS) |
+| `apasz_dark_ui_1` (Dark UI) | game colours (`default_colors.gres.lua`), CSS | none | both work |
+| `auto_line_namer_1`, `auto_signals_1`, `parallel_tracks_1`, `parallel_roads_1`, `mc_realistic_brk`, `tunnel_portal_fix_1` | game scripts, data | none | both work |
+| `zhenya_easy_terminal_assignment` | wraps `PopoverWindowContent` (order 100) and swaps every popover named `TerminalSelection` | the terminal popover | first in the list wins: UI Overhaul's popover has a name of its own (`UioTerminalPopover`) where it comes first, and the base name where Easy Terminal Assignment does (not tested in game: the mod was not installed) |
 
 ## Risks
 
 - Game updates. The mod depends on internal module paths and exported recipes, which are not a public API. After a game patch, re-run `tools/extract_game_sources.sh` and diff the sources. Replacements stay few and call the original recipe where they can, and each stub falls back to the vanilla screen when its module fails.
-- Mod conflicts. Only one mod can replace a given recipe; the one that registers last wins. The README lists the replaced recipes.
+- Mod conflicts. Only one mod can replace a given recipe. Which one is decided by the mod list (priority.lua), not by the config order; a mod that replaces a recipe at render time or after the late config (order above 1e9) is out of its reach. Duplicates that share no recipe or function are only recognised for the mods in `priority.OVERLAPS`; for others the player can switch the feature off.
 - Performance on large networks. Widgets read the engine on timers or through parallel state, and only while they are shown; nothing reads the whole network in the background.
 - Savegames. The mod changes only the GUI and adds no game script, so it can be added to and removed from a savegame.

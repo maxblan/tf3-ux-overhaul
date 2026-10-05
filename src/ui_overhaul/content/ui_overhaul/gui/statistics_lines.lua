@@ -5,7 +5,7 @@
 --     value it displays (base: by the sum over the line's current vehicles)
 -- A Lua conversion of the base tab (gui/statistics/statistic_lines.tl), registered under the base
 -- recipe names so the base stylesheet applies, installed through a react-replacement-config
--- (statistics_lines.script.lua). If rendering fails, the base tab is shown for the rest of the
+-- (installer.lua). If rendering fails, the base tab is shown for the rest of the
 -- session (fallback.lua).
 -- @module ui_overhaul.gui.statistics_lines
 local builtin = require("::/gui/main/builtin.lua")
@@ -470,7 +470,7 @@ statistics_lines.switch = fallback.switch("statistics lines tab")
 local Replacement = fallback.replacement(statistics_lines.switch, "LinesStatistic", render,
 	base_lines_statistic, { focus = true, api = { "getVisualizeLines" } })
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function statistics_lines.install(replacement_api)
 	replacement_api.ReplaceRecipe(base_lines_statistic, Replacement)

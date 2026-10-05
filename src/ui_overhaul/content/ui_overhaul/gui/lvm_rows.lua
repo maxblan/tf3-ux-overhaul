@@ -4,7 +4,7 @@
 --                 is reached); the row's tooltip names the next stop, speed, load, condition and
 --                 delivery quality (vehicle_info.lua)
 -- Wraps the exported base recipe line_react_util.ManagerNotificationWidget, which the base renders
--- at the end of every line, depot and vehicle row (react-replacement-config, see lvm_rows.script.lua);
+-- at the end of every line, depot and vehicle row (react-replacement-config, see installer.lua);
 -- the base problem icons stay. Uses the rows' own text style (font-scale-body).
 -- @module ui_overhaul.gui.lvm_rows
 local react = require("::/gui/main/react.lua")
@@ -244,7 +244,7 @@ local Replacement = react.RegisterRecipe("ManagerNotificationWidget", function(e
 	return horizontal{ RowInfo(entity), react.CallOriginalRecipe(line_react_util.ManagerNotificationWidget, entity) }
 end)
 
---- Called from the react-replacement-config before the UI starts.
+--- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function lvm_rows.install(replacement_api)
 	replacement_api.ReplaceRecipe(line_react_util.ManagerNotificationWidget, Replacement)
