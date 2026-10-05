@@ -178,6 +178,9 @@ end
 --- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function catchment.install(_replacement_api)
+	if type(selector_react_util.makeDefaultSelectorCombinedFn) ~= "function" then
+		error("makeDefaultSelectorCombinedFn not found")
+	end
 	priority.chain(selector_react_util, "makeDefaultSelectorCombinedFn", wrap_combined_fn)
 	debugPrint("[ui_overhaul] catchment overlay installed")
 end

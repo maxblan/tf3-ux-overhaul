@@ -86,6 +86,9 @@ end
 function subsidies.install(_replacement_api)
 	-- the previous function in the chain (the game's, or another mod's wrapper around it), called with
 	-- whatever the wrapper got
+	if type(subvention_util.makeDefaultCardData) ~= "function" then
+		error("subvention_util.makeDefaultCardData not found")
+	end
 	priority.chain(subvention_util, "makeDefaultCardData",
 	---@param original uo.gui.subsidies.MakeCardData
 	---@return uo.gui.subsidies.MakeCardData

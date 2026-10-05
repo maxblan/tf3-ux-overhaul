@@ -283,6 +283,7 @@ end
 --- Called by installer.lua before the UI starts.
 ---@param _replacement_api react.ReplacementApi
 function performance.install(_replacement_api)
+	if type(vehicle_util.getPowerRatingTextAndToolTip) ~= "function" then error("rating function not found") end
 	priority.chain(vehicle_util, "getPowerRatingTextAndToolTip", wrap_rating)
 	builtin_wraps.wrap("TextView", wrap_text_view)
 	debugPrint("[ui_overhaul] performance tooltip installed")

@@ -12,17 +12,26 @@ local TAG = "[testbench]"
 local START_AFTER_FRAMES = 120
 
 local fixture = require("/ui_overhaul_testbench/fixture.lua")
--- The fixture's extra mods come after this mod, or before it with fixture.mods_first (to check that
--- the activation order decides which mod wins).
+
+--- This mod (unless vanilla), the testbench and the fixture's extra mods, in activation order: the
+-- extra mods after this mod, or before it with fixture.mods_first (to check that the activation order
+-- decides which mod wins).
+---@return string[]
+local function ordered_mods()
+	local list = {} ---@type string[]
+	if fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do list[#list + 1] = name end
+	end
+	if not fixture.vanilla then list[#list + 1] = "ui_overhaul_1" end
+	list[#list + 1] = "ui_overhaul_testbench_1"
+	if not fixture.mods_first then
+		for _i, name in ipairs(fixture.mods or {}) do list[#list + 1] = name end
+	end
+	return list
+end
+
 local MODS = { "urbangames_no_costs_1" }
-if fixture.mods_first then
-	for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
-end
-if not fixture.vanilla then MODS[#MODS + 1] = "ui_overhaul_1" end
-MODS[#MODS + 1] = "ui_overhaul_testbench_1"
-if not fixture.mods_first then
-	for _i, name in ipairs(fixture.mods or {}) do MODS[#MODS + 1] = name end
-end
+for _i, name in ipairs(ordered_mods()) do MODS[#MODS + 1] = name end
 
 local frames, started = 0, false
 ---@class uo.testbench.PendingLoad
@@ -73,29 +82,28 @@ local function load_fixture_game()
 	local data = load.info:get()
 	local details = api.type.SaveGameDetails.new(data.info)
 	local mods, names, listed = {}, {}, {} ---@type Mod.ModId[], string[], table<string, true>
+	local added = ordered_mods()
+	local wanted = {} ---@type table<string, true>
+	for _i, name in ipairs(added) do wanted[name] = true end
+	-- with mods_first, the savegame's own entries of these mods are listed again below, in that order
+	-- (a savegame made with this mod lists it before mods added now)
+	local moved = {} ---@type table<string, Mod.ModId>
 	for _, mod in ipairs(details.mods) do
 		-- the gallery shows this mod alone: of the savegame's mods only the game's own content stays
 		local keep = not fixture.gallery or mod.name:sub(1, #"urbangames_") == "urbangames_"
 		if fixture.vanilla and mod.name == "ui_overhaul_1" then keep = false end
-		if keep then
+		if keep and fixture.mods_first and wanted[mod.name] then
+			moved[mod.name] = mod
+		elseif keep then
 			mods[#mods + 1], names[#names + 1] = mod, mod.name
 			listed[mod.name] = true
 		end
-	end
-	local added = {} ---@type string[]
-	if fixture.mods_first then
-		for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
-	end
-	if not fixture.vanilla then added[#added + 1] = "ui_overhaul_1" end
-	added[#added + 1] = "ui_overhaul_testbench_1"
-	if not fixture.mods_first then
-		for _i, name in ipairs(fixture.mods or {}) do added[#added + 1] = name end
 	end
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
 	for _, name in ipairs(added) do
 		if not listed[name] then
-			local mod = api.type.ModId.new()
+			local mod = moved[name] or api.type.ModId.new()
 			mod.name = name
 			mods[#mods + 1], names[#names + 1] = mod, name
 			listed[name] = true

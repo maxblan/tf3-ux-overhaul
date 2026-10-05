@@ -78,6 +78,9 @@ function installer.early(replacement_api)
 		end
 		priority.finish(ok)
 	end
+	-- the mods that duplicate a feature which installed (priority.OVERLAPS)
+	local held_ok, held_err = pcall(priority.hold_back)
+	if not held_ok then debugPrint("[ui_overhaul] holding back duplicates failed: ", tostring(held_err)) end
 	local ok, err = pcall(priority.filter_plugins)
 	if not ok then debugPrint("[ui_overhaul] plugin filter not installed: ", tostring(err)) end
 end

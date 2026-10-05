@@ -915,7 +915,8 @@ local checks = {
 	},
 	{
 		-- opened at the screen's bottom right corner, as from a stop button near the edge on a wide screen:
-		-- the popover moves onto the screen (see "[ui_overhaul] terminal popover at ... moved to")
+		-- the popover moves onto the screen (see "[ui_overhaul] terminal popover moved onto the screen" and
+		-- "[ui_overhaul] terminal popover now at content ...: on the screen"; this check sees only that it shows)
 		name = "terminal_popover_on_screen",
 		act = function(ctx)
 			local screen = api.gui.camera.getSize()

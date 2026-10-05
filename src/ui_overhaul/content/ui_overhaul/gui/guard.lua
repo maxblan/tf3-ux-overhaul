@@ -120,9 +120,11 @@ function guard.plugin(path, field, feature)
 	if feature == nil then
 		return function(...) return guard.call(path, field, nil, ...) end
 	end
+	-- loaded on the first render, then kept (a module that fails to load is not tried again)
+	local priority, settings ---@type uo.gui.priority?, uo.gui.settings?
 	return function(...)
-		local priority = guard.module("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
-		local settings = guard.module("ui_overhaul_1::/ui_overhaul/gui/settings.lua")
+		priority = priority or guard.module("ui_overhaul_1::/ui_overhaul/gui/priority.lua") --[[@as uo.gui.priority?]]
+		settings = settings or guard.module("ui_overhaul_1::/ui_overhaul/gui/settings.lua") --[[@as uo.gui.settings?]]
 		if priority == nil or settings == nil or not settings.enabled(feature) or not priority.active(feature) then
 			return guard.empty()
 		end

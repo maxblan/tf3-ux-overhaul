@@ -62,9 +62,11 @@ priority.MOD_ID = "ui_overhaul_1"
 ---@field installed boolean its install ran without an error
 ---@field recipes uo.gui.priority.Recipe[]
 ---@field chains uo.gui.priority.Chain[]
+---@field gates { on: boolean }[] its gated wraps (priority.gated), switched off with a module that failed
 ---@field winner? string the mod that comes first and changes the same part, when there is one
 ---@field recipes_done? integer recipes of the modules installed in full so far
 ---@field chains_done? integer links of the modules installed in full so far
+---@field gates_done? integer gated wraps of the modules installed in full so far
 
 ---A mod whose feature duplicates one of this mod's without a shared recipe or function.
 ---@class uo.gui.priority.Overlap
@@ -72,7 +74,8 @@ priority.MOD_ID = "ui_overhaul_1"
 ---@field feature string this mod's feature
 ---@field what string what both show, for the log
 ---@field extension_point? string its plugins there are held back when this mod comes first
----@field hold_back? fun() held back when this mod comes first, called early (before its config runs)
+---@field hold_back? fun() held back when this mod comes first and the feature installed, called early
+--- (after this mod's installs, before the other mod's config runs)
 ---@field recipe? fun(): function the recipe it replaces with its own version of the feature: its
 --- replacement is taken back when this mod comes first
 
@@ -108,6 +111,15 @@ local decided = false
 
 -- Debug library ----------------------------------------------------------------------------------
 
+--- A source as debug.getinfo gives it, without the leading "@" and with forward slashes; nil if it is
+-- not a string.
+---@param source any
+---@return string?
+local function normalized(source)
+	if type(source) ~= "string" then return nil end
+	return (source:gsub("^@", ""):gsub("\\", "/"))
+end
+
 --- The source of a function as debug.getinfo gives it: "<mod id>::/path" for a module loaded with
 -- require ("::/path" for the game's own), the file's path on disk for a resource script (observed in
 -- game). Nil without the debug library or for a function of the engine.
@@ -116,8 +128,8 @@ local decided = false
 local function source_of(fn)
 	if type(debug) ~= "table" or type(debug.getinfo) ~= "function" then return nil end
 	local ok, info = pcall(debug.getinfo, fn, "S")
-	if not ok or type(info) ~= "table" or type(info.source) ~= "string" then return nil end
-	return (info.source:gsub("^@", ""):gsub("\\", "/"))
+	if not ok or type(info) ~= "table" then return nil end
+	return normalized(info.source)
 end
 
 --- The content folder of a mod on disk, from the source of a file in it and that file's path inside
@@ -213,8 +225,7 @@ local function calling_mod()
 	for level = 3, 40 do
 		local ok, info = pcall(debug.getinfo, level, "S")
 		if not ok or type(info) ~= "table" then break end
-		local source = type(info.source) == "string" and info.source:gsub("^@", ""):gsub("\\", "/") or ""
-		local mod = mod_of(source)
+		local mod = mod_of(normalized(info.source) or "")
 		if mod and mod ~= "" and mod ~= priority.MOD_ID then return mod end
 	end
 	return "?"
@@ -229,7 +240,8 @@ end
 function priority.begin(key, enabled)
 	local feature = features[key]
 	if feature == nil then
-		feature = { key = key, enabled = enabled, active = enabled, installed = false, recipes = {}, chains = {} }
+		feature = { key = key, enabled = enabled, active = enabled, installed = false, recipes = {}, chains = {},
+			gates = {} }
 		features[key] = feature
 		feature_order[#feature_order + 1] = key
 	end
@@ -238,8 +250,8 @@ function priority.begin(key, enabled)
 end
 
 --- Ends the install started by `begin`; `ok` whether it ran without an error. A failed install takes
--- back what it did before the error (its noted replacements, its links), so a feature of several
--- modules keeps only the modules that installed in full.
+-- back what it did before the error (its noted replacements, its links, its gated wraps), so a feature
+-- of several modules keeps only the modules that installed in full.
 ---@param ok boolean
 function priority.finish(ok)
 	local feature = current
@@ -248,10 +260,12 @@ function priority.finish(ok)
 	if ok then
 		feature.installed = true -- a feature of several modules is installed when one of them is
 		feature.recipes_done, feature.chains_done = #feature.recipes, #feature.chains
+		feature.gates_done = #feature.gates
 		return
 	end
 	for i = #feature.recipes, (feature.recipes_done or 0) + 1, -1 do table.remove(feature.recipes, i) end
 	for i = (feature.chains_done or 0) + 1, #feature.chains do feature.chains[i].mode = "off" end
+	for i = (feature.gates_done or 0) + 1, #feature.gates do feature.gates[i].on = false end
 end
 
 --- Whether feature `key` is shown (enabled, installed and not given up to a mod that comes first).
@@ -350,16 +364,19 @@ function priority.chain(module, field, make, generic)
 end
 
 --- A make() for builtin_wraps.wrap and the like that keeps the base when the installing feature is
--- not shown. Outside an install `make` itself.
+-- not shown, or when the module installing it fails (priority.finish). Outside an install `make`
+-- itself.
 ---@param make fun(base: function): function
 ---@return fun(base: function): function
 function priority.gated(make)
 	local feature = current
 	if feature == nil then return make end
+	local gate = { on = true }
+	feature.gates[#feature.gates + 1] = gate
 	return function(base)
 		local wrapped = make(base)
 		return function(...)
-			if feature.active and feature.installed then return wrapped(...) end
+			if gate.on and feature.active and feature.installed then return wrapped(...) end
 			return base(...)
 		end
 	end
@@ -422,16 +439,30 @@ function priority.early(replacement_api, enabled)
 		end)
 		return base_replace(recipe, replacement)
 	end
+	-- held back for now; hold_back() confirms it once this mod's features have installed
 	for _i, overlap in ipairs(priority.OVERLAPS) do
 		local first = priority.comes_first(overlap.mod)
-		if first == false and enabled(overlap.feature) then
-			held_back[overlap.mod] = true
-			if overlap.hold_back then
-				local hold_ok, hold_err = pcall(overlap.hold_back)
-				if not hold_ok then report(overlap.mod, hold_err) end
+		if first == false and enabled(overlap.feature) then held_back[overlap.mod] = true end
+	end
+end
+
+--- After this mod's installs, still before every other mod's config: holds back the overlapping mods
+-- (OVERLAPS) whose feature here installed. Where it did not (switched off, or its install failed),
+-- that mod is not held back, so its version stays.
+function priority.hold_back()
+	for _i, overlap in ipairs(priority.OVERLAPS) do
+		if held_back[overlap.mod] then
+			local feature = features[overlap.feature]
+			if feature ~= nil and not feature.installed then
+				held_back[overlap.mod] = nil
+			else
+				if overlap.hold_back then
+					local hold_ok, hold_err = pcall(overlap.hold_back)
+					if not hold_ok then report(overlap.mod, hold_err) end
+				end
+				debugPrint("[ui_overhaul] ", overlap.what, ": ui_overhaul_1 comes first in the mod list, ",
+					overlap.mod, " is held back")
 			end
-			debugPrint("[ui_overhaul] ", overlap.what, ": ui_overhaul_1 comes first in the mod list, ",
-				overlap.mod, " is held back")
 		end
 	end
 end
@@ -574,12 +605,14 @@ function priority.filter_plugins()
 		end
 	end
 	if next(by_point) == nil then return end
-	local recipes = {} ---@type table<string, uo.gui.priority.RecipeSet> mod id -> its plugin recipes there
+	---@type table<string, uo.gui.priority.RecipeSet> extension point and mod id -> its plugin recipes there
+	local recipes = {}
 	---@param point string
 	---@param mod string
 	---@return uo.gui.priority.RecipeSet
 	local function recipes_of(point, mod)
-		if recipes[mod] then return recipes[mod] end
+		local key = point .. "\0" .. mod
+		if recipes[key] then return recipes[key] end
 		local set = {} ---@type table<function, true>
 		for _i, id in ipairs(api.res.genericRep.getAllOfType("react-plugin " .. point)) do
 			if api.res.genericRep.getName(id):sub(1, #mod + 2) == mod .. "::" then
@@ -587,7 +620,7 @@ function priority.filter_plugins()
 				if recipe then set[recipe] = true end
 			end
 		end
-		recipes[mod] = set
+		recipes[key] = set
 		return set
 	end
 	priority.chain(react, "getPlugins",

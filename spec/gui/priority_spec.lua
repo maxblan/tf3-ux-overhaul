@@ -199,15 +199,18 @@ describe("priority", function()
 		priority.begin("statistics", true) -- the first module installs in full
 		priority.replacement_api(api_).ReplaceRecipe(a, recipe("A2"))
 		priority.finish(true)
-		priority.begin("statistics", true) -- the second fails after a replacement and a wrap
+		priority.begin("statistics", true) -- the second fails after a replacement, a wrap and a gated wrap
 		priority.replacement_api(api_).ReplaceRecipe(b, recipe("B2"))
 		priority.chain(module, "f", function(previous) return function(x) return previous(x) .. " half" end end)
+		local gated = priority.gated(function(base) return function(x) return base(x) .. " half" end end)(
+			function(x) return x end)
 		priority.finish(false)
 		priority.late()
 		assert.is_true(priority.active("statistics"))
 		assert.is_true(replaced[a] ~= nil)
 		assert.is_nil(replaced[b])
 		assert.are.equal("x", module.f("x"))
+		assert.are.equal("x", gated("x"))
 	end)
 
 	describe("a mod that duplicates a feature (OVERLAPS)", function()
@@ -217,7 +220,22 @@ describe("priority", function()
 			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
 			local priority = load_priority()
 			priority.early(game_api(), function() return true end)
+			priority.begin("build_info", true)
+			priority.finish(true)
+			priority.hold_back()
 			assert.is_true(construction_react_util.__gleisbauanzeigeInstalled)
+		end)
+
+		it("does not hold it back when this mod's feature failed to install", function()
+			world({ "ui_overhaul_1", "gleisbauanzeige_tf3" })
+			local construction_react_util = {}
+			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
+			local priority = load_priority()
+			priority.early(game_api(), function() return true end)
+			priority.begin("build_info", true)
+			priority.finish(false)
+			priority.hold_back()
+			assert.is_nil(construction_react_util.__gleisbauanzeigeInstalled)
 		end)
 
 		it("gives way to it when it comes first", function()
@@ -237,6 +255,9 @@ describe("priority", function()
 			package.loaded["::/gui/construction/construction_react_util.tl"] = construction_react_util
 			local priority = load_priority()
 			priority.early(game_api(), function(feature) return feature ~= "build_info" end)
+			priority.begin("build_info", false)
+			priority.finish(false)
+			priority.hold_back()
 			assert.is_nil(construction_react_util.__gleisbauanzeigeInstalled)
 		end)
 

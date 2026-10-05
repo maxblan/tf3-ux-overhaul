@@ -66,7 +66,7 @@ typecheck: ## Type-check all Lua files with the Lua Language Server (strict, see
 	"$(LUALS)" --check . --checklevel=Warning --trust_all_plugins --logpath=.lua-check
 
 test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods, MODS_FIRST=1 before this one; ONLY="check_a check_b" runs just those GUI checks; WINDOW=1280x720 FONT=LARGE UI_SCALE=1.5 for other screens)
-	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(if $(MODS_FIRST),--mods-first) $(foreach c,$(ONLY),--only $(c)) $(if $(WINDOW),--window $(WINDOW)) $(if $(FONT),--font $(FONT)) $(if $(UI_SCALE),--ui-scale $(UI_SCALE)) $(if $(NO_SHOTS),--no-shots)
+	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(if $(filter-out 0,$(MODS_FIRST)),--mods-first) $(foreach c,$(ONLY),--only $(c)) $(if $(WINDOW),--window $(WINDOW)) $(if $(FONT),--font $(FONT)) $(if $(UI_SCALE),--ui-scale $(UI_SCALE)) $(if $(filter-out 0,$(NO_SHOTS)),--no-shots)
 
 check: lint typecheck test test-ingame ## Run lint, the type check and all tests
 
