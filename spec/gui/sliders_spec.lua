@@ -80,6 +80,7 @@ describe("sliders", function()
 		assert.is_true(sliders.wheel_in("ConstructionParam"))
 		assert.is_true(sliders.wheel_in("ConstructionEntityParam"))
 		assert.is_true(sliders.wheel_in("SliderWithLegend"))
+		assert.is_true(sliders.wheel_in("ScriptParamCalloutWrapper")) -- compact construction parameters
 		-- entity windows, the Line Manager's cargo filter, other mods' windows: the wheel scrolls
 		assert.is_false(sliders.wheel_in("CargoFilterWindow"))
 		assert.is_false(sliders.wheel_in("TownWindow"))

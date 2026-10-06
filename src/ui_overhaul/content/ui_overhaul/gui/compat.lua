@@ -7,6 +7,8 @@
 -- of this check; for those the render-time guards remain (guard.base, fallback.lua).
 -- @module ui_overhaul.gui.compat
 
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+
 ---@class uo.gui.compat
 local compat = {}
 
@@ -28,14 +30,17 @@ function compat.use(t)
 	needs = t
 end
 
-local loaded = {} ---@type table<string, table|false> base path -> the module, false if it does not load
+local loaded = {} ---@type table<string, table|function|false> base path -> the module, false if it does not load
 
+--- The base module at `path` (a table, or the recipe some modules are), false if it does not load.
+-- Through guard.module: a module that fails to load leaves the game loader's require stack and
+-- current mod changed, which guard.module puts back (and it does not try such a module again).
 ---@param path string
----@return table|false
+---@return table|function|false
 local function base_module(path)
 	if loaded[path] == nil then
-		local ok, module = pcall(require, path)
-		loaded[path] = ok and type(module) == "table" and module or false
+		local module = guard.module(path) --[[@as any]]
+		loaded[path] = (type(module) == "table" or type(module) == "function") and module or false
 	end
 	return loaded[path]
 end
@@ -66,9 +71,11 @@ function compat.missing(module, feature)
 		table.sort(paths)
 		for _i, path in ipairs(paths) do
 			local base = base_module(path)
+			-- a module whose fields the code does not read (it is a recipe itself) only has to load
+			if not base and #fields[path] == 0 then result[#result + 1] = path end
 			for _j, field in ipairs(fields[path]) do
 				local present = false
-				if base then
+				if type(base) == "table" then
 					-- a base module's field is any Lua value: only whether it is there counts
 					---@return boolean
 					local function has() return base[field] ~= nil end

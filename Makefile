@@ -50,11 +50,9 @@ lint: ## Run luacheck on src, spec and tools/lua, and reject syntax the game's L
 	@# Full-line comments are skipped: type annotations such as table<K, table<K2, V>> never reach Lua.
 	@! grep -rnE --include='*.lua' '\\u\{|[^-/]//[^/]|[^~]~[^=]|<<|>>' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
 		|| { echo "Lua 5.3 syntax above (\\u{} escape, //, bitwise ops): the game embeds Lua 5.2"; exit 1; }
-	@# A wrapper recipe (react.RegisterWrapperRecipe) is the exception: it must return its wrapped recipe's node
-	@# itself; such a line carries the comment "-- wrapper recipe: its child".
-	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src | grep -v -- '-- wrapper recipe: its child' \
+	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src \
 		|| { echo "wrap CallOriginalRecipe in a layout: a recipe's root must be a layout (else the game UI drops)"; exit 1; }
-	@! grep -rnE --include='*.lua' '\blayout = [A-Z][A-Za-z_]*[{(]' src | grep -v 'layout = builtin\.' \
+	@! grep -rnE --include='*.lua' '\blayout = ([a-z_]+\.)?[A-Z][A-Za-z_]*[{(]' src | grep -v 'layout = builtin\.' \
 		|| { echo "a Component's layout must be a builtin layout, not a recipe: the game crashes natively (observed in game)"; exit 1; }
 	@! grep -rnE --include='*.lua' '\braw(get|set|equal|len)\(' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
 		|| { echo "rawget/rawset/rawequal/rawlen are not there in the game's GUI Lua state (observed in game)"; exit 1; }

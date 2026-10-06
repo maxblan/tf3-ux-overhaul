@@ -96,6 +96,15 @@ function vehicle_info.read(vehicle)
 		info.load = info.load + (cargo[2] or 0)
 		info.capacity = info.capacity + (cargo[3] or 0)
 	end
+	-- compartments for several cargo types not set to one yet: the game counts them in the vehicle's
+	-- capacity too (statistic_vehicles.tl, extraCapacity)
+	local unset = cargo_util.getVehicleUnsetCapacities(vehicle)
+	for _cargo_type, capacity in pairs(unset and unset.singleCapacities or {}) do
+		info.capacity = info.capacity + capacity
+	end
+	for _i, multi in ipairs(unset and unset.multiTypes or {}) do
+		info.capacity = info.capacity + (multi.capacity or 0)
+	end
 	info.happiness = quality(vehicle, cargo_util.getPassengerCargoTypeId())
 	info.onTime = quality(vehicle)
 	return info

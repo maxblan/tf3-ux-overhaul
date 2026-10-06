@@ -39,6 +39,17 @@ settings.FEATURES = {
 	"vehicle_store", -- Vehicle store: newest first
 }
 
+-- Switches that were one before (2026-10): a player who had switched the old one off keeps the new
+-- ones off until they set them. New key -> the key it was part of.
+---@type table<string, string>
+settings.FORMERLY = {
+	sections = "entity_windows",
+	sell_confirm = "entity_windows",
+	town_growth = "entity_windows",
+	promotion_pending = "entity_windows",
+	bulldozer_warning = "construction",
+}
+
 local known = {} ---@type table<string, true>
 for _i, key in ipairs(settings.FEATURES) do known[key] = true end
 
@@ -60,7 +71,12 @@ end
 ---@return boolean
 function settings.enabled(key)
 	if not known[key] then return true end
-	local ok, value = pcall(function() return read()["uio_" .. key] end)
+	local ok, value = pcall(function()
+		local params = read()
+		local own = params["uio_" .. key]
+		if own == nil and settings.FORMERLY[key] then return params["uio_" .. settings.FORMERLY[key]] end
+		return own
+	end)
 	return not (ok and value == 2)
 end
 

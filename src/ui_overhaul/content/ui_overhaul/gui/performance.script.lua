@@ -1,6 +1,5 @@
 --- Guarded stub for performance.lua (see guard.lua): the vehicle window's Performance card (a
--- plugin, performance_card.res.lua). The store cart's tooltip is installed by installer.lua. If either
--- fails, the vanilla screen stays and one line is logged.
+-- plugin, performance_card.res.lua). If it fails, the vanilla window stays and one line is logged.
 local react = require("::/gui/main/react.lua")
 local guard = require("/ui_overhaul/gui/guard.lua")
 

@@ -1,5 +1,7 @@
 -- compat.lua: a feature is checked against everything its modules, the modules they require and its
 -- plugins read from the base game; a missing field or module is named, nothing else.
+_G.debugPrint = _G.debugPrint or function() end -- guard.module logs a module that does not load
+
 local compat = require("/ui_overhaul/gui/compat.lua")
 
 describe("compat", function()
@@ -37,6 +39,14 @@ describe("compat", function()
 
 	it("names every field of a base module that no longer loads", function()
 		assert.are.same({ "::/spec/no_such_module.tl Anything" }, compat.missing("gone"))
+	end)
+
+	it("only asks a base module whose fields the code does not read to load", function()
+		loaded["::/spec/recipe.tl"] = function() end -- a module that is a recipe itself
+		compat.use({ modules = { m = { ["::/spec/recipe.tl"] = {}, ["::/spec/gone_too.tl"] = {} } },
+			requires = {}, plugins = {} })
+		assert.are.same({ "::/spec/gone_too.tl" }, compat.missing("m"))
+		loaded["::/spec/recipe.tl"] = nil
 	end)
 
 	it("checks what the feature's plugins render as well", function()

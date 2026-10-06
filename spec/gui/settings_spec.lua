@@ -47,6 +47,20 @@ describe("settings", function()
 		assert.are.equal("switched off: finances", settings.describe())
 	end)
 
+	it("keeps the choice of a switch that was split until the player sets the new ones", function()
+		with_params({ uio_entity_windows = 2, uio_construction = 2, uio_town_growth = 1 })
+		assert.is_false(settings.enabled("sections"))
+		assert.is_false(settings.enabled("sell_confirm"))
+		assert.is_true(settings.enabled("town_growth")) -- set since: its own value counts
+		assert.is_false(settings.enabled("bulldozer_warning"))
+		for key, former in pairs(settings.FORMERLY) do
+			local listed = false
+			for _i, feature in ipairs(settings.FEATURES) do listed = listed or feature == key end
+			assert.is_true(listed, key)
+			assert.is_true(type(former) == "string", key)
+		end
+	end)
+
 	it("keeps everything on where the game has no params for the mod or cannot give them", function()
 		with_params(nil)
 		assert.is_true(settings.enabled("finances"))

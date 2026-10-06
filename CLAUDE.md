@@ -42,9 +42,9 @@ Adding a feature touches `installer.lua` (`INSTALLS`), `settings.lua` (`FEATURES
 
 ## Rules worth repeating
 
-- A recipe must return a layout; wrap `react.CallOriginalRecipe(...)` in `builtin.BoxLayout`.
+- A recipe must return a layout; wrap `react.CallOriginalRecipe(...)` in `builtin.BoxLayout`. A wrapper recipe (`react.RegisterWrapperRecipe`) is the exception: it returns its wrapped recipe's node (in pcall; `{}` for none, never nil).
 - Hooks are declared unconditionally and in the same order on every render, before anything that can fail; no error may escape a recipe (pcall after the hooks, render an empty layout on failure).
-- Wrap module functions with `priority.chain(module, "field", ...)`, never by assigning; `builtin.*` widgets with `builtin_wraps.wrap`.
+- Wrap module functions with `priority.chain(module, "field", ...)`, never by assigning; `builtin.*` widgets with `builtin_wraps.wrap`. Exception: a recipe field other mods wrap with `RegisterWrapperRecipe` gets a wrapper recipe assigned directly (the field must stay a recipe), see `window_tweaks.wrap_bar` / `settle_sell`.
 - `require("/x.lua")` resolves inside this mod only at load time; at render time or in callbacks use `"ui_overhaul_1::/ui_overhaul/..."`.
 - No GUI-thread calls (`api.util.getApplicationTime()`, `_()`) inside timer callbacks: native crash.
 - Texts via plain `_()` from `src/ui_overhaul/strings.json`, reusing the game's own terms.

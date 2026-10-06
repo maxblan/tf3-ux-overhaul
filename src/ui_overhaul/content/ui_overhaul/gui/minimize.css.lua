@@ -37,6 +37,9 @@ function data()
 	-- so it keeps that width while folded, and the minimize button clear of the engine's round close
 	-- button, which sits over the window's top right corner
 	add("R::Component!uio-compact-header", { minSize = { 448, -1 }, padding = { 4, 44, 0, 8 } })
+	-- the content gives up the title row's height (about 44: title, its margins and the row's padding),
+	-- so the Line Manager stays as tall as the game made it (lvmWindowHeight 894)
+	add("Window!uio-on-minimize R::ManagerWindowContent", { maxSize = { 500, 850 } })
 	-- on UioMinimizable's component: a class on a layout hides nothing (observed in game)
 	add("R::UioMinimizable Component!uio-folded, Component!uio-folded", { visibility = "none" })
 	for _i, fixed in ipairs(FIXED) do

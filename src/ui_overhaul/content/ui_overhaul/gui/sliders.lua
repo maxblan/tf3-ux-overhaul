@@ -65,14 +65,17 @@ local sliders = {}
 local VANILLA_IN = { SettingsPage = true }
 
 -- Recipes whose sliders the mouse wheel moves: their sliders are not part of a scrolling list or
--- window, so the wheel has nothing else to do there (construction.tl's parameter rows,
--- game_bar_widgets.tl). Under any other slider the wheel scrolls what lies under it.
+-- window, so the wheel has nothing else to do there (construction.tl's parameter rows, and the callout
+-- they open in compact mode, script_param_util.tl; game_bar_widgets.tl; the music player). Under any
+-- other slider the wheel scrolls what lies under it.
 ---@type table<string, boolean>
 local WHEEL_IN = {
 	ConstructionParam = true,
 	ConstructionEntityParam = true,
+	ScriptParamCalloutWrapper = true,
 	SliderWithLegend = true,
 	CalendarEditorDateSpeedControl = true,
+	MusicPlayer = true,
 }
 
 --- Whether the mouse wheel moves the sliders that recipe `recipe` renders.

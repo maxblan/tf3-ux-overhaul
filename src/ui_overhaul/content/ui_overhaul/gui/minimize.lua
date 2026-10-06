@@ -41,8 +41,9 @@ local ICON_RESTORE = "gui/builtin/window/icons/symbol_maximize_18.tga"
 local ICON_RENAME = "gui/builtin/window/icons/symbol_pencil_18.tga"
 local SKIPPED_CLASSES = { "popover", "dialog", "no-close-button", "construct-" }
 local SKIPPED_TOOLS = { pause = true }
--- compact windows (no title bar) that get a title row of their own, by their tool: the Line Manager
-local COMPACT_TOOLS = { management = true }
+-- compact windows (no title bar) that get a title row of their own, by their id: the Line Manager
+-- (manager_window.tl, managerToolWindowId)
+local COMPACT_IDS = { ["menu.management"] = true }
 
 local minimized = {} ---@type table<string, true?> window key -> true while minimized
 local mounted = {} ---@type table<string, integer?> window key -> open windows with that key
@@ -56,15 +57,14 @@ local report = guard.reporter("minimize: ")
 function minimize.eligible(p)
 	if type(p) ~= "table" or p.content == nil or p.header ~= nil then return false end
 	if p.closable ~= true or SKIPPED_TOOLS[p.tool or ""] then return false end
-	if p.compact then return COMPACT_TOOLS[p.tool or ""] == true end
-	if type(p.title) ~= "string" or p.title == "" then return false end
 	local class = p.meta and p.meta.class ---@type any whatever a mod passes; checked below
 	if type(class) == "string" then
 		for _i, skipped in ipairs(SKIPPED_CLASSES) do
 			if class:find(skipped, 1, true) then return false end
 		end
 	end
-	return true
+	if p.compact then return COMPACT_IDS[p.id or ""] == true end
+	return type(p.title) == "string" and p.title ~= ""
 end
 
 --- A key that tells the window apart from the others open at the same time, for windows that are

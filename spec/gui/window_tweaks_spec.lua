@@ -4,6 +4,7 @@
 _G.debugPrint = _G.debugPrint or function() end
 local registered = {} ---@type table<string, function> recipe name -> its body
 local wrappers = {} ---@type table<string, function> wrapper recipe name -> the recipe it wraps
+local original_fails = false -- the stand-in CallOriginalRecipe raises, as for a field that is no recipe
 
 -- The stand-in for a window's useState({}): set() takes effect on the next render (new_window).
 ---@class spec.window_tweaks.State
@@ -83,7 +84,13 @@ local stand_ins = {
 		---@param recipe function
 		---@param p any
 		---@return { original: function, params: any }
-		CallOriginalRecipe = function(recipe, p) return { original = recipe, params = p } end,
+		CallOriginalRecipe = function(recipe, p)
+			if original_fails then error("not a recipe") end
+			return { original = recipe, params = p }
+		end,
+		---@param _recipe function
+		---@return integer
+		GetRecipeId = function(_recipe) return 7 end,
 	},
 	["::/gui/main/builtin.lua"] = {
 		BoxLayout = function(t) return { box = t } end,
@@ -183,6 +190,27 @@ describe("window_tweaks Sell confirmation", function()
 	it("passes odd params on unchanged instead of raising", function()
 		local odd = { secondaryButtons = "not a list" }
 		assert.are.equal(odd, render(odd).params)
+	end)
+
+	it("leaves the bar out instead of raising where the bar below cannot be made", function()
+		original_fails = true
+		local ok, node = pcall(render, { primaryButtons = {} })
+		original_fails = false
+		assert.is_true(ok)
+		assert.are.same({}, node) -- a wrapper's empty child list (not nil: react.lua indexes it)
+	end)
+
+	it("steps aside where another mod replaced the bar below, which the wrap would hide", function()
+		local globals = _G ---@type table<string, any>
+		local saved_react = globals._react ---@type any the game's registry, or nil outside the game
+		local wrapper = util.ActionButtonBar ---@type function
+		globals._react = { recipeReplace = {} }
+		assert.are.equal("kept", window_tweaks.settle_sell())
+		assert.are.equal(wrapper, util.ActionButtonBar)
+		globals._react = { recipeReplace = { [7] = function() end } }
+		assert.are.equal("left out", window_tweaks.settle_sell())
+		assert.are.equal(wrappers.UioActionButtonBar, util.ActionButtonBar)
+		util.ActionButtonBar, globals._react = wrapper, saved_react
 	end)
 end)
 

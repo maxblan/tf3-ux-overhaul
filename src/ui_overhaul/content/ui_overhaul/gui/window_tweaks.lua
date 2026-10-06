@@ -187,6 +187,8 @@ function window_tweaks.bar_params(params)
 	return ok and changed or params
 end
 
+local report_bar = guard.reporter("Sell confirmation: ")
+
 -- The action bar of every entity window passes through a wrapper recipe around the recipe below it
 -- (the base bar, or another mod's wrapper of it, as Warehouse Station Coverage puts one there). The
 -- engine requires a wrapper recipe to return a node of exactly the recipe it wraps
@@ -200,7 +202,12 @@ function window_tweaks.wrap_bar(below)
 	---@param params game.gui.entity_window.entity_window_util.ActionButtonBarParams
 	---@return react.TreeNodeId
 	return react.RegisterWrapperRecipe("UioActionButtonBar", below, function(params)
-		return react.CallOriginalRecipe(below, window_tweaks.bar_params(params)) -- wrapper recipe: its child
+		-- no error may escape a recipe; a wrapper may return no child, an empty list (react.lua indexes
+		-- the result of a wrapper, so not nil): the bar is left out rather than the whole game UI
+		local ok, node = pcall(react.CallOriginalRecipe, below, window_tweaks.bar_params(params))
+		if ok then return node end
+		report_bar("action bar", node)
+		return {} --[[@as react.TreeNodeId]]
 	end)
 end
 
@@ -400,6 +407,8 @@ function window_tweaks.install_sections(_replacement_api)
 	patch_sections()
 end
 
+local sell_below, sell_wrapper ---@type function?, function? the bar below the wrap, and the wrap
+
 --- Sell needs a second click.
 ---@param _replacement_api react.ReplacementApi
 function window_tweaks.install_sell(_replacement_api)
@@ -409,7 +418,30 @@ function window_tweaks.install_sell(_replacement_api)
 	-- holds a plain Lua function there, and the field must stay a recipe for the mods that wrap it
 	-- with a wrapper recipe or call it through react.CallOriginalRecipe. The wrapper stacks with
 	-- theirs in either order, so there is nothing for the load order to decide.
-	entity_window_util.ActionButtonBar = window_tweaks.wrap_bar(below)
+	sell_below, sell_wrapper = below, window_tweaks.wrap_bar(below)
+	entity_window_util.ActionButtonBar = sell_wrapper
+end
+
+--- After every other mod's config (installer.late): where a mod replaced the bar below the wrap
+-- (ReplaceRecipe), the wrap would show the original instead of their bar, since it has to make the
+-- original's node. Then Sell confirmation steps aside: the field gets the bar below back, and the log
+-- names the mod. Returns what was decided, for the log and the specs.
+---@return string
+function window_tweaks.settle_sell()
+	if not (sell_below and sell_wrapper) then return "not installed" end
+	local id = react.GetRecipeId(sell_below)
+	local replacement = id and type(_react) == "table" and _react.recipeReplace[id] or nil
+	if replacement == nil then return "kept" end
+	local priority_module = guard.module("ui_overhaul_1::/ui_overhaul/gui/priority.lua") --[[@as uo.gui.priority?]]
+	local owner = priority_module and priority_module.owner(replacement) or "another mod"
+	if entity_window_util.ActionButtonBar == sell_wrapper then
+		entity_window_util.ActionButtonBar = sell_below
+		debugPrint("[ui_overhaul] Sell confirmation left out: ", tostring(owner), " replaces the action bar")
+		return "left out"
+	end
+	debugPrint("[ui_overhaul] Sell confirmation: ", tostring(owner), " replaces the action bar, but another mod",
+		" wrapped it above this mod's wrap; their bar does not show")
+	return "wrapped above"
 end
 
 --- The town window's growth bottleneck and progress.

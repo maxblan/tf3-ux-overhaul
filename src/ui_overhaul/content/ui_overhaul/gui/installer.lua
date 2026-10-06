@@ -26,6 +26,7 @@ local GUI = "ui_overhaul_1::/ui_overhaul/gui/"
 ---@field module string file in gui/, without ".lua"
 ---@field fn? string the module's function, default "install"
 ---@field label string for the log
+---@field late? string the module's function to run after every other mod's config, if it installed
 
 -- In this order; the Line Manager tweaks last (they used to have a higher order than the rest).
 ---@type uo.gui.installer.Install[]
@@ -54,7 +55,8 @@ installer.INSTALLS = {
 	{ feature = "windows", module = "tool_stack", label = "tool stack" },
 	{ feature = "vehicle_tooltip", module = "vehicle_tooltip", label = "vehicle tooltip" },
 	{ feature = "sections", module = "window_tweaks", fn = "install_sections", label = "sections staying open" },
-	{ feature = "sell_confirm", module = "window_tweaks", fn = "install_sell", label = "Sell confirmation" },
+	{ feature = "sell_confirm", module = "window_tweaks", fn = "install_sell", label = "Sell confirmation",
+		late = "settle_sell" },
 	{ feature = "town_growth", module = "window_tweaks", fn = "install_town", label = "town growth text" },
 	{ feature = "promotion_pending", module = "window_tweaks", fn = "install_promotion",
 		label = "promotion pending text" },
@@ -113,6 +115,16 @@ function installer.late(_replacement_api)
 	if late_done then return end
 	late_done = true
 	priority.late()
+	for _i, install in ipairs(installer.INSTALLS) do
+		if install.late and priority.active(install.feature) and settings.enabled(install.feature) then
+			local module = guard.module(GUI .. install.module .. ".lua")
+			local fn = module and module[install.late]
+			if type(fn) == "function" then
+				local settled, err = pcall(fn)
+				if not settled then debugPrint("[ui_overhaul] ", install.label, ": ", tostring(err)) end
+			end
+		end
+	end
 	local ok, err = pcall(styles.decide)
 	if not ok then debugPrint("[ui_overhaul] window classes: ", tostring(err)) end
 end
