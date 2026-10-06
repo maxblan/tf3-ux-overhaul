@@ -219,12 +219,12 @@ def terminals():
     box = (MARGIN, TOP + 8, W - 2 * MARGIN, BOTTOM - TOP - 8)
     context = (560, 0, 2880, round(2880 * box[3] / box[2]))
     m = c.shot(src, context, box)
-    rows = (2822, 225, 558, 272)  # the station's line rows with their buttons
-    pop = (856, 214, 942, 170)    # the popover
+    rows = (2822, 196, 558, 240)  # the first terminal's line rows with their buttons
+    pop = (858, 212, 938, 218)    # the popover
     c.outline(c.mapped(m, rows))
     c.outline(c.mapped(m, pop))
-    _mp, bp = c.zoom(src, pop, (MARGIN + 56, BOTTOM - 56 - 170), 1.0)
-    _mr, br = c.zoom(src, rows, (W - MARGIN - 56 - 558, BOTTOM - 56 - 272), 1.0)
+    _mp, bp = c.zoom(src, pop, (MARGIN + 56, BOTTOM - 56 - pop[3]), 1.0)
+    _mr, br = c.zoom(src, rows, (W - MARGIN - 56 - rows[2], BOTTOM - 56 - rows[3]), 1.0)
     sp, sr = c.mapped(m, pop), c.mapped(m, rows)
     c.connector((sp[0] + sp[2] / 2, sp[1] + sp[3] + 4), (bp[0] + bp[2] / 2, bp[1] - BEZEL))
     c.connector((sr[0] + sr[2] / 2, sr[1] + sr[3] + 4), (br[0] + br[2] / 2, br[1] - 66))

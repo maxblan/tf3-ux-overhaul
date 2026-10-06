@@ -6,9 +6,12 @@
 -- comes first. So every rule must select something only this mod puts there while the feature is
 -- shown: a uio- class or an R::Uio recipe (spec/gui/stylesheets_spec.lua checks every rule). For the
 -- game's own elements inside a window, that is a class on the window: every window gets
---   * "uio-on-<feature>" for each feature that is shown (priority.active), and
---   * "uio-own-<feature>" for each feature whose own version shows, no mod that comes first having
---     the last word in it (priority.outranked), for elements it shares with such a mod.
+--   * "uio-on-<feature>" for a feature that is shown (priority.active), and
+--   * "uio-own-<feature>" for a feature whose own version shows, no mod that comes first having
+--     the last word in it (priority.outranked), for elements it shares with such a mod,
+-- but only the ones a stylesheet selects (CLASSES). A feature key's underscores are written as
+-- hyphens there: the game's selector parser does not take an underscore in a class name (observed in
+-- game: Window!uio-on-station_terminals matched no window, Window!uio-on-construction did).
 -- The classes are set once the load order is decided (`decide`, after priority.late); until then
 -- no window is drawn.
 -- @module ui_overhaul.gui.styles
@@ -21,24 +24,33 @@ local styles = {}
 
 local report = guard.reporter("styles: ")
 
--- The features whose rules select by these classes (spec/gui/stylesheets_spec.lua checks the list).
-styles.FEATURES = { "construction", "minimize", "notifications", "station_terminals", "terminals" }
+-- The classes the stylesheets select by, in the order a window gets them: feature and kind ("on":
+-- shown, "own": its own version shows). spec/gui/stylesheets_spec.lua checks that every class a rule
+-- selects is here.
+---@type { [1]: string, [2]: "on"|"own" }[]
+styles.CLASSES = {
+	{ "station_terminals", "on" }, -- terminals.css.lua: room for the buttons in the station window
+	{ "terminals", "own" }, -- terminals.css.lua: the width of the terminal popover
+	{ "construction", "on" }, -- construction.css.lua: the construction settings above the game bar
+	{ "minimize", "on" }, -- minimize.css.lua: the Line Manager keeps its height
+	{ "notifications", "on" }, -- notifications.css.lua: notification colours inside windows
+}
 
 -- the classes every window gets, ", "-separated; nil until decided or where none applies
 local window_classes ---@type string?
 
 --- The window class of feature `key` while it is shown.
----@param key string one of styles.FEATURES
+---@param key string a feature of styles.CLASSES
 ---@return string
 function styles.on(key)
-	return "uio-on-" .. key
+	return "uio-on-" .. (key:gsub("_", "-"))
 end
 
 --- The window class of feature `key` while its own version shows.
----@param key string one of styles.FEATURES
+---@param key string a feature of styles.CLASSES
 ---@return string
 function styles.own(key)
-	return "uio-own-" .. key
+	return "uio-own-" .. (key:gsub("_", "-"))
 end
 
 --- The classes every window gets, from the decisions: see the module comment.
@@ -47,10 +59,10 @@ end
 ---@return string?
 function styles.classes(active, outranked)
 	local classes = {} ---@type string[]
-	for _i, key in ipairs(styles.FEATURES) do
-		if active(key) then
-			classes[#classes + 1] = styles.on(key)
-			if not outranked(key) then classes[#classes + 1] = styles.own(key) end
+	for _i, entry in ipairs(styles.CLASSES) do
+		local key, kind = entry[1], entry[2]
+		if active(key) and (kind == "on" or not outranked(key)) then
+			classes[#classes + 1] = kind == "on" and styles.on(key) or styles.own(key)
 		end
 	end
 	return #classes > 0 and table.concat(classes, ", ") or nil

@@ -9,7 +9,7 @@ local ssu = require("::/gui/main/stylesheetutil.lua")
 local color_util = require("::/gui/main/color_util.tl")
 
 local OWN_POPOVER = "uio-own-terminals" -- styles.own("terminals"): no mod that comes first takes it over
-local STATION_BUTTONS = "Window!uio-on-station_terminals" -- styles.on("station_terminals")
+local STATION_BUTTONS = "Window!uio-on-station-terminals" -- styles.on("station_terminals")
 
 ---@return table
 function data()
@@ -60,12 +60,12 @@ function data()
 	-- vanilla locate button in entity window lists (entity_window.css.lua, 22 x 22).
 	add("R::UioTerminalButton Button!uio-terminal-button", { size = { 22, 22 }, padding = { 1, 1, 1, 1 } })
 	add("Table::TableLayout R::UioTerminalButton Button!uio-terminal-button", { gravity = { 0, -1 } })
-	add("R::TerminalStops Component!uio-station-terminal R::UioTerminalButton", { margin = { 0, 6, 0, 6 } })
+	add("R::TerminalStops R::Component!uio-station-terminal R::UioTerminalButton", { margin = { 0, 6, 0, 6 } })
 	-- room for the button and the alert: the base gives the line name a fixed 234 of the card's 400
 	-- (entity_window_sizes.lua) and the counters about 166, which left the button no width at large
 	-- text (observed in game); the name column gives up the 56 the button and the alert need
-	add("R::TerminalStops Component!uio-station-terminal", { minSize = { 34, -1 }, gravity = { -1, 0.5 } })
-	add("R::TerminalStops Component!uio-station-terminal-alert", { minSize = { 56, -1 } })
+	add("R::TerminalStops R::Component!uio-station-terminal", { minSize = { 34, -1 }, gravity = { -1, 0.5 } })
+	add("R::TerminalStops R::Component!uio-station-terminal-alert", { minSize = { 56, -1 } })
 	-- the game's own line names in that list
 	local list = STATION_BUTTONS .. " R::TerminalStops "
 	add(list .. "R::StationGroupViaLabel, " .. list .. "R::LineStopButton", { size = { 178, -1 } })

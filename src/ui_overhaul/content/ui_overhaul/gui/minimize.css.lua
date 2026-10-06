@@ -41,7 +41,7 @@ function data()
 	-- so the Line Manager stays as tall as the game made it (lvmWindowHeight 894)
 	add("Window!uio-on-minimize R::ManagerWindowContent", { maxSize = { 500, 850 } })
 	-- on UioMinimizable's component: a class on a layout hides nothing (observed in game)
-	add("R::UioMinimizable Component!uio-folded, Component!uio-folded", { visibility = "none" })
+	add("R::UioMinimizable R::Component!uio-folded, R::Component!uio-folded", { visibility = "none" })
 	for _i, fixed in ipairs(FIXED) do
 		add(fixed[1] .. "!uio-window-folded, " .. fixed[1] .. "!window-expanded!uio-window-folded",
 			{ size = { fixed[2], -1 } })
