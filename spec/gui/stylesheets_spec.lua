@@ -68,12 +68,35 @@ describe("stylesheets", function()
 		assert.are.same({}, foreign)
 	end)
 
+	it("select a builtin.Component as R::Component (a bare Component matches nothing, observed in game)", function()
+		local bare = {} ---@type string[]
+		for _i, rule in ipairs(selectors()) do
+			local padded = " " .. rule.selector
+			if padded:find("[^:]Component[!#:]") or padded:find("[^:]Component$") then
+				bare[#bare + 1] = rule.file .. ": " .. rule.selector
+			end
+		end
+		assert.are.same({}, bare)
+	end)
+
+	it("use no underscore in a class name (the game's selector parser stops there, observed in game)", function()
+		local bad = {} ---@type string[]
+		for _i, rule in ipairs(selectors()) do
+			for class in rule.selector:gmatch("![%w_%-]+") do
+				if class:find("_", 1, true) then bad[#bad + 1] = rule.file .. ": " .. class end
+			end
+		end
+		assert.are.same({}, bad)
+	end)
+
 	it("use only the window classes styles.lua sets", function()
 		local known = {} ---@type table<string, true>
-		for _i, key in ipairs(styles.FEATURES) do known[styles.on(key)], known[styles.own(key)] = true, true end
+		for _i, entry in ipairs(styles.CLASSES) do
+			known[entry[2] == "on" and styles.on(entry[1]) or styles.own(entry[1])] = true
+		end
 		local unknown = {} ---@type string[]
 		for _i, rule in ipairs(selectors()) do
-			for class in rule.selector:gmatch("uio%-o[nw]n?%-[%w_]+") do
+			for class in rule.selector:gmatch("uio%-o[nw]n?%-[%w_%-]+") do
 				if not known[class] then unknown[#unknown + 1] = rule.file .. ": " .. class end
 			end
 		end
@@ -82,11 +105,13 @@ describe("stylesheets", function()
 end)
 
 describe("styles", function()
-	it("names a class per feature shown, and one more where its own version shows", function()
+	it("names only the classes the stylesheets select, of the features shown, the most needed first", function()
 		local classes = styles.classes(
-			function(key) return key == "construction" or key == "terminals" end,
+			function(key) return key == "construction" or key == "terminals" or key == "station_terminals" end,
 			function(key) return key == "terminals" end)
-		assert.are.equal("uio-on-construction, uio-own-construction, uio-on-terminals", classes)
+		-- terminals is outranked: no uio-own-terminals; no class a stylesheet does not select
+		-- an underscore of a feature key becomes a hyphen: the game's selectors take no underscore
+		assert.are.equal("uio-on-station-terminals, uio-on-construction", classes)
 		assert.is_nil(styles.classes(function() return false end, function() return false end))
 	end)
 
@@ -109,10 +134,10 @@ describe("styles", function()
 		priority.outranked = function() return false end
 		styles.decide()
 		priority.active, priority.outranked = active, outranked
-		assert.are.equal("popover, uio-on-terminals, uio-own-terminals", wrapped(p).window[1].meta.class)
+		assert.are.equal("popover, uio-own-terminals", wrapped(p).window[1].meta.class)
 		local ref = { is_react_ref_info = true }
 		local node = wrapped(ref, p).window ---@type table[] the stand-in's arguments
 		assert.are.equal(ref, node[1])
-		assert.are.equal("popover, uio-on-terminals, uio-own-terminals", node[2].meta.class)
+		assert.are.equal("popover, uio-own-terminals", node[2].meta.class)
 	end)
 end)
