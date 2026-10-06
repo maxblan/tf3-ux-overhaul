@@ -365,7 +365,7 @@ local qualityData = api.engine.util.cargo.getCargoQualityDataAtStop(lineEntity, 
 - Cargo: the base shows no waiting-cargo count per stop anywhere. The station window counts passengers only.
   - In TF3, cargo is loaded from the stock lists of catchable industries and warehouses (`cargo_util.getInputOutputStocksForStation` → `catchmentAreaSystem.getStationCatchables(station, true)`, `cargo_util.tl:544-563`).
   - The `getCargoQualityDataAt*` docs say "cargo type (passengers allowed)", so calling `getCargoQualityDataAtStop(line, stopIndex0, cargoTypeId)` for each type from `getConfiguredStopCargoTypes` is the closest API. Whether it returns non-zero for cargo needs in-game verification.
-  - Line-wide cargo on board: `cargo_util.calculateSortedLineCargoInfo(line)` returns `{ {cargoType, capacity, fill, vehicleEntities, ...} }` (`cargo_util.tl:352-355`).
+  - Line-wide cargo on board: `cargo_util.calculateSortedLineCargoInfo(line)` returns `{ {cargoType, capacity, vehicleEntities, ...} }` (`cargo_util.tl:352-355`). **No `fill`:** the inner function counts it only with its third argument `calculateFill`, which neither `calculateSortedLineCargoInfo` nor `calculateSortedVehicleCargoInfo` passes (`cargo_util.tl:283-355`), so `fill` is nil and a load summed from it is always 0 (the mod's vehicle load read 0 until 2026-10). For one vehicle's load use `cargo_util.calculateSortedVehicleCargoInfoCompareValue(vehicle)`, the one export that passes it: `{ {cargoType, fill, capacity} }` (`cargo_util.tl:357-364`), or `api.engine.system.simEntityAtVehicleSystem.getVehicleSimEntitiesCountForCargoType(vehicle, cargoType)` per cargo type.
 
 ### 2.11 Problems / issues per line with reason text
 **Engine sources** (the same ones the notification script uses, `game_mechanics/game_mechanics/notifications/notifications.script.tl:122-178`):
@@ -1532,3 +1532,5 @@ Observed in game (build 40408, 2026-10-05, with 13 mod.io mods active in both or
   screen, its content spans 0.829..1.047). Measure the content a few steps after it opened
   (`getPosition(0, 0)` and `(1, 1)` of a node inside it, in `react.onStep`) and open it again further left
   and up (`terminals.placement`).
+
+- `builtin.Component{ layout = X }`: `X` must be a layout builtin (`builtin.BoxLayout{...}` ...). A recipe there (even one whose root is a layout) crashes the game natively, without a Lua error: "Item of Component must be a layout" (`react_builtin.cpp:564`, observed in game 2026-10, build 40408). Put the recipe inside a `BoxLayout`. `make lint` rejects `layout = <not builtin>`.
