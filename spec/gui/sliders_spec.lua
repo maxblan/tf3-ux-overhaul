@@ -76,6 +76,16 @@ describe("sliders", function()
 		assert.are.equal("function", type(node.recipe))
 	end)
 
+	it("lets the wheel move only sliders outside scrolling lists and windows", function()
+		assert.is_true(sliders.wheel_in("ConstructionParam"))
+		assert.is_true(sliders.wheel_in("ConstructionEntityParam"))
+		assert.is_true(sliders.wheel_in("SliderWithLegend"))
+		-- entity windows, the Line Manager's cargo filter, other mods' windows: the wheel scrolls
+		assert.is_false(sliders.wheel_in("CargoFilterWindow"))
+		assert.is_false(sliders.wheel_in("TownWindow"))
+		assert.is_false(sliders.wheel_in(nil))
+	end)
+
 	it("passes a call outside a recipe render to the base slider", function()
 		current_recipe = nil
 		base_calls = {}

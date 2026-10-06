@@ -142,8 +142,10 @@ end
 ---@param value boolean
 ---@return react.TreeNodeId
 local function toggle(kind, icon, tooltip, value)
+	-- typed: the language server infers the concatenation with the alias only now and then
+	local id = "uio.catchment." .. kind ---@type string
 	return builtin.ToggleButton{
-		meta = { tooltip = tooltip, class = "uio-catchment-toggle", id = "uio.catchment." .. kind },
+		meta = { tooltip = tooltip, class = "uio-catchment-toggle", id = id },
 		content = builtin.ImageView{ meta = { class = "uio-catchment-icon" }, path = icon,
 			scaling = builtin.type.ImageViewScaling.AutoFit },
 		value = value and 1 or 0,

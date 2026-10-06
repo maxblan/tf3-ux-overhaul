@@ -20,8 +20,10 @@
 --     the fold state can be declared there as hooks of that recipe; elsewhere it can not.
 -- The field is replaced through builtin_wraps.lua, which keeps window recipes registered later
 -- (react.RegisterWrapperRecipe) on the base builtin; without that the game crashes when such a
--- window opens (observed in game). Windows without a title bar
--- (compact: the Line Manager), without a close button, with a header of their own, dialogs and
+-- window opens (observed in game). The Line Manager has no title bar (a compact window: only the
+-- engine's round close button at its corner), so it gets a title row of its own at the top of its
+-- content, with its name (the game's term) and the minimize button; folded, only that row stays.
+-- Other compact windows, windows without a close button, with a header of their own, dialogs and
 -- popovers stay as they are.
 -- Installed by installer.lua.
 -- @module ui_overhaul.gui.minimize
@@ -39,6 +41,8 @@ local ICON_RESTORE = "gui/builtin/window/icons/symbol_maximize_18.tga"
 local ICON_RENAME = "gui/builtin/window/icons/symbol_pencil_18.tga"
 local SKIPPED_CLASSES = { "popover", "dialog", "no-close-button", "construct-" }
 local SKIPPED_TOOLS = { pause = true }
+-- compact windows (no title bar) that get a title row of their own, by their tool: the Line Manager
+local COMPACT_TOOLS = { management = true }
 
 local minimized = {} ---@type table<string, true?> window key -> true while minimized
 local mounted = {} ---@type table<string, integer?> window key -> open windows with that key
@@ -50,8 +54,9 @@ local report = guard.reporter("minimize: ")
 ---@param p any what the window builtin got first: its params, or a ref, or anything a mod passes
 ---@return boolean
 function minimize.eligible(p)
-	if type(p) ~= "table" or p.content == nil or p.header ~= nil or p.compact then return false end
+	if type(p) ~= "table" or p.content == nil or p.header ~= nil then return false end
 	if p.closable ~= true or SKIPPED_TOOLS[p.tool or ""] then return false end
+	if p.compact then return COMPACT_TOOLS[p.tool or ""] == true end
 	if type(p.title) ~= "string" or p.title == "" then return false end
 	local class = p.meta and p.meta.class ---@type any whatever a mod passes; checked below
 	if type(class) == "string" then
@@ -241,10 +246,11 @@ end
 
 -- `class` appended to the window's own classes (a copy of its meta).
 ---@param meta? react.Meta
----@param class string
+---@param class? string nil: the meta copied as it is
 ---@return react.Meta
 local function with_class(meta, class)
 	local copy = meta and guard.shallow_copy(meta) or {} ---@type react.Meta
+	if class == nil then return copy end
 	local own = copy.class
 	copy.class = (type(own) == "string" and own ~= "") and own .. ", " .. class or class
 	return copy
@@ -278,7 +284,27 @@ local function wrap_window(base)
 			if instance_key == nil then folded = minimized[key] == true end
 			local copy = guard.shallow_copy(window_params) ---@type builtin.WindowParam
 			local id = type(window_params.id) == "string" and window_params.id ~= "" and window_params.id or key
-			copy.content = Minimizable{ key = key, id = "uio.minimize." .. id, content = window_params.content }
+			local content = Minimizable{ key = key, id = "uio.minimize." .. id, content = window_params.content }
+			if window_params.compact then
+				-- no title bar: the title row goes above the content, and stays when the content folds
+				copy.content = builtin.BoxLayout{
+					orientation = builtin.type.Orientation.Vertical,
+					children = {
+						-- a Component's layout must be a layout builtin, not a recipe: the engine crashes
+						-- natively otherwise ("Item of Component must be a layout", observed in game)
+						builtin.Component{
+							meta = { class = "uio-compact-header" },
+							layout = builtin.BoxLayout{ children = {
+								WindowHeader{ key = key, title = _("Line Manager"), editable = false },
+							} },
+						},
+						content,
+					},
+				}
+				copy.meta = with_class(window_params.meta, folded and "uio-window-folded" or nil)
+				return copy
+			end
+			copy.content = content
 			copy.header = WindowHeader{
 				key = key,
 				title = window_params.title or "",

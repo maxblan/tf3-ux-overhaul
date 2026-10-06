@@ -11,6 +11,10 @@ local react = require("::/gui/main/react.lua")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
+-- The base recipe as the module holds it while this mod loads, and safe calls of it (guard.base).
+local base_tooltip = game_tooltips.DefaultEntityToolTip
+local original_tooltip = guard.base("DefaultEntityToolTip", base_tooltip)
+
 local vehicle_tooltip = {}
 
 local REFRESH = 0.25 -- seconds: speed and load change while the player looks
@@ -58,7 +62,7 @@ local Tooltip = react.RegisterRecipe("DefaultEntityToolTip", function(param)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Vertical,
 		children = {
-			react.CallOriginalRecipe(game_tooltips.DefaultEntityToolTip, param),
+			original_tooltip.node(param),
 			VehicleBlock{ entityRef = param.entityRef, filter = param.filter },
 		},
 	}
@@ -67,7 +71,7 @@ end)
 --- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function vehicle_tooltip.install(replacement_api)
-	replacement_api.ReplaceRecipe(game_tooltips.DefaultEntityToolTip, Tooltip)
+	replacement_api.ReplaceRecipe(base_tooltip, Tooltip)
 	debugPrint("[ui_overhaul] vehicle tooltip installed")
 end
 

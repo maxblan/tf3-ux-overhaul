@@ -54,6 +54,42 @@ function guard.empty()
 	return builtin.BoxLayout{}
 end
 
+local report_original = guard.reporter("base recipe ")
+
+---Safe calls of one base recipe (guard.base).
+---@class uo.gui.guard.Base
+---@field node fun(...: any): react.TreeNodeId? its node, or nil where it makes none or raises
+---@field layout fun(...: any): react.TreeNodeId its node inside a layout (a recipe has to return one), empty without
+
+--- Safe calls of the base recipe `recipe`, for a replacement that shows it: react.CallOriginalRecipe in
+-- pcall, and nothing where it makes no node or raises (one log line). Call this while the module
+-- loads, with the recipe the base module holds then: another mod may later put a plain function in
+-- that field, which the framework does not know as a recipe, so CallOriginalRecipe would raise for it
+-- (and an error that escapes a recipe drops the whole game UI).
+---@param name string for the log line
+---@param recipe function the base recipe
+---@return uo.gui.guard.Base
+function guard.base(name, recipe)
+	-- while a module loads, base paths resolve (in the specs: to their stand-ins)
+	local react = require("::/gui/main/react.lua")
+	local builtin = require("::/gui/main/builtin.lua")
+	---@param ... any the recipe's arguments (a ref first, then its params), passed on unchanged
+	---@return react.TreeNodeId?
+	local function node(...)
+		local ok, result = pcall(react.CallOriginalRecipe, recipe, ...)
+		if ok then return result end
+		report_original(name, result)
+		return nil
+	end
+	---@param ... any the recipe's arguments, passed on unchanged
+	---@return react.TreeNodeId
+	local function layout(...)
+		local result = node(...)
+		return builtin.BoxLayout{ children = result ~= nil and { result } or {} }
+	end
+	return { node = node, layout = layout }
+end
+
 -- A module that failed to load is not loaded again: each attempt reads the file anew, and the
 -- game's loader (base/init.lua) pushes the path onto its require stack and changes the current mod
 -- before it runs the file, and undoes neither when loading fails. Both are put back here, so a later

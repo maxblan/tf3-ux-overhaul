@@ -90,9 +90,11 @@ function vehicle_info.read(vehicle)
 	elseif tv.depot and tv.depot >= 0 then
 		info.destination = api.engine.util.getEntityName(tv.depot)
 	end
-	for _i, cargo in ipairs(cargo_util.calculateSortedVehicleCargoInfo(vehicle) or {}) do
-		info.load = info.load + (cargo.fill or 0)
-		info.capacity = info.capacity + (cargo.capacity or 0)
+	-- { cargo type, fill, capacity } per cargo type: the one exported function that counts the fill
+	-- (calculateSortedVehicleCargoInfo leaves `fill` nil, so the load always read 0)
+	for _i, cargo in ipairs(cargo_util.calculateSortedVehicleCargoInfoCompareValue(vehicle) or {}) do
+		info.load = info.load + (cargo[2] or 0)
+		info.capacity = info.capacity + (cargo[3] or 0)
 	end
 	info.happiness = quality(vehicle, cargo_util.getPassengerCargoTypeId())
 	info.onTime = quality(vehicle)

@@ -26,6 +26,10 @@ local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
+-- The base recipe as the module holds it while this mod loads, and safe calls of it (guard.base).
+local base_plugin = line_eow.LineVehiclesPlugin
+local original_plugin = guard.base("LineVehiclesPlugin", base_plugin)
+
 local line_vehicles = {}
 
 --- Marked failed once the card failed: the base card is shown for the rest of the session.
@@ -249,13 +253,13 @@ local Replacement = react.RegisterRecipe("LineVehiclesPlugin", function(params)
 		if ok then return node end
 		fallback.fail(line_vehicles.switch, node)
 	end
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(line_eow.LineVehiclesPlugin, params) } }
+	return original_plugin.layout(params)
 end)
 
 --- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function line_vehicles.install(replacement_api)
-	replacement_api.ReplaceRecipe(line_eow.LineVehiclesPlugin, Replacement)
+	replacement_api.ReplaceRecipe(base_plugin, Replacement)
 end
 
 return line_vehicles
