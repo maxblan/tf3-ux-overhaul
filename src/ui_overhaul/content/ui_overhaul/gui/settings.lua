@@ -19,16 +19,19 @@ settings.FEATURES = {
 	"station_terminals", -- Station window: Select Terminals button per line stop
 	"line_window", -- Line window: Add/Remove Vehicle, vehicle rows, Stops card
 	"vehicle_tooltip", -- Vehicle hover on the map
-	"performance", -- Vehicle window: Performance card; store tooltip
+	"performance", -- Vehicle window: Performance card with the game's rating
 	"statistics", -- Statistics: quick filters, totals, sorting, warehouse cargo
-	"finances", -- Finances: income statement, cash flow, balance sheet
+	"finances", -- Finances: income statement
 	"windows", -- Windows side by side, kept open on map clicks
 	"minimize", -- Minimize button in title bars
-	"entity_windows", -- Sections stay open, Sell needs a second click, town growth, promotion pending
+	"sections", -- Entity windows: sections stay open, several at once
+	"sell_confirm", -- Vehicle window: Sell needs a second click
+	"town_growth", -- Town window: what limits growth, progress as text
+	"promotion_pending", -- Locked perk: promotion pending
 	"industry", -- Industry window: Development and Served by cards, blocked area switch
-	"construction", -- Construction menus: merged tabs, track order, Configure tab, bulldozer warning
-	"build_info", -- Build tooltip: gradient, curve radius, heights
-	"sliders", -- Mouse wheel and typed values on sliders
+	"construction", -- Construction menus: merged tabs, track order, Configure tab
+	"bulldozer_warning", -- Bulldozer tooltip: stations that lines stop at
+	"sliders", -- Mouse wheel on construction sliders, typed values on sliders
 	"notifications", -- Notification groups and colours
 	"catchment", -- Catchment area buttons
 	"subsidies", -- Subsidy states, rings and texts

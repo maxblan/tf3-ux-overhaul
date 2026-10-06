@@ -62,7 +62,7 @@
         {
             "key": "uio_performance",
             "name": "Vehicle performance",
-            "tooltip": "The Performance card in the vehicle window and the slope speeds in the vehicle store.",
+            "tooltip": "The Performance card with the game's rating in the vehicle window.",
             "uiType": "Button",
             "values": [
                 "On",
@@ -84,7 +84,7 @@
         {
             "key": "uio_finances",
             "name": "Finances",
-            "tooltip": "Income statement, cash flow and balance sheet in the Finances tab.",
+            "tooltip": "An income statement in the Finances tab.",
             "uiType": "Button",
             "values": [
                 "On",
@@ -115,9 +115,42 @@
             "defaultIndex": 0
         },
         {
-            "key": "uio_entity_windows",
-            "name": "Entity windows",
-            "tooltip": "Sections stay open, Sell needs a second click, the town window names what limits growth, a locked perk says when a promotion is pending.",
+            "key": "uio_sections",
+            "name": "Sections stay open",
+            "tooltip": "Sections you open in an entity window stay open the next time, and several can be open at once.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_sell_confirm",
+            "name": "Sell: second click",
+            "tooltip": "Sell in the vehicle window needs a second click.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_town_growth",
+            "name": "Town growth",
+            "tooltip": "The town window names what limits growth and shows the progress to the next level as text.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_promotion_pending",
+            "name": "Promotion pending",
+            "tooltip": "A perk that is still locked although the rank is reached says that a promotion is pending.",
             "uiType": "Button",
             "values": [
                 "On",
@@ -139,7 +172,7 @@
         {
             "key": "uio_construction",
             "name": "Construction menus",
-            "tooltip": "Rail and Tracks, Road and Roads show each other's tabs; fastest track first; Configure opens the right tab; the bulldozer warns before removing a station that lines stop at.",
+            "tooltip": "Rail and Tracks, Road and Roads show each other's tabs; fastest track first; Configure opens the right tab.",
             "uiType": "Button",
             "values": [
                 "On",
@@ -148,9 +181,9 @@
             "defaultIndex": 0
         },
         {
-            "key": "uio_build_info",
-            "name": "Build tooltip measurements",
-            "tooltip": "Steepest gradient, tightest curve radius, height range, bridge height and tunnel depth while you draw track or road.",
+            "key": "uio_bulldozer_warning",
+            "name": "Bulldozer warning",
+            "tooltip": "The bulldozer warns before it removes a station that lines stop at.",
             "uiType": "Button",
             "values": [
                 "On",
@@ -161,7 +194,7 @@
         {
             "key": "uio_sliders",
             "name": "Sliders",
-            "tooltip": "The mouse wheel moves a slider one step, and a value can be typed.",
+            "tooltip": "The mouse wheel moves construction sliders one step, and a value can be typed into any slider.",
             "uiType": "Button",
             "values": [
                 "On",

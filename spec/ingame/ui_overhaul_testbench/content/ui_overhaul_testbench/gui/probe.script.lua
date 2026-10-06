@@ -226,8 +226,9 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 		debugPrint("[testbench] industry served by ok=", tostring(ok2), " lines=", ok2 and #lines or tostring(lines))
 	end)
 
-	-- The statements' sums against the game's own "Earnings" (total) per column: the net income plus
-	-- the investments must equal it if every booking is sorted in.
+	-- The income statement's sum against the game's own "Earnings" (total) per column: the net income
+	-- plus the investments (vehicles bought and sold, construction) must equal it if every booking is
+	-- sorted in.
 	react.onEvent("uio.debug.finances", function()
 		local finances = require("ui_overhaul_1::/ui_overhaul/gui/finances.lua")
 		local statements = require("ui_overhaul_1::/ui_overhaul/core/statements.lua")
@@ -237,29 +238,26 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			return
 		end
 		local J = api.type.JournalEntry
-		local income, cash = statements.build(data, {
+		---@type uo.core.statements.Enum
+		local enum = {
 			INCOME = J.Type.INCOME, SUBSIDY = J.Type.SUBSIDY, MAINTENANCE = J.Type.MAINTENANCE,
 			ACQUISITION = J.Type.ACQUISITION, CONSTRUCTION = J.Type.CONSTRUCTION,
 			VEHICLE = J.Maintenance.VEHICLE, INFRASTRUCTURE = J.Maintenance.INFRASTRUCTURE,
 			VEHICLE_MAINTENANCE = J.Maintenance.VEHICLE_MAINTENANCE,
-		})
-		---@param rows uo.core.statements.Row[]
-		---@param key string
-		---@return integer[]
-		local function find(rows, key)
-			for _i, r in ipairs(rows) do if r.key == key then return r.values end end
-			return {}
+		}
+		local income = statements.income(data, enum)
+		local kinds = statements.by_kind(data.entries, enum, data.columns)
+		---@type number[]
+		local net = {}
+		for _i, r in ipairs(income) do
+			if r.key == "net_income" then net = r.values or {} end
 		end
-		local net, investing = find(income, "net_income"), find(cash, "investing")
 		for i = 1, data.columns do
+			local investing = (kinds.vehicles[i] or 0) + (kinds.construction[i] or 0)
 			debugPrint("[testbench] finances ", tostring(data.header[i]), " total=", tostring(data.total[i]),
-				" net=", tostring(net[i]), " net+investing=", tostring((net[i] or 0) + (investing[i] or 0)),
+				" net=", tostring(net[i]), " net+investing=", tostring((net[i] or 0) + investing),
 				" entries=", #data.entries)
 		end
-		local ok2, sheet = pcall(finances.read_balance)
-		debugPrint("[testbench] finances balance ok=", tostring(ok2), " ", ok2 and string.format(
-			"cash=%s vehicles=%s assets=%s debt=%s", tostring(sheet.cash), tostring(sheet.vehicles),
-			tostring(sheet.assets), tostring(sheet.debt)) or tostring(sheet))
 	end)
 
 	react.onEvent("uio.debug.sliders", function(_e, open)
@@ -321,35 +319,6 @@ probe.UioProbeEntry = react.RegisterRecipe("UioProbeEntry", function()
 			recipe = FakeTerminalSelection,
 			params = { lineEntity = line, stopIndex0 = 0 },
 		})
-	end)
-
-	-- Build tooltip measurements on a made-up proposal near the map centre: a straight rising track
-	-- and a bridge 20 m above the ground. Logs each tooltip line.
-	react.onEvent("uio.debug.measure", function()
-		local construction = require("ui_overhaul_1::/ui_overhaul/gui/construction.lua")
-		local ground = api.engine.terrain.getHeightAt(api.type.Vec2f.new(0, 0))
-		debugPrint("[testbench] measure ground at centre ", tostring(ground))
-		local function segment(x0, x1, z0, z1, edge_type)
-			local v = function(x, z) return api.type.Vec3f.new(x, 0, z) end
-			return { type = 1, comp = {
-				position0 = v(x0, z0), position1 = v(x1, z1),
-				tangent0 = v(x1 - x0, z1 - z0), tangent1 = v(x1 - x0, z1 - z0), type = edge_type,
-			} }
-		end
-		local base = ground or 100
-		local fake = { proposal = {
-			addedSegments = {
-				segment(0, 100, base, base + 3, api.type.enum.BaseEdgeType.NORMAL),
-				segment(100, 200, base + 20, base + 20, api.type.enum.BaseEdgeType.BRIDGE),
-			},
-			removedSegments = {},
-		} }
-		local ok, strings = pcall(construction.measurement_strings, fake, 1, nil)
-		if not ok then
-			debugPrint("[testbench] measure failed: ", tostring(strings))
-			return
-		end
-		for _i, line in ipairs(strings) do debugPrint("[testbench] measure ", line) end
 	end)
 
 	-- Reads the line's problems the way the Stops card does, and runs the path search the add-stop

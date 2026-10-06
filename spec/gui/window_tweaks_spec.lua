@@ -1,7 +1,9 @@
 -- window_tweaks.lua: remembered entity-window sections chain on the base function and still collapse
 -- for Modify; the town level text lives in a child recipe that the base card drops after a failure. The
 -- base modules are stand-ins (restored after loading, so other specs keep theirs).
+_G.debugPrint = _G.debugPrint or function() end
 local registered = {} ---@type table<string, function> recipe name -> its body
+local wrappers = {} ---@type table<string, function> wrapper recipe name -> the recipe it wraps
 
 -- The stand-in for a window's useState({}): set() takes effect on the next render (new_window).
 ---@class spec.window_tweaks.State
@@ -70,6 +72,18 @@ local stand_ins = {
 			registered[name] = fn
 			return function(p) return { recipe = name, params = p } end
 		end,
+		---@param name string
+		---@param wrapped function
+		---@param fn function
+		---@return fun(p: any): { recipe: string, params: any }
+		RegisterWrapperRecipe = function(name, wrapped, fn)
+			registered[name], wrappers[name] = fn, wrapped
+			return function(p) return { recipe = name, params = p } end
+		end,
+		---@param recipe function
+		---@param p any
+		---@return { original: function, params: any }
+		CallOriginalRecipe = function(recipe, p) return { original = recipe, params = p } end,
 	},
 	["::/gui/main/builtin.lua"] = {
 		BoxLayout = function(t) return { box = t } end,
@@ -132,7 +146,45 @@ content_card.makeContentCardsCollapsibleFunctions = function(state, only_one)
 	previous_patch_calls[#previous_patch_calls + 1] = only_one
 	return before(state, only_one)
 end
-window_tweaks.install({ ReplaceRecipe = function() end })
+local replaced = {} ---@type table<function, function> base recipe -> replacement
+local replacement_api = { ReplaceRecipe = function(recipe, replacement) replaced[recipe] = replacement end }
+window_tweaks.install_sections(replacement_api)
+window_tweaks.install_sell(replacement_api)
+window_tweaks.install_town(replacement_api)
+window_tweaks.install_promotion(replacement_api)
+
+describe("window_tweaks Sell confirmation", function()
+	local util = stand_ins["::/gui/entity_window/entity_window_util.tl"]
+	---@type fun(p: table): { original: function, params: any }
+	local render = registered.UioActionButtonBar
+
+	it("wraps the bar the field held, in the field, instead of replacing the recipe", function()
+		assert.is_true(next(replaced) == nil)
+		assert.is_true(wrappers.UioActionButtonBar ~= nil)
+		assert.is_true(util.ActionButtonBar ~= wrappers.UioActionButtonBar)
+	end)
+
+	it("returns a node of exactly the wrapped recipe, with every other window's params unchanged", function()
+		local params = { primaryButtons = { { tag = "entityWindow.warehouse.configure" } } }
+		local node = render(params)
+		assert.are.equal(wrappers.UioActionButtonBar, node.original)
+		assert.are.equal(params, node.params)
+	end)
+
+	it("swaps the vehicle window's Sell for the confirming button", function()
+		local sell = { tag = "entityWindow.vehicle.sell", sound = "Sell", description = "Sell", onClick = function() end }
+		local params = { secondaryButtons = { sell } }
+		local passed = render(params).params
+		assert.is_true(params ~= passed)
+		assert.are.equal("UioConfirmSellButton", passed.secondaryButtons[1].customItem.recipe)
+		assert.is_nil(sell.customItem) -- the caller's button stays as it was
+	end)
+
+	it("passes odd params on unchanged instead of raising", function()
+		local odd = { secondaryButtons = "not a list" }
+		assert.are.equal(odd, render(odd).params)
+	end)
+end)
 
 describe("window_tweaks sections", function()
 	it("chains on the previous function instead of replacing it", function()

@@ -318,79 +318,80 @@ describe("priority", function()
 		---construction_react_util as the specs fill it.
 		---@class spec.priority.Construction
 		---@field getActionParams fun(x: string): string
-		---@field gleisbauanzeige_helper? fun(): string
+		---@field terminal_selector_helper? fun(): string
 
 		---@param x string
 		---@return string
 		local function action_params(x) return x end
 
-		--- this mod's build_info wrap and Track & Road Build Info's, as its config makes it
+		--- this mod's station_terminals wrap and Terminal Selector's (a made-up wrap of a module
+		--- function), as its config makes it
 		---@param order string[]
 		---@param enabled boolean
 		---@param ok? boolean the install
 		---@return uo.gui.priority priority
 		---@return spec.priority.Construction construction
-		local function build_info(order, enabled, ok)
+		local function station_terminals(order, enabled, ok)
 			world(order)
 			---@type spec.priority.Construction
 			local construction = { getActionParams = action_params }
 			_ug_loadedModules["::/gui/construction/construction_react_util.tl"] = construction
 			local priority = load_priority()
 			priority.early(game_api(), function() return enabled end)
-			priority.begin("build_info", enabled)
+			priority.begin("station_terminals", enabled)
 			if enabled then
 				priority.chain(construction, "getActionParams",
 					function(previous) return function(x) return previous(x) .. " ours" end end)
 			end
 			priority.finish(ok ~= false and enabled)
 			priority.ready()
-			mod_code("gleisbauanzeige_tf3", [[return function(construction)
+			mod_code("terminal_selector", [[return function(construction)
 				local original = construction.getActionParams
 				local function report(reason) return reason end
 				construction.getActionParams = function(x) report(x) return original(x) .. " theirs" end
-				construction.gleisbauanzeige_helper = function() return report("helper") end
+				construction.terminal_selector_helper = function() return report("helper") end
 			end]])(construction)
 			priority.late()
 			return priority, construction
 		end
 
 		it("takes its wraps out when this mod comes first", function()
-			local priority, construction = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, true)
+			local priority, construction = station_terminals({ "ui_overhaul_1", "terminal_selector" }, true)
 			assert.are.equal("x ours", construction.getActionParams("x"))
-			assert.is_true(priority.held_back("gleisbauanzeige_tf3"))
+			assert.is_true(priority.held_back("terminal_selector"))
 			-- a function it added is its own, not a wrap: it stays
-			local helper = assert(construction.gleisbauanzeige_helper)
+			local helper = assert(construction.terminal_selector_helper)
 			assert.are.equal("helper", helper())
 		end)
 
 		it("is held back neither when this mod's feature failed to install nor when it is off", function()
-			local failed_priority, failed = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, true, false)
+			local failed_priority, failed = station_terminals({ "ui_overhaul_1", "terminal_selector" }, true, false)
 			assert.are.equal("x theirs", failed.getActionParams("x"))
-			assert.is_false(failed_priority.held_back("gleisbauanzeige_tf3"))
-			local off_priority, off = build_info({ "ui_overhaul_1", "gleisbauanzeige_tf3" }, false)
+			assert.is_false(failed_priority.held_back("terminal_selector"))
+			local off_priority, off = station_terminals({ "ui_overhaul_1", "terminal_selector" }, false)
 			assert.are.equal("x theirs", off.getActionParams("x"))
-			assert.is_false(off_priority.held_back("gleisbauanzeige_tf3"))
+			assert.is_false(off_priority.held_back("terminal_selector"))
 		end)
 
 		it("gives way to it when it comes first", function()
-			local priority, construction = build_info({ "gleisbauanzeige_tf3", "ui_overhaul_1" }, true)
+			local priority, construction = station_terminals({ "terminal_selector", "ui_overhaul_1" }, true)
 			assert.are.equal("x theirs", construction.getActionParams("x"))
-			assert.is_false(priority.active("build_info"))
-			assert.are.equal("gleisbauanzeige_tf3", priority.winner("build_info"))
+			assert.is_false(priority.active("station_terminals"))
+			assert.are.equal("terminal_selector", priority.winner("station_terminals"))
 		end)
 
 		it("leaves its wrap under a later mod's wrap (no debug.setupvalue in the game)", function()
-			world({ "ui_overhaul_1", "gleisbauanzeige_tf3", "other_mod" })
+			world({ "ui_overhaul_1", "terminal_selector", "other_mod" })
 			local construction = { getActionParams = action_params }
 			_ug_loadedModules["::/gui/construction/construction_react_util.tl"] = construction
 			local priority = load_priority()
 			priority.early(game_api(), function() return true end)
-			priority.begin("build_info", true)
+			priority.begin("station_terminals", true)
 			priority.chain(construction, "getActionParams",
 				function(previous) return function(x) return previous(x) .. " ours" end end)
 			priority.finish(true)
 			priority.ready()
-			for _i, mod in ipairs({ "gleisbauanzeige_tf3", "other_mod" }) do
+			for _i, mod in ipairs({ "terminal_selector", "other_mod" }) do
 				mod_code(mod, [[return function(construction, name)
 					local original = construction.getActionParams
 					construction.getActionParams = function(x) return original(x) .. " " .. name end
@@ -398,8 +399,8 @@ describe("priority", function()
 			end
 			priority.late()
 			-- both wraps stay, inside this mod's (which has the last word: it comes first)
-			assert.are.equal("x gleisbauanzeige_tf3 other_mod ours", construction.getActionParams("x"))
-			assert.is_true(priority.held_back("gleisbauanzeige_tf3"))
+			assert.are.equal("x terminal_selector other_mod ours", construction.getActionParams("x"))
+			assert.is_true(priority.held_back("terminal_selector"))
 		end)
 
 		it("takes back its recipe replacement and its wraps of modules it loads itself", function()

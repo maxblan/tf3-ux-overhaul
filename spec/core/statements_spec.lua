@@ -3,7 +3,7 @@ local statements = require("/ui_overhaul/core/statements.lua")
 local enum = { INCOME = 1, MAINTENANCE = 2, ACQUISITION = 3, CONSTRUCTION = 4, SUBSIDY = 5,
 	VEHICLE = 11, INFRASTRUCTURE = 12, VEHICLE_MAINTENANCE = 13 }
 
----@alias uo.spec.statements.Row uo.core.statements.Row|uo.core.statements.BalanceRow
+---@alias uo.spec.statements.Row uo.core.statements.Row
 
 ---@param rows uo.spec.statements.Row[]
 ---@param key string
@@ -35,39 +35,16 @@ describe("statements", function()
 		},
 		other = { 0, 0 },
 		interest = { -50, -40 },
-		loanBorrowing = { 3000, 0 },
-		loanRepayment = { 0, -500 },
-		balance = { 5000, 4110 },
 	}
 
 	it("builds the income statement", function()
-		local income = statements.build(data, enum)
+		local income = statements.income(data, enum)
 		assert.are.same({ 1500, 1500 }, get(income, "revenue").values)
 		assert.are.same({ 1100, 1050 }, get(income, "operating_result").values)
 		assert.are.same({ 1050, 1010 }, get(income, "net_income").values)
 		assert.is_nil(row(income, "subsidies")) -- no values: left out
+		-- vehicles bought and construction are investments, not other income or costs
 		assert.is_nil(row(income, "other"))
 		assert.is_true(row(income, "operating_result") ~= nil) -- totals always stay
-	end)
-
-	it("builds the cash flow statement", function()
-		local _income, cash = statements.build(data, enum)
-		assert.are.same({ -2000, -400 }, get(cash, "investing").values)
-		assert.are.same({ 3000, -500 }, get(cash, "financing").values)
-		assert.are.same({ 2050, 110 }, get(cash, "change").values)
-		assert.are.same({ 5000, 4110 }, get(cash, "bank_account").values)
-	end)
-
-	it("builds the balance sheet", function()
-		local sheet = statements.balance_sheet({ cash = 1000, vehicles = 3000, assets = 10000, debt = 4000 })
-		assert.are.equal(3000, get(sheet, "vehicle_assets").value)
-		assert.are.equal(7000, get(sheet, "other_assets").value)
-		assert.are.equal(11000, get(sheet, "total_assets").value)
-		assert.are.equal(-4000, get(sheet, "debt").value)
-		assert.are.equal(7000, get(sheet, "equity").value)
-		-- unlimited money: no cash figure
-		local free = statements.balance_sheet({ cash = nil, vehicles = 10, assets = 5, debt = 0 })
-		assert.is_nil(get(free, "cash").value)
-		assert.are.equal(5, get(free, "vehicle_assets").value) -- never more than the assets
 	end)
 end)

@@ -9,8 +9,9 @@
 --     already reached but not yet applied (the game applies a promotion only when the Company window
 --     is opened, while the game bar already shows the new rank)
 -- Wraps the module functions content_card.makeContentCardsCollapsibleFunctions, content_card.makeRecipeAndParam and
--- company_util.getConstructionDisableReason (GUI state only), each calling the previous one, and replaces the recipe
--- entity_window_util.ActionButtonBar; installed before the UI starts (installer.lua).
+-- company_util.getConstructionDisableReason (GUI state only), each calling the previous one, and puts a wrapper
+-- recipe around entity_window_util.ActionButtonBar; installed before the UI starts (installer.lua), one install per
+-- feature.
 -- @module ui_overhaul.gui.window_tweaks
 local react = require("::/gui/main/react.lua")
 local builtin = require("::/gui/main/builtin.lua")
@@ -159,18 +160,49 @@ local function with_confirmation(buttons)
 	return result
 end
 
+--- Whether the bar has the vehicle window's Sell button (no other window has one).
 ---@param params game.gui.entity_window.entity_window_util.ActionButtonBarParams
----@return react.TreeNodeId
-local ActionButtonBar = react.RegisterRecipe("ActionButtonBar", function(params)
+---@return boolean
+local function has_sell(params)
+	for _i, list in ipairs({ params.primaryButtons or {}, params.secondaryButtons or {} }) do
+		for _j, entry in ipairs(list) do
+			if entry.tag == SELL_TAG then return true end
+		end
+	end
+	return false
+end
+
+--- The params for the bar below: the vehicle window's with the confirming Sell button, every other
+-- window's (and any whose change fails) as they came.
+---@param params game.gui.entity_window.entity_window_util.ActionButtonBarParams
+---@return game.gui.entity_window.entity_window_util.ActionButtonBarParams
+function window_tweaks.bar_params(params)
 	local ok, changed = pcall(function()
+		if type(params) ~= "table" or not has_sell(params) then return params end
 		local copy = guard.shallow_copy(params)
 		copy.primaryButtons = with_confirmation(params.primaryButtons)
 		copy.secondaryButtons = with_confirmation(params.secondaryButtons)
 		return copy
 	end)
-	local bar = react.CallOriginalRecipe(entity_window_util.ActionButtonBar, ok and changed or params)
-	return builtin.BoxLayout{ children = { bar } }
-end)
+	return ok and changed or params
+end
+
+-- The action bar of every entity window passes through a wrapper recipe around the recipe below it
+-- (the base bar, or another mod's wrapper of it, as Warehouse Station Coverage puts one there). The
+-- engine requires a wrapper recipe to return a node of exactly the recipe it wraps
+-- (react.lua: checkRecipeMatch, "Wrapper recipe must return child"), so the child is made with
+-- react.CallOriginalRecipe: a plain call would give the replacement where a mod replaced that recipe,
+-- and the engine would raise on every render. Replacing the bar instead broke such wrappers of other
+-- mods in the same way (observed with Warehouse Station Coverage: every entity window froze).
+---@param below function the recipe in entity_window_util.ActionButtonBar before this wrap
+---@return function
+function window_tweaks.wrap_bar(below)
+	---@param params game.gui.entity_window.entity_window_util.ActionButtonBarParams
+	---@return react.TreeNodeId
+	return react.RegisterWrapperRecipe("UioActionButtonBar", below, function(params)
+		return react.CallOriginalRecipe(below, window_tweaks.bar_params(params)) -- wrapper recipe: its child
+	end)
+end
 
 -- Town growth bottleneck ------------------------------------------------------------------------
 
@@ -362,13 +394,34 @@ local function patch_disable_reason()
 	end)
 end
 
---- Called by installer.lua before the UI starts.
----@param replacement_api react.ReplacementApi
-function window_tweaks.install(replacement_api)
+--- Sections stay open (a feature of its own, see settings.lua; installed by installer.lua).
+---@param _replacement_api react.ReplacementApi
+function window_tweaks.install_sections(_replacement_api)
 	patch_sections()
-	patch_disable_reason()
+end
+
+--- Sell needs a second click.
+---@param _replacement_api react.ReplacementApi
+function window_tweaks.install_sell(_replacement_api)
+	local below = entity_window_util.ActionButtonBar
+	if type(below) ~= "function" then error("ActionButtonBar not found") end
+	-- Put in the field directly, not through priority.chain: until the load order is settled a chain
+	-- holds a plain Lua function there, and the field must stay a recipe for the mods that wrap it
+	-- with a wrapper recipe or call it through react.CallOriginalRecipe. The wrapper stacks with
+	-- theirs in either order, so there is nothing for the load order to decide.
+	entity_window_util.ActionButtonBar = window_tweaks.wrap_bar(below)
+end
+
+--- The town window's growth bottleneck and progress.
+---@param _replacement_api react.ReplacementApi
+function window_tweaks.install_town(_replacement_api)
 	patch_town_level()
-	replacement_api.ReplaceRecipe(entity_window_util.ActionButtonBar, ActionButtonBar)
+end
+
+--- "Promotion pending" on perks locked by a rank already reached.
+---@param _replacement_api react.ReplacementApi
+function window_tweaks.install_promotion(_replacement_api)
+	patch_disable_reason()
 end
 
 return window_tweaks

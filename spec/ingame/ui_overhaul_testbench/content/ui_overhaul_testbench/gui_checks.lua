@@ -78,6 +78,20 @@ local function line_vehicles(line)
 	return api.engine.system.transportVehicleSystem.getLineVehicles(line)
 end
 
+--- A road vehicle of the player's that is on its line, for the hover scene: the cursor is aimed
+-- 1.5 m above the terrain, which at sea is the seabed, so a ship would be missed. Nil if none.
+---@return Engine.Entity?
+local function road_vehicle_en_route()
+	local states = api.type.enum.TransportVehicleState
+	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		for _j, vehicle in ipairs(line_vehicles(line)) do
+			local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+			if tv and tv.carrier == api.type.enum.Carrier.ROAD and tv.state == states.EN_ROUTE then return vehicle end
+		end
+	end
+	return nil
+end
+
 --- The player's line with the most vehicles, or nil.
 ---@return Engine.Entity? line
 ---@return integer vehicles
@@ -232,6 +246,7 @@ end
 ---@field card_line? Engine.Entity
 ---@field card_station? Engine.Entity a station group
 ---@field card_vehicle? Engine.Entity
+---@field hover_vehicle? Engine.Entity the vehicle the gallery hovers (a road vehicle where there is one)
 ---@field second_line? Engine.Entity
 ---@field cargo_line? Engine.Entity
 ---@field clone_before? integer
@@ -400,6 +415,29 @@ local checks = {
 		shot = "line_manager_remembered",
 		check = function()
 			return visible("menu.management"), "line manager visible=" .. tostring(visible("menu.management"))
+		end,
+	},
+	{
+		-- the Line Manager (no title bar) has a title row of its own with the minimize button; folded,
+		-- only that row stays
+		name = "line_manager_minimize",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		shot = "line_manager_minimized",
+		check = function()
+			local window, content = visible("menu.management"), visible("uio.minimize.menu.management")
+			return window and not content,
+				string.format("window open=%s content visible=%s (expect true, false)", tostring(window), tostring(content))
+		end,
+	},
+	{
+		name = "line_manager_restore",
+		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
+		wait = 30,
+		shot = "line_manager_restored",
+		check = function()
+			local content = visible("uio.minimize.menu.management")
+			return content, "content visible=" .. tostring(content)
 		end,
 	},
 	{
@@ -1053,20 +1091,6 @@ local checks = {
 		end,
 	},
 	{
-		name = "finance_cash_flow",
-		act = function() api.gui.fireReactEvent("uio.finances.view", "cashflow") end,
-		wait = 60,
-		shot = "finance_cash_flow",
-		check = function() return visible("uio.finances.views") ~= FINANCIAL_STATEMENTS, "cash flow" end,
-	},
-	{
-		name = "finance_balance_sheet",
-		act = function() api.gui.fireReactEvent("uio.finances.view", "balance") end,
-		wait = 60,
-		shot = "finance_balance_sheet",
-		check = function() return visible("uio.finances.views") ~= FINANCIAL_STATEMENTS, "balance sheet" end,
-	},
-	{
 		name = "finance_details",
 		act = function() api.gui.fireReactEvent("uio.finances.view", "details") end,
 		wait = 60,
@@ -1110,12 +1134,6 @@ local checks = {
 		act = function() api.gui.fireReactEvent("uio.debug.sliders", false) end,
 		wait = 10,
 		check = function() return true, "closed" end,
-	},
-	{
-		name = "build_measurements",
-		act = function() api.gui.fireReactEvent("uio.debug.measure", nil) end,
-		wait = 10,
-		check = function() return true, "see the measure log lines" end,
 	},
 	{
 		name = "configure_opens_module_tab",
@@ -1338,63 +1356,6 @@ local function screen_of(x, y, up)
 	return p.x, p.y
 end
 
---- Dry, flat land with nothing built within `clearance` metres, searched in rings from the map
--- centre: { x, y }, or nil. Roads, tracks and buildings are read once into a grid of occupied cells.
----@param clearance number
----@return { x: number, y: number }?
-local function free_spot(clearance)
-	local cell = 100
-	local taken = {} ---@type table<string, true>
-	---@param x number
-	---@param y number
-	local function take(x, y) taken[math.floor(x / cell) .. "," .. math.floor(y / cell)] = true end
-	-- the engine refuses to loop over road nodes ("Cannot loop over this component", observed in game):
-	-- constructions only, which includes stations, depots, industries and town buildings
-	local read, err = pcall(api.engine.forEachEntityWithComponent, function(e)
-		local con = api.engine.getComponent(e, api.type.ComponentType.CONSTRUCTION)
-		if con then
-			local t = con.transf:getTransl()
-			take(t.x, t.y)
-		end
-	end, api.type.ComponentType.CONSTRUCTION)
-	if not read then debugPrint("[testbench] gallery: constructions not read: ", tostring(err)) end
-	local reach = math.ceil(clearance / cell)
-	---@param x number
-	---@param y number
-	---@return boolean
-	local function clear_at(x, y)
-		local cx, cy = math.floor(x / cell), math.floor(y / cell)
-		for dx = -reach, reach do
-			for dy = -reach, reach do
-				if taken[(cx + dx) .. "," .. (cy + dy)] then return false end
-			end
-		end
-		local lo, hi = math.huge, -math.huge
-		for dx = -150, 150, 50 do
-			for dy = -100, 100, 50 do
-				local p = api.type.Vec2f.new(x + dx, y + dy)
-				if not api.engine.terrain.isValidCoordinate(p) or api.engine.terrain.isOnWater(p) then return false end
-				local h = api.engine.terrain.getBaseHeightAt(p)
-				lo, hi = math.min(lo, h), math.max(hi, h)
-			end
-		end
-		return hi - lo < 12
-	end
-	local box = api.engine.terrain.getBoundingBox()
-	local mx, my = (box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2
-	for ring = 0, 30 do
-		for ix = -ring, ring do
-			for iy = -ring, ring do
-				if math.max(math.abs(ix), math.abs(iy)) == ring then
-					local x, y = mx + ix * 150, my + iy * 150
-					if clear_at(x, y) then return { x = x, y = y } end
-				end
-			end
-		end
-	end
-	return nil
-end
-
 local function clear()
 	-- the tool windows stay open side by side (tool_stack.lua): closed one by one
 	for _i, event in ipairs({ "closeVehicleManager", "closeStatisticsWindow", "closeFinanceWindow" }) do
@@ -1558,21 +1519,6 @@ local scenes = {
 		check = function() return visible("menu.finance.window"), "finances" end,
 	},
 	{
-		-- the statements next to the income statement
-		name = "gallery_finances_cashflow",
-		act = function() api.gui.fireReactEvent("uio.finances.view", "cashflow") end,
-		wait = 90,
-		shot = "gallery_finances_cashflow",
-		check = function() return visible("menu.finance.window"), "cash flow" end,
-	},
-	{
-		name = "gallery_finances_balance",
-		act = function() api.gui.fireReactEvent("uio.finances.view", "balance") end,
-		wait = 90,
-		shot = "gallery_finances_balance",
-		check = function() return visible("menu.finance.window"), "balance sheet" end,
-	},
-	{
 		-- the line window: Vehicles card with Add/Remove Vehicle, the Stops card
 		name = "gallery_line_window",
 		pair = true,
@@ -1585,7 +1531,11 @@ local scenes = {
 		end,
 		wait = 180,
 		shot = "gallery_line_window",
-		check = function(ctx) return stops_card(ctx.card_line) or false, "line window" end,
+		check = function(ctx)
+			-- the "before" shot (run.sh --vanilla) has no Stops card
+			if fixture.vanilla then return ctx.card_line ~= nil, "line window (vanilla)" end
+			return stops_card(ctx.card_line) or false, "line window"
+		end,
 	},
 	{
 		-- minimize: the line window and a vehicle window side by side, then both folded
@@ -1619,10 +1569,11 @@ local scenes = {
 		pair = true,
 		act = function(ctx)
 			clear()
-			if ctx.card_vehicle then api.gui.camera.focusEntity(ctx.card_vehicle) end
+			ctx.hover_vehicle = road_vehicle_en_route() or ctx.card_vehicle
+			if ctx.hover_vehicle then api.gui.camera.focusEntity(ctx.hover_vehicle) end
 		end,
 		wait = 180,
-		check = function(ctx) return ctx.card_vehicle ~= nil, "camera on " .. tostring(ctx.card_vehicle) end,
+		check = function(ctx) return ctx.hover_vehicle ~= nil, "camera on " .. tostring(ctx.hover_vehicle) end,
 	},
 	{
 		name = "gallery_vehicle_hover_shot",
@@ -1660,7 +1611,8 @@ local scenes = {
 	},
 	{
 		name = "gallery_subsidy_hover_3",
-		act = function() mouse(1301, 47) end,
+		-- the subsidy group (the offers spawned above), sixth in the ridge of World#1
+		act = function() mouse(1491, 43) end,
 		wait = 240,
 		shot = "gallery_subsidy_hover_3",
 		check = function() return true, "hover on icon 3" end,
@@ -1706,61 +1658,6 @@ local scenes = {
 		wait = 150,
 		shot = "gallery_warehouses",
 		check = function() return visible("menu.statistics.window"), "warehouses" end,
-	},
-	{
-		-- the build tooltip: the track tool over free land, its first point clicked, the cursor at the second
-		name = "gallery_build_tool",
-		act = function(ctx)
-			clear()
-			local spot = free_spot(200)
-			ctx.spot_x, ctx.spot_y = spot and spot.x, spot and spot.y
-			debugPrint("[testbench] gallery: free spot ", tostring(spot and spot.x), " ", tostring(spot and spot.y))
-			if spot then
-				local h = api.engine.terrain.getHeightAt(api.type.Vec2f.new(spot.x, spot.y))
-				api.gui.camera.focusPosition(api.type.Vec3f.new(spot.x, spot.y, h), 320)
-				api.gui.fireReactEvent("constructionMenuSetTab", { tabIndex = 17 })
-			end
-		end,
-		wait = 240,
-		check = function(ctx) return ctx.spot_x ~= nil, "free spot" end,
-	},
-	{
-		name = "gallery_build_start",
-		act = function(ctx)
-			if ctx.spot_x then mouse(screen_of(ctx.spot_x - 110, ctx.spot_y - 40)) end
-		end,
-		wait = 120,
-		check = function() return true, "moved to the start" end,
-	},
-	{
-		name = "gallery_build_click",
-		act = function(ctx)
-			if ctx.spot_x then
-				local x, y = screen_of(ctx.spot_x - 110, ctx.spot_y - 40)
-				mouse(x, y, true)
-			end
-		end,
-		wait = 120,
-		check = function() return true, "first point" end,
-	},
-	{
-		name = "gallery_build_tooltip",
-		act = function(ctx)
-			if ctx.spot_x then mouse(screen_of(ctx.spot_x + 120, ctx.spot_y + 50)) end
-		end,
-		wait = 300,
-		shot = "gallery_build_tooltip",
-		check = function() return true, "drawing" end,
-	},
-	{
-		name = "gallery_build_cancel",
-		act = function()
-			mouse(1720, 700, false)
-			api.gui.fireReactEvent("constructionMenuQuit", nil)
-			clear()
-		end,
-		wait = 60,
-		check = function() return true, "cancelled" end,
 	},
 	{
 		-- the windows side by side: Line Manager, Statistics with its quick filters, a vehicle window
