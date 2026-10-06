@@ -16,6 +16,11 @@ local lang_util = require("::/scripts/lang_util.tl")
 local cargo_util = require("::/gui/main/cargo_util.tl")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+
+-- The base recipe as the module holds it while this mod loads, and safe calls of it (guard.base).
+local base_widget = line_react_util.ManagerNotificationWidget
+local original_widget = guard.base("ManagerNotificationWidget", base_widget)
 
 ---@class uo.gui.lvm_rows
 local lvm_rows = {}
@@ -241,13 +246,13 @@ end)
 ---@param entity Engine.Entity
 ---@return react.TreeNodeId
 local Replacement = react.RegisterRecipe("ManagerNotificationWidget", function(entity)
-	return horizontal{ RowInfo(entity), react.CallOriginalRecipe(line_react_util.ManagerNotificationWidget, entity) }
+	return horizontal{ RowInfo(entity), original_widget.node(entity) }
 end)
 
 --- Called by installer.lua before the UI starts.
 ---@param replacement_api react.ReplacementApi
 function lvm_rows.install(replacement_api)
-	replacement_api.ReplaceRecipe(line_react_util.ManagerNotificationWidget, Replacement)
+	replacement_api.ReplaceRecipe(base_widget, Replacement)
 end
 
 return lvm_rows

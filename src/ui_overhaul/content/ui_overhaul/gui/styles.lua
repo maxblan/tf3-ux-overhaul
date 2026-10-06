@@ -22,7 +22,7 @@ local styles = {}
 local report = guard.reporter("styles: ")
 
 -- The features whose rules select by these classes (spec/gui/stylesheets_spec.lua checks the list).
-styles.FEATURES = { "construction", "notifications", "station_terminals", "terminals" }
+styles.FEATURES = { "construction", "minimize", "notifications", "station_terminals", "terminals" }
 
 -- the classes every window gets, ", "-separated; nil until decided or where none applies
 local window_classes ---@type string?

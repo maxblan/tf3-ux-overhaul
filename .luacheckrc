@@ -7,7 +7,7 @@ allow_defined_top = false
 
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
-read_globals = { "api", "app", "debugPrint", "_", "pGetText", "nGetText" }
+read_globals = { "api", "app", "debugPrint", "getBuildVersion", "_", "pGetText", "nGetText" }
 -- Variables named with a leading underscore are intentionally unused.
 ignore = { "21./_.*" }
 
@@ -37,6 +37,10 @@ files["src/ui_overhaul/content/ui_overhaul/gui/station_terminals.lua"] = {
 }
 -- Reads the React registry _react (base/init.lua): which recipes wrap builtin.Window.
 files["src/ui_overhaul/content/ui_overhaul/gui/minimize.lua"] = {
+	read_globals = { "api", "app", "debugPrint", "_", "_react" },
+}
+-- Reads the React registry _react (base/init.lua): whether a mod replaced the action bar (settle_sell).
+files["src/ui_overhaul/content/ui_overhaul/gui/window_tweaks.lua"] = {
 	read_globals = { "api", "app", "debugPrint", "_", "_react" },
 }
 -- Reads the React registry _react (base/init.lua): a builtin's recipe id.

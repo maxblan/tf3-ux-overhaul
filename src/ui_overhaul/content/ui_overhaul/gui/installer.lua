@@ -7,8 +7,10 @@
 --     by feature, which mod wins where both change the same part (the one that comes first in the mod
 --     list), holds back the duplicates that come later, applies the result and settles every switch.
 -- Each feature's install runs in pcall: one that fails leaves that part of the game vanilla and logs
--- one line; the others are not affected.
+-- one line; the others are not affected. Before it, compat.lua checks that the game still has every
+-- base recipe and function the feature's modules use; a feature that misses one stays vanilla too.
 -- @module ui_overhaul.gui.installer
+local compat = require("ui_overhaul_1::/ui_overhaul/gui/compat.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
 local settings = require("ui_overhaul_1::/ui_overhaul/gui/settings.lua")
@@ -24,13 +26,15 @@ local GUI = "ui_overhaul_1::/ui_overhaul/gui/"
 ---@field module string file in gui/, without ".lua"
 ---@field fn? string the module's function, default "install"
 ---@field label string for the log
+---@field late? string the module's function to run after every other mod's config, if it installed
 
 -- In this order; the Line Manager tweaks last (they used to have a higher order than the rest).
 ---@type uo.gui.installer.Install[]
 installer.INSTALLS = {
 	{ feature = "catchment", module = "catchment", label = "catchment overlay" },
 	{ feature = "construction", module = "construction", label = "construction menu patch" },
-	{ feature = "build_info", module = "construction", fn = "install_build_info", label = "build tooltip measurements" },
+	{ feature = "bulldozer_warning", module = "construction", fn = "install_bulldozer_warning",
+		label = "bulldozer warning" },
 	{ feature = "earnings", module = "earnings", label = "earnings tooltip" },
 	{ feature = "finances", module = "finances", label = "finance statements" },
 	{ feature = "industry", module = "industry_cards", label = "industry blocked-area switch" },
@@ -38,7 +42,7 @@ installer.INSTALLS = {
 	{ feature = "line_manager", module = "lvm_rows", label = "Line Manager rows" },
 	{ feature = "minimize", module = "minimize", label = "window minimize" },
 	{ feature = "notifications", module = "notifications", label = "notification ridge" },
-	{ feature = "performance", module = "performance", label = "performance tooltip" },
+	{ feature = "performance", module = "performance", label = "performance card" },
 	{ feature = "sliders", module = "sliders", label = "slider wheel and typing" },
 	{ feature = "station_terminals", module = "station_terminals", label = "station terminal buttons" },
 	{ feature = "statistics", module = "statistics_lines", label = "statistics lines tab" },
@@ -50,7 +54,12 @@ installer.INSTALLS = {
 	{ feature = "terminals", module = "terminals", label = "terminal usage buttons" },
 	{ feature = "windows", module = "tool_stack", label = "tool stack" },
 	{ feature = "vehicle_tooltip", module = "vehicle_tooltip", label = "vehicle tooltip" },
-	{ feature = "entity_windows", module = "window_tweaks", label = "entity window tweaks" },
+	{ feature = "sections", module = "window_tweaks", fn = "install_sections", label = "sections staying open" },
+	{ feature = "sell_confirm", module = "window_tweaks", fn = "install_sell", label = "Sell confirmation",
+		late = "settle_sell" },
+	{ feature = "town_growth", module = "window_tweaks", fn = "install_town", label = "town growth text" },
+	{ feature = "promotion_pending", module = "window_tweaks", fn = "install_promotion",
+		label = "promotion pending text" },
 	{ feature = "line_manager", module = "lvm_tweaks", label = "Line Manager tweaks" },
 }
 
@@ -61,7 +70,7 @@ local early_done, late_done = false, false
 function installer.early(replacement_api)
 	if early_done then return end
 	early_done = true
-	debugPrint("[ui_overhaul] settings: ", settings.describe())
+	debugPrint("[ui_overhaul] game build ", compat.build() or "unknown", ", settings: ", settings.describe())
 	priority.early(replacement_api, settings.enabled)
 	-- the window classes the stylesheets select by (styles.lua): first, so that the features' wraps
 	-- of builtin.Window lie above it, where they can be settled
@@ -71,7 +80,18 @@ function installer.early(replacement_api)
 		local enabled = settings.enabled(install.feature)
 		priority.begin(install.feature, enabled)
 		local ok = false
-		if enabled then
+		local checked, missing = true, {} ---@type boolean, string[]|string
+		if enabled then checked, missing = pcall(compat.missing, install.module, install.feature) end
+		if not checked then
+			debugPrint("[ui_overhaul] ", install.label, ": the check of the game failed: ", tostring(missing))
+			missing = {}
+		end
+		---@cast missing string[]
+		if #missing > 0 then
+			-- the game changed: this feature stays vanilla rather than fail where a window renders
+			debugPrint("[ui_overhaul] ", install.label, " not installed, the game no longer has: ",
+				table.concat(missing, ", ", 1, math.min(#missing, 5)), #missing > 5 and " ..." or "")
+		elseif enabled then
 			local module = guard.module(GUI .. install.module .. ".lua")
 			local fn = module and module[install.fn or "install"]
 			if type(fn) == "function" then
@@ -95,6 +115,16 @@ function installer.late(_replacement_api)
 	if late_done then return end
 	late_done = true
 	priority.late()
+	for _i, install in ipairs(installer.INSTALLS) do
+		if install.late and priority.active(install.feature) and settings.enabled(install.feature) then
+			local module = guard.module(GUI .. install.module .. ".lua")
+			local fn = module and module[install.late]
+			if type(fn) == "function" then
+				local settled, err = pcall(fn)
+				if not settled then debugPrint("[ui_overhaul] ", install.label, ": ", tostring(err)) end
+			end
+		end
+	end
 	local ok, err = pcall(styles.decide)
 	if not ok then debugPrint("[ui_overhaul] window classes: ", tostring(err)) end
 end

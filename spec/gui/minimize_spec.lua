@@ -31,7 +31,7 @@ local function load()
 	local react = fake.react --[[@as table<string, any>]] -- the fake has no fireEvent
 	react.fireEvent = function() end
 	local builtin = fake_react.any() ---@type table<string, any>
-	for _i, kind in ipairs({ "BoxLayout", "TextView", "TextInputField", "Button", "ImageView" }) do
+	for _i, kind in ipairs({ "BoxLayout", "TextView", "TextInputField", "Button", "ImageView", "Component" }) do
 		builtin[kind] = made(kind)
 	end
 	local make_window ---@type fun(base: function): function
@@ -83,6 +83,27 @@ describe("minimize", function()
 		-- a window with its own header, or without a close button, stays as it is
 		local own = { title = "x", closable = true, content = {}, header = {} }
 		assert.are.equal(own, window(own))
+	end)
+
+	it("gives the Line Manager, which has no title bar, a title row of its own above its content", function()
+		local _fake, _minimize, window = load()
+		local manager = { compact = true, closable = true, tool = "management", id = "menu.management",
+			content = { "lines" } }
+		local p = window(manager)
+		assert.is_nil(p.header) -- a compact window draws no header slot
+		local rows = p.content.p.children ---@type spec.MinimizeNode[]
+		assert.are.same({ "Component", "uio-compact-header" }, { rows[1].kind, rows[1].p.meta.class })
+		-- a Component's layout must be a layout builtin (a recipe there crashes the game natively)
+		local layout = rows[1].p.layout --[[@as spec.MinimizeNode]]
+		assert.are.equal("BoxLayout", layout.kind)
+		local recipe_node = layout.p.children[1] --[[@as { args: table<string, any>[] }]]
+		local header = recipe_node.args[1]
+		assert.are.same({ "Line Manager", false }, { header.title, header.editable })
+		local content = rows[2] --[[@as { name: string, args: table<string, any>[] }]]
+		assert.are.same({ "UioMinimizable", "uio.minimize.menu.management" }, { content.name, content.args[1].id })
+		-- other compact windows (Statistics: the game's own minimize) stay as they are
+		local statistics = { compact = true, closable = true, tool = "Statistics", content = {} }
+		assert.are.equal(statistics, window(statistics))
 	end)
 
 	it("renames through its own field and keeps its hooks", function()

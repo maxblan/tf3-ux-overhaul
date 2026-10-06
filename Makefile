@@ -52,6 +52,8 @@ lint: ## Run luacheck on src, spec and tools/lua, and reject syntax the game's L
 		|| { echo "Lua 5.3 syntax above (\\u{} escape, //, bitwise ops): the game embeds Lua 5.2"; exit 1; }
 	@! grep -rn --include='*.lua' 'return react.CallOriginalRecipe' src \
 		|| { echo "wrap CallOriginalRecipe in a layout: a recipe's root must be a layout (else the game UI drops)"; exit 1; }
+	@! grep -rnE --include='*.lua' '\blayout = ([a-z_]+\.)?[A-Z][A-Za-z_]*[{(]' src | grep -v 'layout = builtin\.' \
+		|| { echo "a Component's layout must be a builtin layout, not a recipe: the game crashes natively (observed in game)"; exit 1; }
 	@! grep -rnE --include='*.lua' '\braw(get|set|equal|len)\(' src | grep -vE '^[^:]+:[0-9]+:[[:space:]]*--' \
 		|| { echo "rawget/rawset/rawequal/rawlen are not there in the game's GUI Lua state (observed in game)"; exit 1; }
 ifneq ($(LUACHECK),)
@@ -70,7 +72,8 @@ test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name
 
 check: lint typecheck test test-ingame ## Run lint, the type check and all tests
 
-content: ## Regenerate the _content.json file lists of the mod and the testbench
+content: ## Regenerate gui/needs.lua (what each feature takes from the game) and the _content.json file lists
+	python3 tools/needs.py
 	tools/content_index.sh $(MOD_DIR) $(TESTBENCH)
 
 preview: ## Render assets/preview.svg to the mod's preview image

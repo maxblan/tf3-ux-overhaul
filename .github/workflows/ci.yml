@@ -65,3 +65,10 @@ jobs:
         run: |
           tools/content_index.sh src/ui_overhaul spec/ingame/ui_overhaul_testbench
           git diff --exit-code -- '*/_content.json'
+
+      # gui/needs.lua lists what each feature takes from the game (checked at load, gui/compat.lua).
+      # A use added without `make content` would go unchecked after a game update.
+      - name: Needs table is up to date
+        run: |
+          python3 tools/needs.py
+          git diff --exit-code -- src/ui_overhaul/content/ui_overhaul/gui/needs.lua

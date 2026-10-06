@@ -1,8 +1,7 @@
 --- Two cards in the vanilla industry window, from the game's own widgets and styles:
 --   * Development: the level ("Level 2 of 4"), the recipes in words ("2 Coal + 1 Iron ore -> 1 Steel,
---     up to 400 per year"), how likely the industry is to expand at its next half-yearly check,
---     with the production rating and the share of its output that is shipped, and what keeps it
---     from expanding (maximum level, something in the way, nothing produced or shipped, closure
+--     up to 400 per year"), the share of its output that is shipped, and what keeps it from
+--     expanding (maximum level, something in the way, nothing produced or shipped, closure
 --     countdown, developed by hand, owned by the player). The game's own rule is in
 --     core/industry_development.lua.
 --   * Served by: the player's lines with a stop whose catchment area reaches the industry, each a
@@ -30,6 +29,9 @@ local base_industry_window = require("::/gui/entity_window/industry/industry.tl"
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+
+-- safe calls of the base recipe (guard.base)
+local original_window = guard.base("IndustryWindow", base_industry_window)
 
 ---@class uo.gui.industry_cards
 local industry_cards = {}
@@ -326,11 +328,6 @@ local function render_development(params, f, show)
 				{ shipped = lang_util.formatInt(f.shipped), output = lang_util.formatInt(f.output) })),
 			lang_util.format(_("Production rating: {rating}"), { rating = percent(f.productionRating) }))
 	end
-	if growing then
-		local explain = _("Every half year the industry may expand, if it produces well and its output is transported.")
-		children[#children + 1] = row(_("Expansion chance"),
-			bar(#f.blockers == 0 and f.chance or 0, percent(#f.blockers == 0 and f.chance or 0), explain), explain)
-	end
 	for _i, key in ipairs(f.blockers) do
 		local line = blocker_text(key, f)
 		if line then
@@ -493,7 +490,7 @@ local IndustryWindow = react.RegisterRecipe("IndustryWindow", function(params)
 			end, ...)
 		end
 	end
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(base_industry_window, copy) } }
+	return original_window.layout(copy)
 end)
 
 --- Called by installer.lua before the UI starts.

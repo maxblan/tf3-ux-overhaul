@@ -114,8 +114,6 @@ priority.OVERLAPS = {
 	{ mod = "cayde_industry_enhanced_1", feature = "industry", what = "industry window cards" },
 	-- a copy of the station window with its own terminal buttons, and a wrap of react.CallOriginalRecipe
 	{ mod = "terminal_selector", feature = "station_terminals", what = "station window terminal buttons" },
-	-- a wrap of construction_react_util.getActionParams
-	{ mod = "gleisbauanzeige_tf3", feature = "build_info", what = "build tooltip measurements" },
 }
 
 local report = guard.reporter("load order: ")

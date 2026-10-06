@@ -31,6 +31,13 @@ local lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local table_util = require("::/scripts/table_util.tl")
 local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
+local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
+
+-- The base recipes as the modules hold them while this mod loads, and safe calls of them (guard.base).
+local base_vehicle_list = vehicle_list_react_util.VehicleList
+local base_add_stop = manager_tooltips_util.LMAddStop
+local original_list = guard.base("VehicleList", base_vehicle_list)
+local original_add_stop = guard.base("LMAddStop", base_add_stop)
 
 local lvm_tweaks = {}
 
@@ -225,7 +232,7 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 		row = lvm_models.update(params)
 	end)
 	if not ok then debugPrint("[ui_overhaul] Line Manager models failed: ", tostring(err)) end
-	local list = react.CallOriginalRecipe(vehicle_list_react_util.VehicleList, react.ref(list_ref), original_params)
+	local list = original_list.node(react.ref(list_ref), original_params)
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical,
 		children = row and { row, list } or { list } }
 end)
@@ -376,7 +383,7 @@ local AddStopTooltip = react.RegisterRecipe("LMAddStop", function(pick)
 	end)
 	if ok then return line_react_util.makeTooltip(text) end
 	debugPrint("[ui_overhaul] add-stop hover failed: ", tostring(text))
-	return builtin.BoxLayout{ children = { react.CallOriginalRecipe(manager_tooltips_util.LMAddStop, pick) } }
+	return original_add_stop.layout(pick)
 end)
 
 -- Memory ------------------------------------------------------------------------------------------
@@ -417,8 +424,8 @@ function lvm_tweaks.install(replacement_api)
 	install_confirmation()
 	patch_handle_vehicle_changes()
 	table.insert(tool_stack.on_pop, remember_selection)
-	replacement_api.ReplaceRecipe(vehicle_list_react_util.VehicleList, VehicleList)
-	replacement_api.ReplaceRecipe(manager_tooltips_util.LMAddStop, AddStopTooltip)
+	replacement_api.ReplaceRecipe(base_vehicle_list, VehicleList)
+	replacement_api.ReplaceRecipe(base_add_stop, AddStopTooltip)
 end
 
 return lvm_tweaks

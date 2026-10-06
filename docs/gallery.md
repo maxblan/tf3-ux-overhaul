@@ -20,8 +20,7 @@ workflow, the overview.
 
    The scenes are the `gallery_*` entries in `gui_checks.lua`; the shots land in
    `spec/ingame/results/gallery-mod/` and `gallery-vanilla/`. Leave mouse and keyboard alone while
-   it runs: for the hover tooltips and the track tool, `run.sh` moves the mouse and clicks where the
-   testbench asks. The subsidy scene adds offers with the game's own debug event, in the savegame copy
+   it runs: for the hover tooltips, `run.sh` moves the mouse where the testbench asks. The subsidy scene adds offers with the game's own debug event, in the savegame copy
    only (it is deleted afterwards). `--only gallery_<name>` takes single scenes again.
 2. `make gallery` composes the cards (`tools/gallery/compose.py`, crops in screenshot pixels) and
    renders them with the game's font, Lato, to the mod's gallery images
@@ -43,13 +42,13 @@ The card numbers are the gallery order; the captions are for the gallery, the lo
 | 4 | `04-terminals` | Set a stop's terminals in one click |
 | 5 | `05-industry` | Know why an industry isn't growing |
 | 6 | `06-statistics` | Find the lines that lose money in one click |
-| 7 | `07-workflow-replace-model` | Replace a bus model across your whole network |
-| 8 | `08-build-tooltip` | Know the gradient before you build |
+| 7 | `07-workflow-replace-model` | Replace a vehicle model across your whole network |
+| 8 | `08-catchment` | Keep every station's catchment area on the map |
 | 9 | `09-notifications` | Fewer icons, clearer colours, offers that say when they end |
 | 10 | `10-minimize` | Minimize any window to its title bar |
 
-`compose.py` also has cards for the warehouses, the finance statements, catchment areas and an overview; they
-are left out of `CARDS` to stay within the 10 images.
+`compose.py` also has cards for the warehouses and an overview; they are left out of `CARDS` to stay within
+the 10 images.
 
 1. **Line Manager.** Every line shows its vehicle count and its balance over the last 12 months, red
    when it loses money, and every vehicle its load, condition and age. The same window, same scene:
@@ -63,16 +62,16 @@ are left out of `CARDS` to stay within the 10 images.
    there. It opens the line's terminals for that stop: Preferred, Alternative or Don't use, one click
    each, without opening the Line Manager. A line that cannot reach the stop gets a warning sign, and
    the button's tooltip says why.
-5. **Industries.** The Development card shows the level, how much of the output is transported, the
-   chance of the next expansion and what keeps the industry from growing; the eye button shows or
-   hides the red area of a blocked expansion. Served by lists the lines that reach it.
+5. **Industries.** The Development card shows the level, how much of the output is transported and
+   what keeps the industry from growing; the eye button shows or hides the red area of a blocked
+   expansion. Served by lists the lines that reach it.
 6. **Statistics.** Quick filters above the Lines, Vehicles, Stations and Warehouses tabs (losing
    money, problems, no vehicles, old, crowded …), and totals for exactly what the filter shows.
 7. **Replacing a model.** Select the model in the row above the vehicle list, add its vehicles from
    every line with "In all lines", then replace them in one go. The Line Manager asks before it
    replaces or clones several vehicles.
-8. **Construction.** While you draw track or road, the build tooltip gives the length, the steepest
-   gradient and the tightest curve with the limits of the chosen type, the height range and the angle.
+8. **Map.** Two buttons in the game bar keep the passenger and the cargo catchment areas of all
+   stations on the map, each switched on its own, whenever no tool draws its own overlay.
 9. **Notifications.** Notifications of the same kind share one icon with a count; click to visit
    each, right-click to dismiss the group. Every icon colour, subsidies included, has at least 7:1
    contrast to its white symbol, and subsidy offers say when they end.

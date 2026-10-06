@@ -194,10 +194,10 @@ TOTAL = 10
 def before_after():
     c = Card(1, TOTAL, "Line Manager", "See which lines lose money at a glance",
              "Vehicle count and 12-month balance for every line, load and age for every vehicle.")
-    crop = (100, 96, 690, 712)  # the Line Manager's lines and vehicles
+    crop = (100, 96, 690, 760)  # the Line Manager's title row, lines and vehicles
     y = TOP + 44 + 30
     h = BOTTOM - y
-    w = round(690 * h / 712)
+    w = round(690 * h / 760)
     gap = 130
     left = (W - 2 * w - gap) // 2
     c.chip(left, TOP + 4, "Vanilla", False)
@@ -205,9 +205,9 @@ def before_after():
     right = left + w + gap
     c.chip(right, TOP + 4, "With UI Overhaul", True)
     m = c.shot(MOD + "gallery_line_manager.png", crop, (right, y, w, h))
-    c.outline(c.mapped(m, (488, 212, 180, 260)))   # vehicle count and balance
-    c.outline(c.mapped(m, (110, 536, 670, 54)))    # the model row
-    c.outline(c.mapped(m, (543, 596, 212, 208)))   # load, condition and age
+    c.outline(c.mapped(m, (486, 282, 182, 262)))   # vehicle count and balance
+    c.outline(c.mapped(m, (110, 604, 672, 52)))    # the model row
+    c.outline(c.mapped(m, (543, 664, 212, 172)))   # load, condition and age
     c.arrow(left + w + gap / 2, y + h / 2)
     return "01-line-manager-before-after", c
 
@@ -235,12 +235,12 @@ def terminals():
 
 def industry():
     c = Card(5, TOTAL, "Industries", "Know why an industry isn't growing",
-             "Level, transported share and expansion chance, what blocks it, and the lines that serve it.")
+             "Level, transported share, what blocks it, and the lines that serve it.")
     src = MOD + "gallery_industry.png"
     box_w = W - 2 * MARGIN
     box_h = round(box_w * 1440 / 3440)
     m = c.shot(src, (0, 0, 3440, 1440), (MARGIN, TOP + 8, box_w, box_h))
-    card = (2818, 350, 564, 464)  # Development and Served by
+    card = (2818, 350, 564, 425)  # Development and Served by
     c.outline(c.mapped(m, card))
     _mi, bi = c.zoom(src, card, (MARGIN + 56, TOP + 44), 1.12)
     sc = c.mapped(m, card)
@@ -272,17 +272,17 @@ def statistics():
 
 
 def workflow():
-    c = Card(7, TOTAL, "Workflow", "Replace a bus model across your whole network",
+    c = Card(7, TOTAL, "Workflow", "Replace a vehicle model across your whole network",
              "Pick the model, pull its vehicles from every line, replace them all at once.")
-    crop = (100, 250, 690, 700)
+    crop = (100, 322, 690, 740)
     steps = [
-        (MOD + "gallery_models_select.png", "Click the model", (110, 536, 670, 54)),
-        (MOD + "gallery_models_all_lines.png", "“In all lines” adds every one", (110, 538, 662, 266)),
-        (MOD + "gallery_models_replace.png", "Replace all 101 in one go", (166, 814, 560, 122)),
+        (MOD + "gallery_models_select.png", "Click the model", (110, 604, 672, 52)),
+        (MOD + "gallery_models_all_lines.png", "“In all lines” adds every one", (110, 610, 666, 266)),
+        (MOD + "gallery_models_replace.png", "Replace them all in one go", (166, 893, 560, 112)),
     ]
     gap = 52
     w = (W - 2 * MARGIN - 2 * gap) // 3
-    h = round(w * 700 / 690)
+    h = round(w * 740 / 690)
     y = TOP + 76
     for i, (src, caption, mark) in enumerate(steps):
         x = MARGIN + i * (w + gap)
@@ -356,9 +356,9 @@ def line_window():
 
 def vehicle_hover():
     c = Card(3, TOTAL, "Vehicles on the map", "Hover a vehicle, see how it is doing",
-             "Line, next stop, speed, load, condition and passenger happiness, right where the vehicle is.")
+             "Line, next stop, speed, load, condition and delivery quality, right where the vehicle is.")
     m, _box, _b = pair(c, (1560, 600, 760, 480), VANILLA + "gallery_vehicle_hover.png", MOD + "gallery_vehicle_hover.png")
-    c.outline(c.mapped(m, (1740, 838, 516, 198)))
+    c.outline(c.mapped(m, (1736, 816, 450, 198)))
     return "03-vehicle-hover-before-after", c
 
 
@@ -380,38 +380,11 @@ def warehouses():
     return "07-warehouses", c
 
 
-def finances():
-    c = Card(11, TOTAL, "Finances", "Read your company like a balance sheet",
-             "Income statement, cash flow and balance sheet from the game's own figures, next to its table.")
-    src = MOD + "gallery_finances_cashflow.png"
-    crop = (730, 96, 1990, 784)  # the window, from its title to the last row
-    w = W - 2 * MARGIN
-    h = round(784 * w / 1990)
-    x = (W - w) // 2
-    m = c.shot(src, crop, (x, TOP + 8, w, h))
-    c.outline(c.mapped(m, (746, 252, 682, 52)))    # the statements
-    c.outline(c.mapped(m, (750, 752, 1940, 112)))  # change in the bank account, bank account
-    return "11-finances", c
-
-
-def build_tooltip():
-    c = Card(8, TOTAL, "Construction", "Know the gradient before you build",
-             "While you draw track or road: steepest gradient and tightest curve with the type's limits, and the height.")
-    src = MOD + "gallery_build_tooltip.png"
-    crop = (600, 380, 1500, 720)
-    h = BOTTOM - TOP - 8
-    w = round(1500 * h / 720)
-    x = (W - w) // 2
-    m = c.shot(src, crop, (x, TOP + 8, w, h))
-    c.outline(c.mapped(m, (798, 914, 420, 168)))
-    return "08-build-tooltip", c
-
-
 def notifications():
     c = Card(9, TOTAL, "Notifications", "Fewer icons, clearer colours, offers that say when they end",
              "Notifications of one kind share an icon with a count; every colour has 7:1 contrast to its symbol.")
-    vanilla_ridge = (1140, 8, 642, 70)
-    mod_ridge = (1140, 8, 268, 70)
+    vanilla_ridge = (1140, 8, 450, 70)
+    mod_ridge = (1140, 8, 322, 70)
     scale = 1.25
     y = TOP + 60
     c.chip(MARGIN, y, "Vanilla", False)
@@ -419,17 +392,17 @@ def notifications():
     y2 = y + 70 + round(70 * scale) + 70
     c.chip(MARGIN, y2, "With UI Overhaul", True)
     c.zoom(MOD + "gallery_vehicle_hover.png", mod_ridge, (MARGIN, y2 + 70), scale)
-    card = (1104, 86, 534, 352)
+    card = (1296, 88, 512, 318)
     s2 = 1.6
-    _mc, bc = c.zoom(MOD + "gallery_subsidy_hover_3.png", card, (W - MARGIN - round(534 * s2), TOP + 40), s2)
+    _mc, bc = c.zoom(MOD + "gallery_subsidy_hover_3.png", card, (W - MARGIN - round(card[2] * s2), TOP + 40), s2)
     c.plate(bc[0], bc[1] + bc[3] + 26, "A subsidy offer, with the time it has left")
-    c.text(MARGIN, y2 + 70 + round(70 * scale) + 74, "Ten icons become four groups, in high-contrast colours.", 24,
+    c.text(MARGIN, y2 + 70 + round(70 * scale) + 74, "Seven icons become five groups, in high-contrast colours.", 24,
            MUTED, 400)
     return "09-notifications", c
 
 
 def catchment():
-    c = Card(11, TOTAL, "Map", "Keep every station's catchment area on the map",
+    c = Card(8, TOTAL, "Map", "Keep every station's catchment area on the map",
              "Two buttons switch the passenger and the cargo areas of all stations on and off, separately.")
     src = MOD + "gallery_catchment.png"
     h = BOTTOM - TOP - 8
@@ -442,7 +415,7 @@ def catchment():
     sb = c.mapped(m, buttons)
     c.connector((sb[0] + sb[2] / 2, sb[1] + sb[3] + 4), (bb[0] + bb[2] / 2, bb[1] - BEZEL))
     c.plate(bb[0] + bb[2] + 30, bb[1] + bb[3] / 2 - 25, "Passengers and cargo, each on its own")
-    return "11-catchment", c
+    return "08-catchment", c
 
 
 def minimize():
@@ -456,8 +429,8 @@ def minimize():
     return "10-minimize", c
 
 
-CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, workflow, build_tooltip, notifications, minimize]
-# not in the gallery (mod.io takes at most 10 images per upload): warehouses, finances, catchment, overview
+CARDS = [before_after, line_window, vehicle_hover, terminals, industry, statistics, workflow, catchment, notifications, minimize]
+# not in the gallery (mod.io takes at most 10 images per upload): warehouses, overview
 
 
 def main():

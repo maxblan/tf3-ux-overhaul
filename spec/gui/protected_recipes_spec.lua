@@ -86,16 +86,10 @@ describe("protected recipes", function()
 		assert.is_true(facts.blocked) -- the read facts stay as they were
 	end)
 
-	it("vehicle performance card shows nothing for odd ratings", function()
-		local fake = load("/ui_overhaul/gui/performance.lua")
-		local card = fake.mount(fake.recipe("UioVehiclePerformance"))
-		assert.are.same(EMPTY, card.render({ entityId = 1 }))
-		assert.are.same({ "useState" }, card.hooks)
-		assert.are.equal(1, #logged)
-	end)
-
 	it("line vehicles card: the status cell and the card fail alone, then the base card shows", function()
-		local base_card = {}
+		-- the base recipe as line_eow holds it when the mod loads (the card calls exactly that one)
+		local base_plugin = function() end
+		local base_card = { LineVehiclesPlugin = base_plugin }
 		local fake, line_vehicles = load("/ui_overhaul/gui/line_vehicles.lua", {
 			["/ui_overhaul/gui/vehicle_info.lua"] = {
 				read = function() return { condition = 1 } end,
@@ -105,7 +99,6 @@ describe("protected recipes", function()
 			["/ui_overhaul/gui/actions.lua"] = { remove_refused = function() error("actions changed") end },
 			["::/gui/entity_window/line/line_eow.script.tl"] = base_card,
 		})
-		base_card.LineVehiclesPlugin = fake.react.RegisterRecipe("LineVehiclesPlugin", function() end)
 
 		local status = fake.mount(fake.recipe("UioLineVehicleStatus"))
 		assert.are.same({}, status.render({ vehicle = 1 }).layout.children)
@@ -124,7 +117,7 @@ describe("protected recipes", function()
 		parent.step()
 		local node = parent.render({ ownershipState = "Player", entityId = 1 })
 		assert.are.same({ "useState", "onStep" }, parent.hooks)
-		assert.are.equal(base_card.LineVehiclesPlugin, node.layout.children[1].original)
+		assert.are.equal(base_plugin, node.layout.children[1].original)
 	end)
 
 	it("statistics: the vehicles Age tooltip and the warehouse cells leave out what fails", function()

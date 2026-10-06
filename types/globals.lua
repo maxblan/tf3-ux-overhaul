@@ -20,6 +20,10 @@ nGetText = nil
 ---@type fun(...: any)
 debugPrint = nil
 
+---The game's build version (apidef/main.d.tl).
+---@type fun(): string
+getBuildVersion = nil
+
 ---Resource files (.res.lua, .script.lua, .css.lua, ...) define it; the engine calls it to read the
 ---resource table, whose shape depends on the resource type. Nil until a resource file defines it.
 ---@type (fun(): table)?

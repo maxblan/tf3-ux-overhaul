@@ -1,15 +1,12 @@
---- Income statement, cash flow statement and balance sheet from the game's finance figures.
--- Pure Lua: the GUI hands in plain copies of FinanceData (api.engine.util.finance.computeFinanceTable,
--- one value per column, costs negative) and of the company's value, and words the row keys.
+--- The income statement from the game's finance figures: the rows of the game's own finance table,
+-- grouped. Pure Lua: the GUI hands in a plain copy of FinanceData
+-- (api.engine.util.finance.computeFinanceTable, one value per column, costs negative) and words the
+-- row keys.
 --
 -- The game books every journal entry under a type (income, subsidy, maintenance of vehicles or
--- infrastructure, vehicle acquisition, construction). The statements sort them:
---   income statement: revenue, subsidies and the running costs give the operating result; with
---                     other income and loan interest, the net income
---   cash flow:        net income, then investments (vehicles bought or sold, construction) and
---                     financing (loans taken and repaid) give the change in the bank account
---   balance sheet:    cash, vehicles at their depreciated value and the other assets against the
---                     debt; the difference is the company value the game shows
+-- infrastructure, vehicle acquisition, construction). Revenue, subsidies and the running costs give
+-- the operating result; with other income and loan interest, the net income. Vehicles bought and
+-- sold and construction are not part of it (the game's table lists them as investments).
 -- @module ui_overhaul.core.statements
 local statements = {}
 
@@ -40,9 +37,6 @@ local statements = {}
 ---@field entries uo.core.statements.Entry[]
 ---@field other? number[]
 ---@field interest? number[]
----@field loanBorrowing? number[]
----@field loanRepayment? number[]
----@field balance? number[]
 
 ---@alias uo.core.statements.Kind
 ---| "revenue"
@@ -58,18 +52,6 @@ local statements = {}
 ---@class uo.core.statements.Row
 ---@field key string
 ---@field values? number[] one per column
----@field total? boolean
-
---- Today's figures for the balance sheet.
----@class uo.core.statements.Values
----@field cash? number nil: unlimited money
----@field vehicles? number depreciated value
----@field assets? number the company's total assets without cash
----@field debt? number
-
----@class uo.core.statements.BalanceRow
----@field key string
----@field value? number
 ---@field total? boolean
 
 ---@param n integer
@@ -138,21 +120,16 @@ function statements.by_kind(entries, enum, columns)
 	return kinds
 end
 
---- The income statement and the cash flow statement as lists of rows { key, values, total = bool }.
--- `data` = { columns, entries, other, interest, loanBorrowing, loanRepayment, balance }.
--- Rows without any value are left out, except totals.
+--- The income statement as a list of rows { key, values, total = bool }.
+-- `data` = { columns, entries, other, interest }. Rows without any value are left out, except totals.
 ---@param data uo.core.statements.Data
 ---@param enum uo.core.statements.Enum
----@return uo.core.statements.Row[] income
----@return uo.core.statements.Row[] cash_flow
-function statements.build(data, enum)
+---@return uo.core.statements.Row[]
+function statements.income(data, enum)
 	local n = data.columns
 	local k = statements.by_kind(data.entries, enum, n)
 	local operating = sum(n, k.revenue, k.subsidies, k.running_costs, k.vehicle_maintenance, k.upkeep, k.other_upkeep)
 	local net = sum(n, operating, k.unknown, data.other, data.interest)
-	local investing = sum(n, k.vehicles, k.construction)
-	local financing = sum(n, data.loanBorrowing, data.loanRepayment)
-	local change = sum(n, net, investing, financing)
 
 	---@param list uo.core.statements.Row[]
 	---@return uo.core.statements.Row[]
@@ -163,7 +140,7 @@ function statements.build(data, enum)
 		end
 		return result
 	end
-	local income = rows{
+	return rows{
 		{ key = "revenue", values = k.revenue },
 		{ key = "subsidies", values = k.subsidies },
 		{ key = "running_costs", values = k.running_costs },
@@ -174,37 +151,6 @@ function statements.build(data, enum)
 		{ key = "other", values = sum(n, k.unknown, data.other) },
 		{ key = "interest", values = data.interest },
 		{ key = "net_income", values = net, total = true },
-	}
-	local cash = rows{
-		{ key = "net_income", values = net },
-		{ key = "vehicles", values = k.vehicles },
-		{ key = "construction", values = k.construction },
-		{ key = "investing", values = investing, total = true },
-		{ key = "loans_taken", values = data.loanBorrowing },
-		{ key = "loans_repaid", values = data.loanRepayment },
-		{ key = "financing", values = financing, total = true },
-		{ key = "change", values = change, total = true },
-		{ key = "bank_account", values = data.balance, total = true },
-	}
-	return income, cash
-end
-
---- The balance sheet as rows { key, value, total = bool }. `v` = { cash (nil: unlimited money),
--- vehicles (depreciated value), assets (the company's total assets without cash), debt }.
----@param v uo.core.statements.Values
----@return uo.core.statements.BalanceRow[]
-function statements.balance_sheet(v)
-	local cash = v.cash or 0
-	local vehicles = math.max(0, math.min(v.vehicles or 0, v.assets or 0))
-	local other = math.max(0, (v.assets or 0) - vehicles)
-	local total = cash + vehicles + other
-	return {
-		{ key = "cash", value = v.cash },
-		{ key = "vehicle_assets", value = vehicles },
-		{ key = "other_assets", value = other },
-		{ key = "total_assets", value = total, total = true },
-		{ key = "debt", value = -(v.debt or 0) },
-		{ key = "equity", value = total - (v.debt or 0), total = true },
 	}
 end
 

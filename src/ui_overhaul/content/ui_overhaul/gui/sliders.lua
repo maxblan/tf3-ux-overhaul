@@ -1,5 +1,8 @@
 --- Sliders on the gameplay screens:
---   * the mouse wheel moves a slider under the cursor one step (core/slider_values.lua)
+--   * the mouse wheel moves a slider under the cursor one step (core/slider_values.lua), where the
+--     slider sits outside a scrolling list or window: the construction parameters and the game bar.
+--     Elsewhere (entity windows, the Line Manager's cargo filter, mods' windows) the wheel scrolls
+--     the list or window under it, as in vanilla
 --   * a value can be typed: double-click a slider, or click the value next to a construction
 --     slider (a number spin box, as the Line Manager's wait times have)
 -- Construction sliders (and all other script parameters) move through a list of values, which their
@@ -45,6 +48,7 @@ local sliders = {}
 
 ---@class uo.sliders.UioSliderParams
 ---@field p uo.sliders.SliderParam
+---@field wheel boolean the mouse wheel moves the slider
 
 -- ScriptParamSliderAndTextParam of script_param_util.tl.
 ---@class uo.sliders.ParamSliderParams: react.Param
@@ -53,11 +57,33 @@ local sliders = {}
 ---@field onValueChange fun(value: number)
 ---@field disableGamepadNavigation? boolean
 ---@field allowCoalesce? boolean
+---@field uioWheel? boolean the mouse wheel moves the slider
 
 
 -- Recipes whose sliders stay vanilla: the in-game settings menu.
 ---@type table<string, boolean>
 local VANILLA_IN = { SettingsPage = true }
+
+-- Recipes whose sliders the mouse wheel moves: their sliders are not part of a scrolling list or
+-- window, so the wheel has nothing else to do there (construction.tl's parameter rows, and the callout
+-- they open in compact mode, script_param_util.tl; game_bar_widgets.tl; the music player). Under any
+-- other slider the wheel scrolls what lies under it.
+---@type table<string, boolean>
+local WHEEL_IN = {
+	ConstructionParam = true,
+	ConstructionEntityParam = true,
+	ScriptParamCalloutWrapper = true,
+	SliderWithLegend = true,
+	CalendarEditorDateSpeedControl = true,
+	MusicPlayer = true,
+}
+
+--- Whether the mouse wheel moves the sliders that recipe `recipe` renders.
+---@param recipe string?
+---@return boolean
+function sliders.wheel_in(recipe)
+	return WHEEL_IN[recipe or ""] == true
+end
 
 local report = guard.reporter("sliders: ")
 
@@ -131,7 +157,7 @@ local function render_slider(params)
 			if evt.type == types.Moved then intent.moved() end
 			if evt.handled then return false end
 			if evt.type == types.Wheel and evt.yrel ~= 0 then
-				if not intent.allows_wheel() then return false end
+				if not params.wheel or not intent.allows_wheel() then return false end
 				commit(slider_values.wheel(value, min, max, step, wheel_dir(evt)))
 				return true
 			end
@@ -203,8 +229,12 @@ end
 local function wrapped_slider(...)
 	local args = { ... }
 	-- outside a render (a callback, another mod) getCurrentRecipeName asserts: the call stays the base one
-	local ok, enhance = pcall(function() return sliders.enhance(args, react.getCurrentRecipeName()) end)
-	if ok and enhance then return UioSlider{ p = args[1] } end
+	local recipe ---@type string?
+	local ok, enhance = pcall(function()
+		recipe = react.getCurrentRecipeName()
+		return sliders.enhance(args, recipe)
+	end)
+	if ok and enhance then return UioSlider{ p = args[1], wheel = sliders.wheel_in(recipe) } end
 	return base_slider(...)
 end
 
@@ -287,7 +317,7 @@ local function render_param_slider(param)
 			end
 			if evt.handled then return false end
 			if evt.type == api.gui.mouse.Event.Type.Wheel and evt.yrel ~= 0 then
-				if not intent.allows_wheel() then return false end
+				if not param.uioWheel or not intent.allows_wheel() then return false end
 				local dir = wheel_dir(evt)
 				---@type number?
 				local value
@@ -405,6 +435,8 @@ local function wrap_build(original)
 		end
 		if scriptParam.numbers ~= nil and #scriptParam.numbers == 0 then scriptParam.numbers = nil end
 		if choices(scriptParam) < 1 then return original(param, ...) end
+		-- outside a render there is no current recipe: no wheel
+		local found, recipe = pcall(react.getCurrentRecipeName)
 		local right = ScriptParamSliderAndText{
 			meta = {
 				class = "right-parameters, ui-type-" .. tostring(scriptParam.uiType),
@@ -416,6 +448,7 @@ local function wrap_build(original)
 			onValueChange = param.onValueChange,
 			disableGamepadNavigation = param.disableGamepadNavigation,
 			allowCoalesce = scriptParam.allowCoalesce,
+			uioWheel = found and sliders.wheel_in(recipe) or false,
 		}
 		if param.vertical == nil then return right end
 		return script_param_util.wrap(scriptParam.name, param.vertical, right, param.addSpacer, param.onHover, nil)
