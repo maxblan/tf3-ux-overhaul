@@ -7,7 +7,7 @@ allow_defined_top = false
 
 -- Globals provided by Transport Fever 3.
 -- "_" is the engine's translation function.
-read_globals = { "api", "app", "debugPrint", "_", "pGetText", "nGetText" }
+read_globals = { "api", "app", "debugPrint", "getBuildVersion", "_", "pGetText", "nGetText" }
 -- Variables named with a leading underscore are intentionally unused.
 ignore = { "21./_.*" }
 
