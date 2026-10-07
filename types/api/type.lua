@@ -70,7 +70,9 @@
 ---@class StockListType
 
 ---@class InputMode
+---@field Undefined InputMode before the first input
 ---@field KeyboardMouse InputMode
+---@field Gamepad InputMode
 
 ---@class Enum
 ---@field Carrier Carrier

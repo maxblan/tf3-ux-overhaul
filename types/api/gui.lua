@@ -36,6 +36,8 @@
 ---@class Gui.ById
 ---@field isVisibleRecursive fun(id: string): boolean
 ---@field setVisible fun(id: string, visible: boolean)
+---Width and height of a component, as parts of the screen (0..1).
+---@field getSize fun(id: string): { x: number, y: number }
 
 ---Camera data {center x, center y, distance, angle, pitch} (Vec5f).
 ---@class Gui.CameraData

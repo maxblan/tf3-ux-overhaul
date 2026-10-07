@@ -15,6 +15,7 @@
 --   * a row of the list's vehicle models above the vehicle list, and Shift+click on a vehicle row
 --     to select its model (lvm_models.lua); a new line started from vehicles of two or more lines
 --     starts empty, like one started with several lines selected
+-- The vehicle list also holds the vehicle search (lvm_search.lua), which has its own switch.
 -- The confirmation wraps react.fireEvent for "duplicateVehicles" (installed before the UI starts,
 -- see installer.lua); the memory uses the tool stack's pop hook (tool_stack.lua) and the
 -- entry point's per-frame step (entry.lua).
@@ -28,6 +29,7 @@ local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
 local manager_tooltips_util = require("::/gui/line_vehicle_mgmt/manager_tooltips_util.tl")
 local tool_stack = require("/ui_overhaul/gui/tool_stack.lua")
 local lvm_models = require("/ui_overhaul/gui/lvm_models.lua")
+local lvm_search = require("/ui_overhaul/gui/lvm_search.lua")
 local line_problems = require("/ui_overhaul/core/line_problems.lua")
 local table_util = require("::/scripts/table_util.tl")
 local priority = require("ui_overhaul_1::/ui_overhaul/gui/priority.lua")
@@ -201,9 +203,24 @@ local function list_params(params)
 	return copy
 end
 
+--- The list's parameters with `vehicles` as its rows (a copy where they differ).
+---@param params uo.gui.lvm_tweaks.ListParams
+---@param vehicles Engine.Entity[]
+---@return uo.gui.lvm_tweaks.ListParams
+local function with_vehicles(params, vehicles)
+	if vehicles == params.vehicles then return params end
+	local copy = table_util.shallowCopy(params)
+	copy.vehicles = vehicles
+	return copy
+end
+
+-- The vehicle list of the Line Manager. Two features show their parts in it, each only while it is
+-- shown (priority.active, decided before the UI starts): the Line Manager tweaks (the model row,
+-- Shift+click, the questions) and the vehicle search (the field above the list, lvm_search.lua).
 ---@param params uo.gui.lvm_tweaks.ListParams
 ---@return react.TreeNodeId
 local VehicleList = react.RegisterRecipe("VehicleList", function(params)
+	local tweaks, search = priority.active("line_manager"), priority.active("vehicle_search")
 	react.onEvent("uio.debug.lvm_models", function(_e, param)
 		local ok, err = pcall(lvm_models.debug, param)
 		if not ok then debugPrint("[ui_overhaul] lvm models debug failed: ", tostring(err)) end
@@ -212,14 +229,36 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 	-- list, not to the model row above it
 	local list_ref = react.useNodeRef()
 	react.setPreferredFocusChild(list_ref)
+	-- the search field re-renders the list as the player types
+	local typed = react.useState(0)
+	-- testbench: "uio.debug.vehicle_search" with a text types it as the search; with { log = true } it
+	-- logs the list ("[ui_overhaul] vehicle search ...")
+	react.onEvent("uio.debug.vehicle_search", function(_e, param)
+		if not search then return end
+		if type(param) == "table" and param.log then
+			local ok, line = pcall(lvm_search.describe, params)
+			debugPrint("[ui_overhaul] vehicle search ", ok and line or ("failed: " .. tostring(line)))
+			return
+		end
+		lvm_search.set_text(type(param) == "string" and param or "")
+		typed:set(typed:old() + 1)
+	end)
+	react.onStep(function()
+		if not (search and params and params.commonParams and params.commonParams.vehicleManagerStateRef) then return end
+		local ok, err = pcall(lvm_search.step, params)
+		if not ok then debugPrint("[ui_overhaul] vehicle search failed: ", tostring(err)) end
+	end)
 	-- a closed Line Manager's params must not take questions (the replace confirmation, below)
 	local captured = params and params.commonParams
 	react.onUnmount(function()
 		if captured ~= nil and current == captured then current = nil end
+		if search then lvm_search.unmount() end
 	end)
-	local row, original_params = nil, params ---@type react.TreeNodeId?, uo.gui.lvm_tweaks.ListParams
+	-- the model row, the search field and its "No matches found", and the list's own parameters
+	local row, field, none = nil, nil, nil ---@type react.TreeNodeId?, react.TreeNodeId?, react.TreeNodeId?
+	local original_params = params ---@type uo.gui.lvm_tweaks.ListParams
 	local ok, err = pcall(function()
-		if params and params.commonParams then
+		if tweaks and params and params.commonParams then
 			current = params.commonParams
 			wrap_new_line(params.commonParams)
 		end
@@ -227,14 +266,27 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 	if not ok then debugPrint("[ui_overhaul] Line Manager params not captured: ", tostring(err)) end
 	ok, err = pcall(function()
 		if not (params and params.commonParams and params.commonParams.vehicleManagerStateRef) then return end
-		original_params = list_params(params)
-		pcall(wrap_select_vehicles, params)
-		row = lvm_models.update(params)
+		local shown = params
+		if search then
+			lvm_search.wrap_api(params)
+			shown = with_vehicles(params, lvm_search.shown(params.vehicles))
+			field = lvm_search.field(params, function() typed:set(typed:old() + 1) end)
+			none = lvm_search.no_match()
+		end
+		original_params = shown
+		if tweaks then
+			original_params = list_params(shown)
+			pcall(wrap_select_vehicles, params)
+			row = lvm_models.update(shown)
+		end
 	end)
-	if not ok then debugPrint("[ui_overhaul] Line Manager models failed: ", tostring(err)) end
+	if not ok then debugPrint("[ui_overhaul] Line Manager vehicle list parts failed: ", tostring(err)) end
 	local list = original_list.node(react.ref(list_ref), original_params)
-	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical,
-		children = row and { row, list } or { list } }
+	local children = {} ---@type react.TreeNodeId[]
+	for _i, node in ipairs({ field or false, none or false, row or false, list }) do
+		if node then children[#children + 1] = node end
+	end
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
 end)
 
 -- Replace confirmation ----------------------------------------------------------------------------
@@ -426,6 +478,13 @@ function lvm_tweaks.install(replacement_api)
 	table.insert(tool_stack.on_pop, remember_selection)
 	replacement_api.ReplaceRecipe(base_vehicle_list, VehicleList)
 	replacement_api.ReplaceRecipe(base_add_stop, AddStopTooltip)
+end
+
+--- The vehicle search, a feature of its own (installer.lua): its field is in the same vehicle list,
+-- which shows each feature's parts only while that feature is shown.
+---@param replacement_api react.ReplacementApi
+function lvm_tweaks.install_search(replacement_api)
+	replacement_api.ReplaceRecipe(base_vehicle_list, VehicleList)
 end
 
 return lvm_tweaks

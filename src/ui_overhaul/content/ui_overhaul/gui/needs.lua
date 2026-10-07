@@ -63,6 +63,9 @@ local needs = {
 			["::/scripts/util.tl"] = { "formatDurationWithCurrentCalenderSpeed" },
 		},
 		installer = {},
+		line_cargo = {
+			["::/gui/main/cargo_util.tl"] = { "getPassengerCargoTypeId", "getSortedProducedCargoTypes" },
+		},
 		line_vehicles = {
 			["::/gui/entity_window/entity_window_util.tl"] = { "ActionButtonBar" },
 			["::/gui/entity_window/line/line_eow.script.tl"] = { "LineVehiclesPlugin" },
@@ -74,6 +77,7 @@ local needs = {
 			["::/gui/main/engine_react_util.tl"] = { "useStepState", "useStepStateTimer" },
 			["::/scripts/lang_util.tl"] = { "format" },
 		},
+		lvm_columns = {},
 		lvm_models = {
 			["::/gui/line_vehicle_mgmt/vehicle_react_util.tl"] = { "VehicleWidget" },
 			["::/gui/main/engine_react_util.tl"] = { "useStepStateTimer" },
@@ -85,9 +89,12 @@ local needs = {
 			["::/gui/line_vehicle_mgmt/line_react_util.tl"] = { "ManagerNotificationWidget" },
 			["::/gui/line_vehicle_mgmt/vehicle_util.tl"] = { "getConditionIcon", "getMinPurchaseTimeAndLifespan" },
 			["::/gui/main/cargo_react_util.tl"] = { "makeCargoIcon" },
-			["::/gui/main/cargo_util.tl"] = { "getPassengerCargoTypeId", "getSortedProducedCargoTypes" },
 			["::/gui/main/engine_react_util.tl"] = { "useStepStateTimer" },
 			["::/scripts/lang_util.tl"] = { "format" },
+		},
+		lvm_search = {
+			["::/scripts/entity_util.tl"] = { "entityChanged0", "isOwnedByPlayer" },
+			["::/scripts/lang_util.tl"] = { "stringContains" },
 		},
 		lvm_tweaks = {
 			["::/gui/line_vehicle_mgmt/line_react_util.tl"] = { "makeTooltip" },
@@ -301,9 +308,11 @@ local needs = {
 	requires = {
 		cards = { "ui" },
 		entry = { "actions", "cleanup", "construction", "lvm_tweaks", "ui" },
+		industry_cards = { "line_cargo" },
 		line_vehicles = { "actions", "vehicle_info" },
-		lvm_rows = { "vehicle_info" },
-		lvm_tweaks = { "lvm_models", "tool_stack" },
+		lvm_rows = { "line_cargo", "vehicle_info" },
+		lvm_search = { "lvm_models" },
+		lvm_tweaks = { "lvm_models", "lvm_search", "tool_stack" },
 		station_terminals = { "terminals" },
 		statistics_lines = { "statistics_common" },
 		statistics_stations = { "statistics_common" },

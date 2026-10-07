@@ -12,6 +12,8 @@ It shows only what the game itself already shows somewhere: a vehicle's load in 
 
 - Line rows show what the line carries (cargo icons), the vehicle count and the 12-month balance, in red when the line loses money. Vehicle rows show the load, a condition icon and the age, in red once the lifespan is reached; their tooltip names the next stop, speed, load, condition and delivery quality.
 - A row above the vehicle list shows each vehicle model in it with its count. Clicking a model selects exactly those vehicles; *In all lines* adds that model's vehicles from every line, so one Replace, Sell or Send to Depot reaches all of them. Shift+click on a vehicle selects all listed vehicles of its model.
+- The Line Manager is twice as wide, in two columns: the lines with the selected line's stops below them on the left, the vehicles on the right. It is as tall as before. With a gamepad it stays as it is.
+- A search field above the vehicle list shows only the vehicles whose name, model or line contains the text. The list's select-all box, its counts and every action then reach exactly those vehicles. Clearing the search brings the others back, unselected; when nothing matches, the list says so and nothing is selected.
 - In *Select Terminals*, each terminal has three buttons (Don't Use, Alternative, Preferred) instead of a drop-down list, so a change takes one click.
 - In *Select Terminals*, the preferred terminal is highlighted. Terminals the line cannot use (another kind of vehicle, a passenger terminal on a freight line and the reverse) or cannot reach (no path, with the missing piece such as catenaries) are greyed, and their tooltip says why. This also works when the popover is opened from the station or line window.
 
@@ -65,7 +67,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 
 - A Development card: the recipes in words ("4 Clay -> 4 Bricks, up to 460 per year"), the level while the industry can still grow, how much of its output is transported, and what keeps it from expanding (maximum reached, something in the way, nothing produced or transported, closure countdown).
 - When something blocks the next expansion, an eye button in the Development card shows or hides the game's red area on the map, so you can see what stands there. (Its colour is fixed by the engine and cannot be made see-through.)
-- A Served by card lists your lines with a stop that reaches the industry; each name opens the line.
+- A Served by card lists your lines with a stop that reaches the industry; each name opens the line. Each line shows what it carries and its rate (what it can transport per year, the Line Manager's figure), so it can be held against the industry's production. Lines that carry the industry's cargo come first.
 
 ### Towns and company
 
@@ -112,6 +114,8 @@ Every part of the mod can be switched off on its own, in the mod's settings: the
 | Setting | What it switches |
 |---|---|
 | Line Manager | line and vehicle rows, the model row, the questions before cloning or replacing several vehicles, the add-stop hint, reopening on the last line (needs Windows side by side) |
+| Vehicle search | the search field above the Line Manager's vehicle list |
+| Line Manager in two columns | lines and stops on the left, vehicles on the right |
 | Select Terminals | the terminal popover's buttons, highlighting and greying |
 | Station window: Select Terminals | the button per line stop in the station window |
 | Line window | the Vehicles card's rows and buttons, the Stops card |
@@ -125,7 +129,7 @@ Every part of the mod can be switched off on its own, in the mod's settings: the
 | Sell: second click | the second click on *Sell* in the vehicle window |
 | Town growth | what limits growth, and the progress as text, in the town window |
 | Promotion pending | the text on a perk locked by a rank already reached |
-| Industry window | the Development and Served by cards, the red-area switch |
+| Industry window | the Development and Served by cards (with each line's cargo and rate), the red-area switch |
 | Construction menus | the merged menus, track order, Configure, the settings above the game bar |
 | Bulldozer warning | the bulldozer's warning about stations that lines stop at |
 | Sliders | mouse wheel on construction and game-bar sliders, typed values |
@@ -153,6 +157,7 @@ Every part of the mod can be switched off on its own, in the mod's settings: the
   - the map's entity hover tooltip and the industry window (calling the original);
   - the game bar's Earnings display, the notification icons and the window stack.
 - The entity windows' action bar is not replaced but wrapped (for *Sell*), so other mods that wrap it as well (Warehouse Station Coverage) keep working in either order.
+- The Line Manager's two columns replace nothing either: its parts stay the game's (and those of mods that replace them, such as Timetables), only the layout that stacks them is arranged differently while the Line Manager is drawn.
 - English, German, French, Italian, Spanish, Dutch, Japanese, Korean, Polish, Brazilian Portuguese, Russian and Chinese (simplified and traditional): all the game's languages.
 
 

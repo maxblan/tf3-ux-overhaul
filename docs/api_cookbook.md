@@ -334,6 +334,7 @@ local rate = api.engine.util.line.calcLineStationThroughput(lineEntity)   -- int
 ```
 - `statistic_lines.tl:220-230`, `line_eow.script.tl:34-54`.
 - Unit: "Amount of cargo or passengers a line can transport per year" (`manager_window.tl:3989-3999`). Display it with `lang_util.formatInt(rate)`.
+- The game's own texts for it, translated in every language: `_("Rate")`, `_("Amount of cargo or passengers a line can transport per year.")` (with the full stop) and `_("{currentProgress} per Year")` ("112 pro Jahr"), used by the industry window's Served by card (`industry_cards.lua`, seen in game 2026-10-07). It counts the whole line, all its cargo and every stop: a line that stops at two industries counts fully at both.
 
 ### 2.9 Stops (station group + name per stop)
 ```lua
@@ -1525,6 +1526,27 @@ Observed in game (build 40408, 2026-10-05, with 13 mod.io mods active in both or
 - `react.fireEvent` is `api.gui.react.fireEvent`, an engine function: `type()` need not be `"function"`.
 
 ### 9.3 Window and node positions
+- Layouts lay nothing out smaller than its content: a `ScrollArea` grows to its content and ran under the
+  button next to it (the Line Manager's model row), a `TextView` with gravity 0 keeps its natural width, and a
+  `DataTable` hands its width out to every column while the last cell's content ran past the table's edge (the
+  vehicle list's figures). What holds things in place is a fixed `size` or a `maxSize`, as the game's own
+  tables have it (`entity_window.css.lua`, `R::VehicleTable R::VehicleWidget ScrollArea`: 82 wide); a column
+  given a `maxSize` leaves its share to the others (observed in game 2026-10-07, `lvm_rows.css.lua`).
+- `api.gui.byId.getSize(id)` gives a component's width and height as parts of the screen too (the Line Manager
+  `menu.management`: 0.426 x 0.908 in two columns on 3440x1440, 0.571 wide at 1280x720 with large text).
+- `api.util.getInputMode()` is `InputMode.Undefined` (0) until the player's first input, and stayed so through a
+  whole testbench run: test for a gamepad with `~= InputMode.Gamepad`, as the base does (`line_react_util.tl`),
+  not for `== KeyboardMouse`. The stylesheets' `!input-mouse` class is set meanwhile (observed in game).
+- The Line Manager's parts (top bar, lines, vehicles, line panel) are file-local recipes, stacked by a
+  `BoxLayout` without an orientation at the end of `ManagerWindowContent` (`manager_window.tl:8194-8205`); CSS
+  has no orientation property. To arrange them otherwise, wrap `builtin.BoxLayout` and act only while
+  `react.getCurrentRecipeName()` is `"ManagerWindowContent"` on the layout with those four children
+  (`lvm_columns.lua`). Their sizes are CSS (`line_vehicle_mgmt.css.lua`: content 500 wide, at most 894 tall;
+  lines and vehicles 240, the line panel 360, 6 between).
+- The vehicle manager's api (`params.managerRef:get():getApi()` in `VehicleList`) changes the vehicle list with
+  `addVehiclesToVehicleListAndSelect`, `removeVehiclesFromVehicleList` and `clearVehicleList`; the base's
+  select-all box, its counts and actions read `commonParams.vehicleManagerStateRef` directly. When the list is
+  empty the manager does not render `VehicleList` at all, only "Select a vehicle, depot or line." (`manager_window.tl:5660-5715`).
 - `nodeRef:getPosition(gravityX, gravityY)` returns parts of the screen (0..1), not pixels; a window's
   `initialX`/`initialY` are taken the same way, as the window's top left corner (a value above 1, e.g. a
   pixel count, is clamped to the edge). `api.gui.camera.getSize()` gives the screen in pixels.

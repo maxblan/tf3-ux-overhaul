@@ -15,6 +15,8 @@ settings.MOD_ID = "ui_overhaul_1"
 -- Feature keys, in the order of mod.json's params (each param's key is "uio_" .. key).
 settings.FEATURES = {
 	"line_manager", -- Line Manager: line and vehicle rows, model row, confirmations, add-stop hint
+	"vehicle_search", -- Line Manager: search field above the vehicle list
+	"lvm_columns", -- Line Manager in two columns: lines and stops left, vehicles right
 	"terminals", -- Select Terminals popover: three buttons per terminal, greyed terminals
 	"station_terminals", -- Station window: Select Terminals button per line stop
 	"line_window", -- Line window: Add/Remove Vehicle, vehicle rows, Stops card

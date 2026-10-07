@@ -108,6 +108,34 @@ local function busiest_line()
 	return best, best_count
 end
 
+--- An industry that a stop of one of the player's lines reaches (the Served by card lists that line),
+-- or nil.
+---@return Engine.Entity?
+local function served_industry()
+	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
+		for _j, stop in ipairs(component and component.stops or {}) do
+			local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
+			local station = group and group.stations[stop.station + 1]
+			for _k, catchable in ipairs(station and api.engine.system.catchmentAreaSystem.getStationCatchables(station, true)
+				or {}) do
+				if api.engine.getComponent(catchable, api.type.ComponentType.INDUSTRY) then return catchable end
+			end
+		end
+	end
+	return nil
+end
+
+--- Every vehicle of the player's lines.
+---@return Engine.Entity[]
+local function all_line_vehicles()
+	local result = {} ---@type Engine.Entity[]
+	for _i, line in ipairs(api.engine.system.lineSystem.getLinesForPlayer(api.engine.util.getPlayer())) do
+		for _j, vehicle in ipairs(line_vehicles(line)) do result[#result + 1] = vehicle end
+	end
+	return result
+end
+
 ---@param line Engine.Entity?
 ---@return boolean?
 local function stops_card(line)
@@ -277,6 +305,8 @@ end
 ---@field spot_x? number the gallery's free land for the track tool
 ---@field spot_y? number
 ---@field header_vehicle? Engine.Entity the vehicle whose window the title row checks use
+---@field search_vehicles? Engine.Entity[] the vehicles the vehicle search checks list
+---@field served_industry? Engine.Entity an industry a line reaches
 
 ---@class uo.testbench.GuiCheck
 ---@field name string unique, shown in the PASS/FAIL line
@@ -608,6 +638,93 @@ local checks = {
 		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
 		wait = 30,
 		check = function() return true, "restored" end,
+	},
+	{
+		-- the Line Manager in two columns: twice as wide, with the lines and stops left and the vehicles
+		-- right (see the shot); the window's width as a part of the screen in the log
+		name = "line_manager_columns",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.card_line = ctx.card_line or busiest_line()
+			api.gui.fireReactEvent("openVehicleManager", { openWithLineEntity = ctx.card_line })
+		end,
+		wait = 120,
+		shot = "line_manager_columns",
+		check = function()
+			local size = api.gui.byId.getSize("menu.management")
+			local shown = visible("menu.management")
+			debugPrint(string.format("[testbench] Line Manager size %.3f x %.3f (parts of the screen)", size.x, size.y))
+			-- the game's Line Manager is about 0.15 of a 3440 wide screen: in columns it is about twice that
+			return shown, string.format("line manager visible=%s width=%.3f height=%.3f (columns off: about half as wide)",
+				tostring(shown), size.x, size.y)
+		end,
+	},
+	{
+		-- the vehicle search: the list of all the player's vehicles, then a search for "Zug"
+		name = "vehicle_search_list",
+		act = function(ctx)
+			ctx.search_vehicles = all_line_vehicles()
+			api.gui.fireReactEvent("openVehicleManager", { openWithVehicleEntities = ctx.search_vehicles })
+		end,
+		wait = 90,
+		shot = "vehicle_search_list",
+		check = function()
+			api.gui.fireReactEvent("uio.debug.vehicle_search", { log = true })
+			-- the model row: its chips and "In all lines" side by side, as parts of the screen
+			local row, pull = api.gui.byId.getSize("uio.lvm.models"), api.gui.byId.getSize("uio.lvm.models.pull")
+			debugPrint(string.format("[testbench] model row %.4f wide, In all lines %.4f wide", row.x, pull.x))
+			return visible("menu.management"), "see the vehicle search log line (all vehicles listed)"
+		end,
+	},
+	{
+		name = "vehicle_search_match",
+		act = function() api.gui.fireReactEvent("uio.debug.vehicle_search", "Zug") end,
+		wait = 30,
+		shot = "vehicle_search_match",
+		check = function()
+			api.gui.fireReactEvent("uio.debug.vehicle_search", { log = true })
+			local none = visible("uio.lvm.search.none")
+			return not none, "no-match text visible=" .. tostring(none) .. " (expect false; rows in the log line)"
+		end,
+	},
+	{
+		name = "vehicle_search_none",
+		act = function() api.gui.fireReactEvent("uio.debug.vehicle_search", "xyzzy") end,
+		wait = 30,
+		shot = "vehicle_search_none",
+		check = function()
+			api.gui.fireReactEvent("uio.debug.vehicle_search", { log = true })
+			local none = visible("uio.lvm.search.none")
+			return none, "no-match text visible=" .. tostring(none) .. " (expect true)"
+		end,
+	},
+	{
+		name = "vehicle_search_cleared",
+		act = function() api.gui.fireReactEvent("uio.debug.vehicle_search", "") end,
+		wait = 30,
+		check = function()
+			api.gui.fireReactEvent("uio.debug.vehicle_search", { log = true })
+			local none = visible("uio.lvm.search.none")
+			return not none, "no-match text visible=" .. tostring(none) .. " (expect false; all vehicles back in the log)"
+		end,
+	},
+	{
+		-- the Served by card: each line with its cargo and its rate (see the shot)
+		name = "industry_served_rates",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			ctx.served_industry = served_industry()
+			if ctx.served_industry then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.served_industry, stack = false })
+			end
+		end,
+		wait = 150,
+		shot = "industry_served_rates",
+		check = function(ctx)
+			if not ctx.served_industry then return true, "skipped: no industry within reach of a line" end
+			local shown = visible("temp.view.entity_" .. tostring(ctx.served_industry))
+			return shown, "industry window open=" .. tostring(shown) .. " (see the Served by card in the shot)"
+		end,
 	},
 	{
 		-- the vehicle window's title row: a click on the rename button, aimed from outside the window,

@@ -13,9 +13,9 @@ local engine_react_util = require("::/gui/main/engine_react_util.tl")
 local line_react_util = require("::/gui/line_vehicle_mgmt/line_react_util.tl")
 local vehicle_util = require("::/gui/line_vehicle_mgmt/vehicle_util.tl")
 local lang_util = require("::/scripts/lang_util.tl")
-local cargo_util = require("::/gui/main/cargo_util.tl")
 local cargo_react_util = require("::/gui/main/cargo_react_util.tl")
 local vehicle_info = require("/ui_overhaul/gui/vehicle_info.lua")
+local line_cargo = require("/ui_overhaul/gui/line_cargo.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
 -- The base recipe as the module holds it while this mod loads, and safe calls of it (guard.base).
@@ -58,55 +58,6 @@ local function now()
 	return api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).gameTime
 end
 
---- Cargo type ids a line carries, passengers first: the capacities of its vehicles, sorted as the
--- line's header in the Line Manager (LineCargoDisplay) sorts them. A line without vehicles falls
--- back to the cargo its stops are configured to load. Engine reads only.
----@param line Engine.Entity
----@return CargoTypeId[]
-function lvm_rows.cargo_types(line)
-	local ids = cargo_util.getSortedProducedCargoTypes(
-		{ lineEntity = line, getTendency = true, showEmpty = true }, "CAPACITY", true, nil, true)
-	local result = {} ---@type CargoTypeId[]
-	for i, id in ipairs(ids) do result[i] = id end
-	if #result > 0 then return result end
-
-	local component = api.engine.getComponent(line, api.type.ComponentType.LINE)
-	local seen = {} ---@type table<CargoTypeId, boolean>
-	for _i, stop in ipairs(component and component.stops or {}) do
-		for index, load in ipairs(stop.stopConfig.load) do
-			local id = index - 1 -- an id vector: index - 1 is the cargo type id
-			if load and not seen[id] and api.engine.util.stock.isCargoTypeCurrentlyProduced(id) then
-				seen[id] = true
-				result[#result + 1] = id
-			end
-		end
-	end
-	table.sort(result)
-	local passengers = cargo_util.getPassengerCargoTypeId()
-	if seen[passengers] then
-		for i, id in ipairs(result) do
-			if id == passengers then table.remove(result, i) break end
-		end
-		table.insert(result, 1, passengers)
-	end
-	return result
-end
-
---- Splits cargo ids into the icons shown and the rest behind a "+N". When they do not all fit,
--- the last slot holds the "+N".
----@param ids CargoTypeId[]
----@param slots integer
----@return CargoTypeId[] shown
----@return CargoTypeId[] more
-function lvm_rows.cargo_slots(ids, slots)
-	local shown, more = {}, {} ---@type CargoTypeId[], CargoTypeId[]
-	local fit = #ids <= slots and slots or slots - 1
-	for i, id in ipairs(ids) do
-		if i <= fit then shown[#shown + 1] = id else more[#more + 1] = id end
-	end
-	return shown, more
-end
-
 --- Whether a vehicle's lifespan is reached and, if not, the share of it used so far. Like the base
 -- vehicle table's age cell (line_eow.script.tl LineTableCellAge), a model without a lifespan
 -- (lifespan 0, some modded models) counts as reached, so nothing is divided by it.
@@ -132,7 +83,7 @@ local function read(entity)
 			kind = "line",
 			vehicles = #api.engine.system.transportVehicleSystem.getLineVehicles(entity),
 			balance = api.engine.util.finance.calculateBalance({ entity }, from, t, true),
-			cargo = lvm_rows.cargo_types(entity),
+			cargo = line_cargo.cargo_types(entity),
 		}
 	end
 	local tv = api.engine.getComponent(entity, api.type.ComponentType.TRANSPORT_VEHICLE)
@@ -158,7 +109,7 @@ end
 ---@param ids CargoTypeId[]
 ---@return react.TreeNodeId
 local function cargo_column(entity, ids)
-	local shown, more = lvm_rows.cargo_slots(ids, CARGO_SLOTS)
+	local shown, more = line_cargo.cargo_slots(ids, CARGO_SLOTS)
 	local children = {} ---@type react.TreeNodeId[]
 	for _i, id in ipairs(shown) do
 		children[#children + 1] = cargo_react_util.makeCargoIcon(id, "uio-lvm-cargo-icon")

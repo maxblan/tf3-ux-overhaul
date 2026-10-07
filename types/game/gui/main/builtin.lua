@@ -97,6 +97,8 @@
 
 ---@class builtin.TextInputFieldParam: react.Param
 ---@field value? string
+---@field placeholderText? string shown while the field is empty
+---@field onTyping? fun(value: string) on every change while typing
 ---@field onValueChange? fun(value: string)
 ---@field onCancel? fun()
 ---@field onEditingModeChange? fun(editing: boolean)

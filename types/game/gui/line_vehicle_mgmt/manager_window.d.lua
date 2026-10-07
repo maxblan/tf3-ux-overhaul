@@ -3,6 +3,9 @@
 
 ---Api of the vehicle manager (the Line Manager's vehicle half).
 ---@class game.gui.line_vehicle_mgmt.manager_window.VehicleManagerApi
+---@field addVehiclesToVehicleListAndSelect fun(vehicleEntities: Engine.Entity[])
+---@field removeVehiclesFromVehicleList fun(vehicleEntities: Engine.Entity[])
+---@field clearVehicleList fun()
 ---@field selectVehicles fun(vehicleEntities: Engine.Entity[], selectEntities: boolean)
 ---@field isVehicleSelected fun(vehicleEntity: Engine.Entity): boolean
 ---@field numberSelectedVehicles fun(): integer

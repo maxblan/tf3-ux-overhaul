@@ -118,9 +118,13 @@ local function load_fixture_game()
 	end
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
+	-- the --with-mod mods: added even where the savegame's own entry is left out
+	local requested = {} ---@type table<string, true>
+	for _i, name in ipairs(fixture.mods or {}) do requested[name] = true end
 	for _, name in ipairs(added) do
-		-- --without-mod ui_overhaul_1 runs the checks without the mod, to tell the game's own faults
-		if not listed[name] and not without[name] then
+		-- --without-mod ui_overhaul_1 runs the checks without the mod, to tell the game's own faults; a mod
+		-- both left out and added (--without-mod X --with-mod X) moves to the end of the list
+		if not listed[name] and not (without[name] and not requested[name]) then
 			local mod = moved[name] or api.type.ModId.new()
 			mod.name = name
 			mods[#mods + 1], names[#names + 1] = mod, name
