@@ -34,6 +34,8 @@ styles.CLASSES = {
 	{ "construction", "on" }, -- construction.css.lua: the construction settings above the game bar
 	{ "minimize", "on" }, -- minimize.css.lua: the Line Manager keeps its height
 	{ "notifications", "on" }, -- notifications.css.lua: notification colours inside windows
+	{ "lvm_columns", "on" }, -- lvm_columns.css.lua: the Line Manager twice as wide
+	{ "line_manager", "on" }, -- lvm_rows.css.lua: room for the row figures in the vehicle list
 }
 
 -- the classes every window gets, ", "-separated; nil until decided or where none applies

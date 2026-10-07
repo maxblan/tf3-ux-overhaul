@@ -16,6 +16,28 @@
             "defaultIndex": 0
         },
         {
+            "key": "uio_vehicle_search",
+            "name": "Vehicle search",
+            "tooltip": "A search field above the Line Manager's vehicle list. It shows the vehicles whose name, model or line contains the text; selecting and every action reach only those.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
+            "key": "uio_lvm_columns",
+            "name": "Line Manager in two columns",
+            "tooltip": "The Line Manager twice as wide: the lines and the selected line's stops on the left, the vehicles on the right. With a gamepad it stays as it is.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
             "key": "uio_terminals",
             "name": "Select Terminals",
             "tooltip": "Three buttons per terminal instead of the drop-down list; the preferred terminal highlighted; terminals the line cannot use or reach greyed, with the reason.",
@@ -161,7 +183,7 @@
         {
             "key": "uio_industry",
             "name": "Industry window",
-            "tooltip": "The Development and Served by cards, and the switch for the red area of a blocked expansion.",
+            "tooltip": "The Development and Served by cards (each line with its cargo and rate), and the switch for the red area of a blocked expansion.",
             "uiType": "Button",
             "values": [
                 "On",

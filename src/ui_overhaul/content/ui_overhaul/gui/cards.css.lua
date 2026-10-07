@@ -49,5 +49,18 @@ function data()
 	add("R::UioIndustryDevelopment ToggleButton!uio-industry-area-toggle",
 		{ size = { 24, 24 }, minSize = { 24, 24 }, padding = { 3, 3, 3, 3 }, gravity = { 1, 0.5 } })
 	add("R::UioIndustryServedBy BoxLayout!uio-industry-lines", { innerSpacing = { 0, 2 } })
+	-- Served by rows: colour, the name (fills the row, cut short where long), the cargo icons and the
+	-- rate, right-aligned in a fixed width so the figures form a column
+	add("R::UioIndustryServedBy R::Component!uio-industry-line-name", { gravity = { -1, 0.5 } })
+	add("R::UioIndustryServedBy R::Component!uio-industry-line-cargo-column",
+		{ gravity = { 0, 0.5 }, margin = { 0, 6, 0, 6 } })
+	add("R::UioIndustryServedBy ImageView!uio-industry-line-cargo", { size = { 16, 16 }, margin = { 0, 0, 0, 2 },
+		gravity = { 0, 0.5 } })
+	add("R::UioIndustryServedBy TextView!uio-industry-line-more", { minSize = { 16, -1 }, textAlignment = { 0, 0.5 } })
+	add("R::UioIndustryServedBy TextView!uio-industry-line-rate",
+		{ size = { 96, -1 }, textAlignment = { 1, 0.5 }, gravity = { 0, 0.5 } })
+	for font, width in pairs({ medium = 108, large = 124 }) do
+		add("!font-" .. font .. " R::UioIndustryServedBy TextView!uio-industry-line-rate", { size = { width, -1 } })
+	end
 	return result
 end

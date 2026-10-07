@@ -19,6 +19,7 @@
 ---@field vehicleManagerStateRef react.Ref<game.gui.line_vehicle_mgmt.manager_window.VehicleManagerState>
 ---@field lineManagerStateRef react.Ref<game.gui.line_vehicle_mgmt.manager_window.LineManagerState>
 ---@field vehicleManagerRef react.RefWrapApi<game.gui.line_vehicle_mgmt.manager_window.VehicleManagerApi>
+---@field gamepadInputModeState react.State<boolean> whether the player uses a gamepad (the base shows no search field then)
 ---@field getModeState fun(): [game.gui.line_vehicle_mgmt.line_util.LVMMode, any] any: the mode's data, e.g. the stop number of a SEGMENT
 ---@field addFeedback fun(message: string, mode: string, dialogData?: game.gui.line_vehicle_mgmt.feedback_list_util.FeedbackDialogParam, id?: number)
 ---@field newLine fun(newLineStartingWithStation: game.gui.line_vehicle_mgmt.line_util.StationSelectionDetails, vehicleEntities: Engine.Entity[])

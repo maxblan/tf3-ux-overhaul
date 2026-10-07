@@ -5,7 +5,9 @@
 --     countdown, developed by hand, owned by the player). The game's own rule is in
 --     core/industry_development.lua.
 --   * Served by: the player's lines with a stop whose catchment area reaches the industry, each a
---     clickable name.
+--     clickable name with the cargo it carries (as the Line Manager's line rows show it) and its rate,
+--     what it can transport per year (the figure of the Line Manager and Statistics, so it can be held
+--     against the industry's production); lines that carry the industry's cargo come first.
 -- A plugin of ::IndustryEowExtensionPoint (industry_card.res.lua), rendered through the guarded
 -- stub industry_cards.script.lua. State functions only read the engine; rendering translates.
 --
@@ -27,6 +29,7 @@ local react = require("::/gui/main/react.lua")
 local base_industry_window = require("::/gui/entity_window/industry/industry.tl")
 -- loaded at render time (guard.plugin): only fully qualified paths reach this mod
 local development = require("ui_overhaul_1::/ui_overhaul/core/industry_development.lua")
+local line_cargo = require("ui_overhaul_1::/ui_overhaul/gui/line_cargo.lua")
 local builtin_wraps = require("ui_overhaul_1::/ui_overhaul/gui/builtin_wraps.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
 
@@ -39,6 +42,7 @@ local industry_cards = {}
 local REFRESH = 2.0 -- seconds
 local SERVED_REFRESH = 5.0 -- the line search walks all the player's stops
 local MAX_LINES = 8
+local CARGO_SLOTS = 3 -- cargo icons that fit before a line's rate in the Served by card (cards.css.lua)
 local BLOCKED_AREA_EVENT = "uio.industry.blocked_area"
 
 -- A card whose content fails shows nothing and logs once; its recipe declared its hooks before.
@@ -181,15 +185,51 @@ function industry_cards.live(facts, colliding)
 	return copy
 end
 
----A line and the 1-based index of its stop that reaches the industry.
----@alias uo.industry_cards.ServingLine [Engine.Entity, integer]
+---A line with a stop that reaches the industry.
+---@class uo.industry_cards.ServingLine
+---@field line Engine.Entity
+---@field stop integer 1-based index of its first stop that reaches the industry
+---@field rate integer what the line can transport per year, as the Line Manager and Statistics show it
+---@field cargo CargoTypeId[] what it carries, as the Line Manager's line rows show it
+---@field carries boolean it carries a cargo the industry takes in or makes
 
---- The player's lines with a stop whose catchment reaches the industry: { {line, stopIndex} }.
+--- The cargo types an industry takes in or makes: its stocks and its recipes' outputs.
+---@param stock_list_entity Engine.Entity
+---@return table<CargoTypeId, true>
+local function industry_cargo(stock_list_entity)
+	local result = {} ---@type table<CargoTypeId, true>
+	local stock_list = api.engine.getComponent(stock_list_entity, api.type.ComponentType.STOCK_LIST)
+	if not stock_list then return result end
+	for _i, stock in ipairs(stock_list.stocks) do result[stock.cargoType] = true end
+	for _i, rule in ipairs(stock_list.rules) do
+		for cargo, amount in pairs(rule.output) do
+			if amount > 0 then result[cargo] = true end
+		end
+	end
+	return result
+end
+
+--- Lines that carry the industry's cargo first, each group in the game's order of the lines.
+---@param lines uo.industry_cards.ServingLine[]
+---@return uo.industry_cards.ServingLine[]
+function industry_cards.order_lines(lines)
+	local result = {} ---@type uo.industry_cards.ServingLine[]
+	for _pass, carries in ipairs({ true, false }) do
+		for _i, entry in ipairs(lines) do
+			if entry.carries == carries then result[#result + 1] = entry end
+		end
+	end
+	return result
+end
+
+--- The player's lines with a stop whose catchment reaches the industry, with their rate and cargo;
+-- those that carry the industry's cargo first.
 ---@param entity Engine.Entity
 ---@return uo.industry_cards.ServingLine[]
 function industry_cards.read_lines(entity)
 	local industry = api.engine.getComponent(entity, api.type.ComponentType.INDUSTRY)
 	if not industry then return {} end
+	local own_cargo = industry_cargo(industry.stockList)
 	local targets = { [entity] = true, [industry.stockList] = true }
 	local reaches = {} ---@type table<Engine.Entity, boolean> station -> boolean, per pass
 	---@param station Engine.Entity
@@ -210,12 +250,18 @@ function industry_cards.read_lines(entity)
 			local group = api.engine.getComponent(stop.stationGroup, api.type.ComponentType.STATION_GROUP)
 			local station = group and group.stations[stop.station + 1]
 			if station and station_reaches(station) then
-				result[#result + 1] = { line, stop_index }
+				local cargo = line_cargo.cargo_types(line)
+				local carries = false
+				for _j, id in ipairs(cargo) do
+					if own_cargo[id] then carries = true break end
+				end
+				result[#result + 1] = { line = line, stop = stop_index, cargo = cargo, carries = carries,
+					rate = api.engine.util.line.calcLineStationThroughput(line) }
 				break
 			end
 		end
 	end
-	return result
+	return industry_cards.order_lines(result)
 end
 
 -- Texts ------------------------------------------------------------------------------------------------
@@ -383,13 +429,36 @@ local Development = react.RegisterRecipe("UioIndustryDevelopment", function(para
 	return vertical{}
 end)
 
--- The Served by card's content: entries of industry_cards.read_lines.
+-- Cargo icons of a line, as many as fit the column, the rest behind "+N" (tooltip: their names).
+---@param ids CargoTypeId[]
+---@return react.TreeNodeId
+local function line_cargo_icons(ids)
+	local shown, more = line_cargo.cargo_slots(ids, CARGO_SLOTS)
+	local children = {} ---@type react.TreeNodeId[]
+	for _i, id in ipairs(shown) do
+		children[#children + 1] = cargo_react_util.makeCargoIcon(id, "uio-industry-line-cargo")
+	end
+	if #more > 0 then
+		local names = {} ---@type string[]
+		for i, id in ipairs(more) do names[i] = api.res.cargoTypeRep.get(id).name end
+		children[#children + 1] = text("+" .. tostring(#more), "font-scale-body, uio-industry-line-more",
+			table.concat(names, ", "))
+	end
+	return builtin.Component{
+		meta = { class = "uio-industry-line-cargo-column" },
+		layout = builtin.BoxLayout{ orientation = builtin.type.Orientation.Horizontal, children = children },
+	}
+end
+
+-- The Served by card's content: entries of industry_cards.read_lines. Each line with what it carries
+-- and its rate, the figure the Line Manager and Statistics show for it.
 ---@param lines uo.industry_cards.ServingLine[]
 ---@return react.TreeNodeId
 local function render_served_by(lines)
 	if #lines == 0 then
 		return vertical{ text(_("No line of yours stops within reach of this industry."), "font-scale-body") }
 	end
+	local rate_tooltip = _("Rate") .. ": " .. _("Amount of cargo or passengers a line can transport per year.")
 	local children = {} ---@type react.TreeNodeId[]
 	for i, entry in ipairs(lines) do
 		if i > MAX_LINES then
@@ -398,12 +467,20 @@ local function render_served_by(lines)
 			break
 		end
 		children[#children + 1] = builtin.BoxLayout{
-			meta = { localKey = tostring(entry[1]) },
+			meta = { localKey = tostring(entry.line) },
 			orientation = builtin.type.Orientation.Horizontal,
 			children = {
-				line_react_util.ColorWidget{ entity = entry[1] },
-				line_react_util.NameTextView{ entity = entry[1], locationButton = false, stackEntityOpen = true,
-					editMode = false },
+				line_react_util.ColorWidget{ entity = entry.line },
+				builtin.Component{
+					meta = { class = "uio-industry-line-name" },
+					layout = builtin.BoxLayout{ children = {
+						line_react_util.NameTextView{ entity = entry.line, locationButton = false, stackEntityOpen = true,
+							editMode = false },
+					} },
+				},
+				line_cargo_icons(entry.cargo),
+				text(lang_util.format(_("{currentProgress} per Year"), { currentProgress = lang_util.formatInt(entry.rate) }),
+					"font-scale-body, uio-industry-line-rate", rate_tooltip),
 			},
 		}
 	end

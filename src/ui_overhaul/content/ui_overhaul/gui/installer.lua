@@ -61,6 +61,8 @@ installer.INSTALLS = {
 	{ feature = "promotion_pending", module = "window_tweaks", fn = "install_promotion",
 		label = "promotion pending text" },
 	{ feature = "line_manager", module = "lvm_tweaks", label = "Line Manager tweaks" },
+	{ feature = "vehicle_search", module = "lvm_tweaks", fn = "install_search", label = "Line Manager vehicle search" },
+	{ feature = "lvm_columns", module = "lvm_columns", label = "Line Manager columns" },
 }
 
 local early_done, late_done = false, false
