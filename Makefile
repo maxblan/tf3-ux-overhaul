@@ -67,8 +67,8 @@ typecheck: ## Type-check all Lua files with the Lua Language Server (strict, see
 	@test -x "$(LUALS)" || { echo "run 'make deps' first"; exit 1; }
 	"$(LUALS)" --check . --checklevel=Warning --trust_all_plugins --logpath=.lua-check
 
-test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods, MODS_FIRST=1 before this one; ONLY="check_a check_b" runs just those GUI checks; OFF="feature_a" switches those features off; WINDOW=1280x720 FONT=LARGE UI_SCALE=1.5 for other screens)
-	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(if $(filter-out 0,$(MODS_FIRST)),--mods-first) $(foreach c,$(ONLY),--only $(c)) $(foreach f,$(OFF),--off $(f)) $(if $(WINDOW),--window $(WINDOW)) $(if $(FONT),--font $(FONT)) $(if $(UI_SCALE),--ui-scale $(UI_SCALE)) $(if $(filter-out 0,$(NO_SHOTS)),--no-shots)
+test-ingame: content ## Run the in-game scenarios (launches the game; SAVE="name" runs on a copy of that savegame; WITH="mod_a mod_b" adds installed mods, MODS_FIRST=1 before this one; WITHOUT="mod_c" leaves the savegame's mods out; ONLY="check_a check_b" runs just those GUI checks; OFF="feature_a" switches those features off; WINDOW=1280x720 FONT=LARGE UI_SCALE=1.5 for other screens)
+	spec/ingame/run.sh $(if $(SAVE),--save "$(SAVE)") $(foreach m,$(WITH),--with-mod $(m)) $(foreach m,$(WITHOUT),--without-mod $(m)) $(if $(filter-out 0,$(MODS_FIRST)),--mods-first) $(foreach c,$(ONLY),--only $(c)) $(foreach f,$(OFF),--off $(f)) $(if $(WINDOW),--window $(WINDOW)) $(if $(FONT),--font $(FONT)) $(if $(UI_SCALE),--ui-scale $(UI_SCALE)) $(if $(filter-out 0,$(NO_SHOTS)),--no-shots)
 
 check: lint typecheck test test-ingame ## Run lint, the type check and all tests
 

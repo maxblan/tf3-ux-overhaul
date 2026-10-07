@@ -73,11 +73,11 @@ Where this mod and another change the same part, the one that comes first in the
 
 A change is not finished until you have looked at it in the game. `make test-ingame` writes a screenshot of every changed screen to `spec/ingame/results/` (the checks in `spec/ingame/ui_overhaul_testbench/` call `shot`). Compare them with the vanilla screen: sizes, spacing, fonts, nothing clipped or cut off. Use the game's widgets and style classes instead of your own colours and sizes.
 
-The screenshot shows only the game window (`spec/ingame/window_shot.ps1`), also while other windows lie in front of it, so you can use the computer during a run. Only the gallery (`--gallery`) captures the primary screen and needs the game in front.
+The screenshot shows only the game window (`spec/ingame/window_shot.ps1`), also while other windows lie in front of it, so you can use the computer during a run. Only the gallery (`--gallery`) captures the primary screen and needs the game in front. A check can also ask for a real mouse click (`[testbench] CLICK x y`, done by `spec/ingame/mouse.ps1`, e.g. the title row's rename button): it brings the game to the front and skips the click, logged in the shots' `mouse.log`, where another window still lies over the game, so leave mouse and keyboard alone while such checks run.
 
 Check other screen shapes and text sizes too (`WINDOW=1024x768`, `WINDOW=2560x1080`, `FONT=LARGE`, `UI_SCALE=1.5`): positions in the game's GUI are parts of the screen, and a window the game opens near an edge can grow past it once its content is laid out (docs/api_cookbook.md, 9.3).
 
-Hovers, second clicks and anything that needs a long game session can't be automated. List them under "Still unverified" in the pull request.
+Most hovers, second clicks and anything that needs a long game session aren't automated. List them under "Still unverified" in the pull request. To find which mod of a savegame causes a crash, leave mods out one by one: `WITHOUT="mod_a mod_b"` (also `ui_overhaul_1`, to see whether the game crashes on its own).
 
 ## Scope
 

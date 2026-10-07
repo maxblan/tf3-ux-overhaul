@@ -1,7 +1,7 @@
 -- Minimize (minimize.lua): the window's own title is hidden; the header row in its place holds the
--- title, the rename button (styled by the game as Window::TitleLayout Button!rename) and the minimize
--- button in the close button's design (the game's fake-builtin-window-close-button style), so the
--- buttons sit right-aligned before the title bar's own ones. A folded window's content is not drawn
+-- rename button (styled by the game as Window::TitleLayout Button!rename), the title and the minimize
+-- button in the close button's design (the game's fake-builtin-window-close-button style), which sits
+-- right-aligned before the title bar's own buttons. A folded window's content is not drawn
 -- and takes no space; the windows the game gives a fixed size keep their width and lose their height.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
@@ -23,7 +23,7 @@ function data()
 	-- UioWindowHeader's root (class alone): at the top of the title bar, as the game's title and close
 	-- button are (gravity { -1, 0 } and { 1, 0 }, builtin.css.lua), so the buttons line up
 	add("BoxLayout!uio-window-header", { gravity = { -1, 0 } })
-	-- as the game's Window::Title (builtin.css.lua)
+	-- as the game's Window::Title (builtin.css.lua): fills the row, so a long title is cut short
 	add("R::UioWindowHeader TextView!uio-window-title, R::UioWindowHeader TextInputField!uio-window-title",
 		{ margin = { 4, 4, 4, 4 }, padding = { 4, 4, 4, 4 }, gravity = { -1, 0.5 } })
 	-- the close button's measures (Window::TitleLayout Button!close: padding 8 around an 18 px symbol, no

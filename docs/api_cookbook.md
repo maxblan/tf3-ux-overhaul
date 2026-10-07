@@ -1097,6 +1097,7 @@ end)
 ```
 - Signature: `makeVehicleSendToDepotCmd(vehicle, sellOnArrival, jumpToDepotEntity?)` (`apidef/api/cmd.d.tl:910-915`). The command goes to the nearest reachable depot, and the optional third argument teleports the vehicle there.
 - The base never passes `sellOnArrival = true`: there are no call sites. Read the flag back via `tv.sellOnArrival`.
+- Selling on arrival can crash the game itself. In the savegame World#1, train 108611 (the only vehicle on its line) sent with `sellOnArrival = true` crashes the simulation thread as it is sold in the depot: "Assertion `it != components.end()' failed ... Entity: 108611, Notified Entity: 108611, Component Type Index: 72" (TransportVehicle), "ecs::Engine::GetComponentDataIndex". This happens with no mod but the testbench (`make test-ingame WITHOUT="... ui_overhaul_1"`, build 40408, 2026-10-07). In-game checks that sell a vehicle must not run long after it reaches the depot.
 - The base enables the button only while `state ~= IN_DEPOT and state ~= GOING_TO_DEPOT` (`vehicle.tl:352-355`).
 - `line_util.sendVehiclesToDepot`, `sendVehiclesToLine` and `sellVehicle` are not module functions. They are fields of the LVM-internal `commonParams` record, declared in `line_util.d.tl:551-561` and implemented in `manager_window.tl:7208-7264`, and are unusable from a mod.
 
@@ -1532,5 +1533,16 @@ Observed in game (build 40408, 2026-10-05, with 13 mod.io mods active in both or
   screen, its content spans 0.829..1.047). Measure the content a few steps after it opened
   (`getPosition(0, 0)` and `(1, 1)` of a node inside it, in `react.onStep`) and open it again further left
   and up (`terminals.placement`).
+- An entity window's title bar shows the pin button once the mouse is over the window (`pinnable`, set by
+  `view_manager.tl` with mouse input). It is added before the close button, so everything right-aligned before
+  it, the window's `header` slot included, moves left by its width (39 pixels at 3440x1440): a button aimed at
+  from outside the window moves away under the cursor as it comes in, and its neighbour on the right takes the
+  click (observed in game, build 40408). Buttons there that must not take each other's clicks go at the left
+  of the header, before a title that fills the row (`minimize.lua`). A `TextView` with gravity 0 keeps its
+  natural width: a long title then runs over the title bar's buttons; with gravity -1 it is cut short.
+- The testbench (a game script with `guiUpdate`) runs in another Lua state than the mod's recipes:
+  `require` of a mod module there loads a second copy, and its recipes fail to register. A check reads the
+  component tree (`api.gui.byId`) and the log; a debug event of the mod logs what the check needs (and asks
+  `run.sh` for a real click with `[testbench] CLICK x y`, as `minimize.lua` does on `uio.debug.header`).
 
 - `builtin.Component{ layout = X }`: `X` must be a layout builtin (`builtin.BoxLayout{...}` ...). A recipe there (even one whose root is a layout) crashes the game natively, without a Lua error: "Item of Component must be a layout" (`react_builtin.cpp:564`, observed in game 2026-10, build 40408). Put the recipe inside a `BoxLayout`. `make lint` rejects `layout = <not builtin>`.

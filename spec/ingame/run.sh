@@ -12,7 +12,9 @@
 #                  terminals); repeatable. The GUI checks expect that part vanilla.
 #   --with-mod ID  also activate the installed mod ID (its file system name, as the game log shows it
 #                  in "will be added to filesystem ID"), e.g. to check compatibility; repeatable.
-#   --gallery      shoot the gallery scenes (gui_checks.lua) instead of running the checks, paused and
+#   --without-mod ID  leave the savegame's mod ID out (with --save), e.g. to find the mod behind a
+#                  crash; repeatable.
+#   --gallery     shoot the gallery scenes (gui_checks.lua) instead of running the checks, paused and
 #                  with only the game's own mods besides this one; needs --save. The cursor is parked
 #                  at the top edge before each shot, so nothing shows a hover state.
 #   --vanilla      with --gallery: without the mod, for the "before" shots
@@ -29,6 +31,7 @@ timeout=900
 keep_testbench=0
 save=""
 with_mods=()
+without_mods=()
 only=()
 off=()
 gallery=0
@@ -45,6 +48,7 @@ while [ $# -gt 0 ]; do
 		--keep-testbench) keep_testbench=1; shift ;;
 		--save) save="$2"; shift 2 ;;
 		--with-mod) with_mods+=("$2"); shift 2 ;;
+		--without-mod) without_mods+=("$2"); shift 2 ;;
 		--mods-first) mods_first=1; shift ;;
 		--only) only+=("$2"); shift 2 ;;
 		--off) off+=("$2"); shift 2 ;;
@@ -159,6 +163,8 @@ if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ ${
 	|| [ "$gallery" -eq 1 ]; then
 	extra=""
 	for m in "${with_mods[@]}"; do extra="$extra\"$m\", "; done
+	without_list=""
+	for m in "${without_mods[@]}"; do without_list="$without_list\"$m\", "; done
 	only_list=""
 	for c in "${only[@]}"; do only_list="$only_list\"$c\", "; done
 	off_list=""
@@ -172,9 +178,10 @@ if [ -n "$save" ] || [ ${#with_mods[@]} -gt 0 ] || [ ${#only[@]} -gt 0 ] || [ ${
 	[ "$gallery" -eq 1 ] && flags="$flags gallery = true,"
 	[ "$vanilla" -eq 1 ] && flags="$flags vanilla = true,"
 	[ "$mods_first" -eq 1 ] && flags="$flags mods_first = true,"
-	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s}, off = { %s},%s }\n' \
-		"$fixture_save" "$extra" "$only_list" "$off_list" "$flags" > "$staged_fixture"
+	printf -- '-- Written by spec/ingame/run.sh\nreturn { save = %s, mods = { %s}, only = { %s}, off = { %s}, without = { %s},%s }\n' \
+		"$fixture_save" "$extra" "$only_list" "$off_list" "$without_list" "$flags" > "$staged_fixture"
 	if [ ${#with_mods[@]} -gt 0 ]; then echo "with mods: ${with_mods[*]}"; fi
+	if [ ${#without_mods[@]} -gt 0 ]; then echo "without mods: ${without_mods[*]}"; fi
 	if [ ${#off[@]} -gt 0 ]; then echo "features off: ${off[*]}"; fi
 fi
 
@@ -199,25 +206,22 @@ capture_screen() {
 park_cursor() {
 	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point ([int](\$b.Left+\$b.Width/2)),\$b.Top" < /dev/null > /dev/null 2>&1
 }
-# A hover or a click the testbench asks for ("[testbench] MOUSE x y" / "CLICK x y", screen pixels): the
-# cursor goes a few pixels off and back, so the game sees it move, and stays there for the next shot.
-# The click helper is compiled before the game starts: compiling it while the game runs hung (observed).
-mouse_dll_win=""
-if [ "$gallery" -eq 1 ]; then
-	# on C: (.NET refuses to load an assembly from the WSL share, observed)
-	mkdir -p "$results_dir"
-	mouse_dll="$results_dir/uio_mouse.dll"
-	rm -f "$mouse_dll"
-	mouse_dll_win="$(wslpath -w "$mouse_dll")"
-	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -OutputAssembly '$mouse_dll_win' -TypeDefinition 'public static class UioMouse { [System.Runtime.InteropServices.DllImport(\"user32.dll\")] public static extern void mouse_event(int f, int dx, int dy, int d, int e); }'" < /dev/null
-	[ -f "$mouse_dll" ] || { echo "could not build the mouse helper" >&2; exit 1; }
-fi
+# A hover or a click the testbench asks for ("[testbench] MOUSE x y" / "CLICK x y", screen pixels),
+# done by mouse.ps1, which clicks only where the game's window is in front. Its helper is built for
+# every run (the gallery hovers, checks click) before the game starts, on C: (.NET refuses to load an
+# assembly from the WSL share, observed).
+mouse_ps1="$(wslpath -w "$repo/spec/ingame/mouse.ps1")"
+mkdir -p "$results_dir"
+mouse_dll="$results_dir/uio_mouse.dll"
+rm -f "$mouse_dll"
+mouse_dll_win="$(wslpath -w "$mouse_dll")"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$mouse_ps1" -dll "$mouse_dll_win" -build < /dev/null
+[ -f "$mouse_dll" ] || { echo "could not build the mouse helper" >&2; exit 1; }
 mouse_at() {
-	local click=""
-	if [ "${3:-}" = "click" ]; then
-		click="[Reflection.Assembly]::LoadFile('$mouse_dll_win') | Out-Null; Start-Sleep -Milliseconds 150; [UioMouse]::mouse_event(2,0,0,0,0); Start-Sleep -Milliseconds 80; [UioMouse]::mouse_event(4,0,0,0,0);"
-	fi
-	powershell.exe -NoProfile -NonInteractive -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point ($1 - 6),($2 - 6); Start-Sleep -Milliseconds 120; [System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point $1,$2; $click" < /dev/null >> "$shots_dir/mouse.log" 2>&1
+	local click=()
+	[ "${3:-}" = "click" ] && click=(-click)
+	powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$mouse_ps1" -dll "$mouse_dll_win" \
+		-x "$1" -y "$2" "${click[@]}" < /dev/null >> "$shots_dir/mouse.log" 2>&1
 }
 watch_shots() {
 	set +e # a failed step must not end the watcher
