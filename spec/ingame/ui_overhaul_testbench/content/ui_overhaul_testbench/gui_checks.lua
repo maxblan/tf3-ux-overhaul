@@ -65,6 +65,10 @@ local EASY_TERMINALS = wins("zhenya_easy_terminal_assignment")
 local FINANCIAL_STATEMENTS = wins("tcoleman_financial_statements_1")
 -- Development and lines cards in the industry window.
 local INDUSTRY_ENHANCED = wins("cayde_industry_enhanced_1")
+-- Replaces the vehicle window (a top bar with its own minimize to a bar at the screen's edge).
+local CLEAN_VEHICLE_VIEW = position("cayde_vue_vehicule_1") ~= nil
+-- A window of its own, docked next to the Line Manager, opened from the mod buttons at the top left.
+local SUPPLY_CHAIN_MANAGER = position("dgbooth_supply_chain_manager_1") ~= nil
 
 ---@param id string
 ---@return boolean
@@ -272,6 +276,7 @@ end
 ---@field public protected? Engine.Entity a protected vehicle; `public` since the name is also a keyword
 ---@field spot_x? number the gallery's free land for the track tool
 ---@field spot_y? number
+---@field header_vehicle? Engine.Entity the vehicle whose window the title row checks use
 
 ---@class uo.testbench.GuiCheck
 ---@field name string unique, shown in the PASS/FAIL line
@@ -279,6 +284,25 @@ end
 ---@field wait? integer guiUpdate calls between act and check
 ---@field shot? string screenshot name: run.sh captures the screen after the check
 ---@field check fun(ctx: uo.testbench.GuiContext): boolean?, string passed, and details
+
+--- Whether the screen is the one the fixed mouse positions of some checks were taken on (3440 x 1440):
+-- elsewhere they would point at something else, and those checks pass as skipped.
+---@return boolean
+local function reference_screen()
+	local screen = api.gui.camera.getSize()
+	return screen.x == 3440 and math.abs(screen.y - 1440) <= 1
+end
+
+--- Asks run.sh to move the mouse to screen pixel `x`, `y` (and to click there with `click`): hovers,
+-- real clicks and the track tool's first point cannot be driven otherwise. run.sh does it in log
+-- order, before the next SHOT, and leaves the cursor there for that shot.
+---@param x number
+---@param y number
+---@param click? boolean
+local function mouse(x, y, click)
+	debugPrint(string.format("[testbench] %s %d %d", click and "CLICK" or "MOUSE", math.floor(x + 0.5),
+		math.floor(y + 0.5)))
+end
 
 ---@type uo.testbench.GuiCheck[]
 local checks = {
@@ -373,6 +397,37 @@ local checks = {
 		check = function()
 			local stats, lvm = visible("menu.statistics.window"), visible("menu.management")
 			return stats and lvm, string.format("statistics=%s line manager=%s", tostring(stats), tostring(lvm))
+		end,
+	},
+	{
+		-- with Supply Chain Manager: its window, opened by its mod button (the third at the top left on a
+		-- 3440 x 1440 screen, seen in a shot), next to the Line Manager
+		name = "supply_chain_manager_window",
+		act = function()
+			if SUPPLY_CHAIN_MANAGER and reference_screen() then mouse(176, 42, true) end
+		end,
+		wait = 240,
+		shot = "supply_chain_manager_window",
+		check = function()
+			if not (SUPPLY_CHAIN_MANAGER and reference_screen()) then return true, "skipped" end
+			local shown = visible("dgbooth_supply_chain_manager_window_1")
+			return shown, "window visible=" .. tostring(shown)
+		end,
+	},
+	{
+		-- with Supply Chain Manager: its "add to the plan" button next to Locate in a Line Manager row, shown
+		-- while the mouse is over the row (the first line row; the Line Manager starts lower with this mod's
+		-- title row, 3440 x 1440 screen)
+		name = "supply_chain_manager_row",
+		act = function()
+			if SUPPLY_CHAIN_MANAGER and reference_screen() then
+				mouse(280, position("ui_overhaul_1") and 292 or 228)
+			end
+		end,
+		wait = 120,
+		shot = "supply_chain_manager_row",
+		check = function()
+			return true, (SUPPLY_CHAIN_MANAGER and reference_screen()) and "see the shot" or "skipped"
 		end,
 	},
 	{
@@ -553,6 +608,128 @@ local checks = {
 		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
 		wait = 30,
 		check = function() return true, "restored" end,
+	},
+	{
+		-- the vehicle window's title row: a click on the rename button, aimed from outside the window,
+		-- renames (reported: the minimize button took it, as the row moved left when the engine showed
+		-- its pin button). Before the vehicle actions: a vehicle they sell can crash the game when it
+		-- reaches the depot (the game's own fault, see docs/api_cookbook.md), so nothing runs long after them.
+		name = "title_row_park_mouse",
+		act = function()
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			-- the mouse off the window to come (entity windows open at the right edge): the engine shows
+			-- the pin button once the mouse is over the window, and the click comes from outside
+			mouse(20, api.gui.camera.getSize().y / 2)
+		end,
+		wait = 180,
+		check = function() return true, "mouse parked" end,
+	},
+	{
+		name = "title_row_buttons",
+		act = function(ctx)
+			local line = busiest_line()
+			ctx.header_vehicle = line and oldest_vehicle(line)
+			if ctx.header_vehicle then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.header_vehicle, stack = false })
+			end
+		end,
+		wait = 120,
+		shot = "title_row",
+		check = function(ctx)
+			if not ctx.header_vehicle then return true, "skipped: no vehicle" end
+			return true, "vehicle window opened"
+		end,
+	},
+	{
+		-- a real click on the rename button's centre (minimize.lua logs the buttons' pixels, "[ui_overhaul]
+		-- title row ...", and asks run.sh for the click): the title becomes a text field (the log line
+		-- after the click says editing=true) and the window stays unfolded
+		name = "title_row_rename_click",
+		act = function(ctx)
+			if ctx.header_vehicle then api.gui.fireReactEvent("uio.debug.header", { click = "rename" }) end
+		end,
+		wait = 300,
+		shot = "title_row_after_rename_click",
+		check = function(ctx)
+			if not ctx.header_vehicle then return true, "skipped: no vehicle" end
+			local id = "temp.view.entity_" .. tostring(ctx.header_vehicle)
+			local window, content = visible(id), visible("uio.minimize." .. id)
+			return window and content, string.format("window open=%s content visible=%s (expect true, true; "
+				.. "editing in the title row log line)", tostring(window), tostring(content))
+		end,
+	},
+	{
+		-- the title row's state after the click, in its log line
+		name = "title_row_state",
+		act = function() api.gui.fireReactEvent("uio.debug.header", nil) end,
+		wait = 10,
+		check = function() return true, "logged" end,
+	},
+	{
+		-- a long name (in the savegame copy): the title is cut short with the buttons in the window,
+		-- not widening it (see the shot and the title row log line)
+		name = "title_row_long_name",
+		act = function(ctx)
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			if ctx.header_vehicle then
+				api.cmd.sendCommand(api.cmd.makeEntitySetNameCmd(ctx.header_vehicle,
+					"Interregio Express Bodensee - Oberschwaben - Allgaeu - Muenchen Hauptbahnhof"))
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.header_vehicle, stack = false })
+			end
+		end,
+		wait = 120,
+		shot = "title_row_long_name",
+		check = function(ctx)
+			if not ctx.header_vehicle then return true, "skipped: no vehicle" end
+			api.gui.fireReactEvent("uio.debug.header", nil)
+			return visible("temp.view.entity_" .. tostring(ctx.header_vehicle)), "window open"
+		end,
+	},
+	{
+		name = "title_row_close",
+		act = function() api.gui.fireReactEvent("closeAllWindows", nil) end,
+		wait = 30,
+		check = function() return true, "closed" end,
+	},
+	{
+		-- with Clean Vehicle View: its minimize (">" in its top bar) closes the vehicle window and opens
+		-- its bar at the screen's edge, a window of its own; then the vehicle window again
+		name = "clean_vehicle_view_minimize",
+		act = function(ctx)
+			ctx.header_vehicle = nil
+			if not (CLEAN_VEHICLE_VIEW and reference_screen()) then return end
+			local line = busiest_line()
+			ctx.header_vehicle = line and oldest_vehicle(line)
+			if ctx.header_vehicle then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.header_vehicle, stack = false })
+				-- the ">" button, with the vehicle window at the screen's right edge (seen in a shot)
+				mouse(2830, 100, true)
+			end
+		end,
+		wait = 300,
+		shot = "clean_vehicle_view_minimized",
+		check = function(ctx)
+			if not ctx.header_vehicle then return true, "skipped" end
+			local bar, window = visible("cayde.vue.mini"), visible("temp.view.entity_" .. tostring(ctx.header_vehicle))
+			return bar and not window, string.format("bar=%s vehicle window=%s (expect true, false)",
+				tostring(bar), tostring(window))
+		end,
+	},
+	{
+		name = "clean_vehicle_view_reopen",
+		act = function(ctx)
+			if ctx.header_vehicle then
+				api.gui.fireReactEvent("selectEntity", { entity = ctx.header_vehicle, stack = false })
+			end
+		end,
+		wait = 180,
+		shot = "clean_vehicle_view_reopened",
+		check = function(ctx)
+			if not ctx.header_vehicle then return true, "skipped" end
+			local shown = visible("temp.view.entity_" .. tostring(ctx.header_vehicle))
+			api.gui.fireReactEvent("closeAllWindows", nil)
+			return shown, "vehicle window open=" .. tostring(shown)
+		end,
 	},
 	{
 		-- the Finances window: the title row (title, rename, minimize before close) and, once folded, no
@@ -1332,17 +1509,6 @@ local function blocked_industry()
 	return best
 end
 
-
---- Asks run.sh to move the mouse to screen pixel `x`, `y` (and to click there with `click`): hovers
--- and the track tool's first point cannot be driven otherwise. run.sh does it in log order, before
--- the next SHOT, and leaves the cursor there for that shot.
----@param x number
----@param y number
----@param click? boolean
-local function mouse(x, y, click)
-	debugPrint(string.format("[testbench] %s %d %d", click and "CLICK" or "MOUSE", math.floor(x + 0.5),
-		math.floor(y + 0.5)))
-end
 
 --- The screen pixel of world point `x`, `y` on the ground (plus `up` metres).
 ---@param x number

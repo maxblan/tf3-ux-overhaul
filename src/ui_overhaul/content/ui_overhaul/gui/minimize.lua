@@ -8,10 +8,16 @@
 -- The module field builtin.Window, which base recipes look up when they render, is wrapped:
 --   * header: the engine draws the window's header slot in the title bar, but before the title, so
 --     a button there would sit left of the title and cut long titles short. The slot therefore holds
---     the whole title row (UioWindowHeader): the title, the rename button of a renamable window
---     with its own text field, and the minimize button, right-aligned before the title bar's own
---     buttons (locate, pin, close; the engine places the header before them). The engine's title
---     and rename button are switched off (class uio-minimizable, titleEditable = false);
+--     the whole title row (UioWindowHeader): the rename button of a renamable window, the title (or
+--     the rename text field) and the minimize button, right-aligned before the title bar's own
+--     buttons (locate, pin, close; the engine places the header before them). The engine shows the
+--     pin button only while the mouse is over the window, and everything right-aligned before it
+--     moves left by the pin's width then (observed in game): a rename button there moved away under
+--     the cursor as it came in, and the minimize button took the click. At the left edge, before the
+--     title, the rename button stays where it is. The title fills the row and is cut short where it
+--     is long; at its natural width, with the rename button after it, a long title ran over the title
+--     bar's buttons (observed in game). The engine's title and rename button are switched off (class
+--     uio-minimizable, titleEditable = false);
 --   * content: wrapped in UioMinimizable, whose component is hidden by id while minimized
 --     (api.gui.byId.setVisible; it also carries the class uio-folded);
 --   * a window built by a wrapper recipe of builtin.Window (Finances, Company, Statistics ...) also
@@ -148,18 +154,38 @@ end)
 ---@field onTitleChange? fun(title: string)
 ---@field emptyNameAllowed? boolean as the window's own parameter: nil means allowed
 
---- The title row's content; `editing` is the rename state, `field` the text field's node ref.
+-- testbench: where a rendered node lies on the screen, in pixels ("left,top-right,bottom"), and its
+-- centre; nil where it is not rendered
+---@param ref react.RefWrap
+---@return string?, integer?, integer?
+local function pixels_of(ref)
+	local node = ref:get()
+	if not node then return nil end
+	local screen = api.gui.camera.getSize()
+	local top_left, bottom_right = node:getPosition(0, 0), node:getPosition(1, 1)
+	local l, t = top_left.x * screen.x, top_left.y * screen.y
+	local r, b = bottom_right.x * screen.x, bottom_right.y * screen.y
+	return string.format("%.0f,%.0f-%.0f,%.0f", l, t, r, b), math.floor((l + r) / 2 + 0.5), math.floor((t + b) / 2 + 0.5)
+end
+
+---The node refs of the title row.
+---@class uo.minimize.HeaderRefs
+---@field field react.RefWrap the rename text field
+---@field rename react.RefWrap
+---@field minimize react.RefWrap
+
+--- The title row's content; `editing` is the rename state.
 ---@param params uo.minimize.WindowHeaderParams
 ---@param folded boolean
 ---@param editing react.State<boolean>
 ---@param focus_pending react.Ref<boolean>
----@param field react.RefWrap
+---@param refs uo.minimize.HeaderRefs
 ---@return react.TreeNodeId
-local function render_header(params, folded, editing, focus_pending, field)
+local function render_header(params, folded, editing, focus_pending, refs)
 	local title ---@type react.TreeNodeId
 	if params.editable and editing:old() then
 		local function stop() editing:set(false) end
-		title = builtin.TextInputField(react.ref(field), {
+		title = builtin.TextInputField(react.ref(refs.field), {
 			meta = { class = "font-scale-title-2, uio-window-title" },
 			value = params.title,
 			acceptOnFocusLoss = true,
@@ -181,25 +207,27 @@ local function render_header(params, folded, editing, focus_pending, field)
 			tooltipWhenClipped = params.title,
 		}
 	end
-	local children = { title } ---@type react.TreeNodeId[]
+	local children = {} ---@type react.TreeNodeId[]
 	if params.editable then
-		children[#children + 1] = builtin.Button{
+		-- before the title, at the left edge: it keeps its place when the engine shows the pin button
+		children[1] = builtin.Button(react.ref(refs.rename), {
 			meta = { class = "rename, uio-window-rename", tooltip = _("Rename") },
 			content = builtin.ImageView{ path = ICON_RENAME, scaling = builtin.type.ImageViewScaling.AutoFit },
 			onClick = function()
 				focus_pending:set(true)
 				editing:set(true)
 			end,
-		}
+		})
 	end
-	children[#children + 1] = builtin.Button{
+	children[#children + 1] = title
+	children[#children + 1] = builtin.Button(react.ref(refs.minimize), {
 		-- no component id: a window can be rendered twice, and ids must be unique
 		meta = { class = "fake-builtin-window-close-button, uio-minimize",
 			tooltip = folded and _("Restore") or _("Minimize") },
 		content = builtin.ImageView{ path = folded and ICON_RESTORE or ICON_MINIMIZE,
 			scaling = builtin.type.ImageViewScaling.AutoFit },
 		onClick = function() minimize.toggle(params.key) end,
-	}
+	})
 	return builtin.BoxLayout{
 		meta = { class = "uio-window-header" },
 		orientation = builtin.type.Orientation.Horizontal,
@@ -214,17 +242,36 @@ local WindowHeader = react.RegisterRecipe("UioWindowHeader", function(params)
 	local folded = use_folded(params.key)
 	local editing = react.useState(false)
 	local focus_pending = react.useRef(false)
+	-- one hook per statement: the order of a table constructor's fields is not fixed
 	local field = react.useNodeRef(builtin.TextInputField)
+	local rename = react.useNodeRef(builtin.Button)
+	local minimize_button = react.useNodeRef(builtin.Button)
+	local refs = { field = field, rename = rename, minimize = minimize_button } ---@type uo.minimize.HeaderRefs
 	react.onStep(function()
 		-- the rename field exists one step after the rename click: give it the keyboard
 		if not focus_pending:get() then return end
-		local node = field:get()
+		local node = refs.field:get()
 		if not node then return end
 		focus_pending:set(false)
 		local ok, err = pcall(function() node:focus() end)
 		if not ok then report("rename focus", err) end
 	end)
-	local ok, node = pcall(render_header, params, folded, editing, focus_pending, field)
+	-- testbench: "uio.debug.header" logs where the title row's buttons are and its state; with
+	-- { click = "rename" } it also asks run.sh for a real click on the rename button's centre (the
+	-- testbench runs in another Lua state and reads neither this module nor the node positions)
+	react.onEvent("uio.debug.header", function(_e, param)
+		local ok, err = pcall(function()
+			local at, x, y = pixels_of(refs.rename)
+			debugPrint(string.format("[ui_overhaul] title row %q: rename %s minimize %s editing=%s folded=%s",
+				tostring(params.title), tostring(at), tostring((pixels_of(refs.minimize))),
+				tostring(editing:old() == true), tostring(folded)))
+			if type(param) == "table" and param.click == "rename" and x and y then
+				debugPrint(string.format("[testbench] CLICK %d %d", x, y))
+			end
+		end)
+		if not ok then report("debug", err) end
+	end)
+	local ok, node = pcall(render_header, params, folded, editing, focus_pending, refs)
 	if ok then return node end
 	report("header", node)
 	-- the engine's title is hidden on this window: keep at least the title

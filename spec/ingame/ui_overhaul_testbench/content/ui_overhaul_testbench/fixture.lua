@@ -12,5 +12,6 @@
 --- game's own mods (urbangames_*) besides this mod and the testbench
 ---@field vanilla? boolean run.sh --vanilla: without the mod (the gallery's "before" shots)
 ---@field off? string[] run.sh --off: features of the mod switched off in its settings (gui/settings.lua)
+---@field without? string[] run.sh --without-mod: mods of the savegame left out (to tell which one does what)
 local fixture = { save = nil, mods = {} }
 return fixture

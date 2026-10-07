@@ -102,10 +102,13 @@ local function load_fixture_game()
 	-- with mods_first, the savegame's own entries of these mods are listed again below, in that order
 	-- (a savegame made with this mod lists it before mods added now)
 	local moved = {} ---@type table<string, Mod.ModId>
+	local without = {} ---@type table<string, true> the savegame's mods left out (run.sh --without-mod)
+	for _i, name in ipairs(fixture.without or {}) do without[name] = true end
 	for _, mod in ipairs(details.mods) do
 		-- the gallery shows this mod alone: of the savegame's mods only the game's own content stays
 		local keep = not fixture.gallery or mod.name:sub(1, #"urbangames_") == "urbangames_"
 		if fixture.vanilla and mod.name == "ui_overhaul_1" then keep = false end
+		if without[mod.name] then keep = false end
 		if keep and fixture.mods_first and wanted[mod.name] then
 			moved[mod.name] = mod
 		elseif keep then
@@ -116,7 +119,8 @@ local function load_fixture_game()
 	-- A savegame made with the mod already lists it; a mod listed twice registers its resources
 	-- twice and the game crashes while loading (ResTypeRep::Add assertion, observed in-game).
 	for _, name in ipairs(added) do
-		if not listed[name] then
+		-- --without-mod ui_overhaul_1 runs the checks without the mod, to tell the game's own faults
+		if not listed[name] and not without[name] then
 			local mod = moved[name] or api.type.ModId.new()
 			mod.name = name
 			mods[#mods + 1], names[#names + 1] = mod, name

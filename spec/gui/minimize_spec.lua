@@ -116,19 +116,21 @@ describe("minimize", function()
 		local row = header.render(params) ---@type spec.MinimizeNode
 		local hooks = header.hooks
 		local children = row.p.children
-		local title, rename, minimize_button = children[1], children[2], children[3]
-		assert.are.same({ "TextView", "Falcon Transport" }, { title.kind, title.p.text })
+		-- the rename button first, at the left edge: it keeps its place when the engine shows the pin button
+		local rename, title, minimize_button = children[1], children[2], children[3]
 		assert.are.equal("Button", rename.kind)
+		assert.are.equal("Rename", rename.p.meta.tooltip)
+		assert.are.same({ "TextView", "Falcon Transport" }, { title.kind, title.p.text })
 		assert.are.equal("Minimize", minimize_button.p.meta.tooltip)
 		rename.p.onClick()
 		row = header.render(params)
 		assert.are.same(hooks, header.hooks)
-		local field = row.p.children[1] ---@type spec.MinimizeNode
+		local field = row.p.children[2] ---@type spec.MinimizeNode
 		assert.are.same({ "TextInputField", "Falcon Transport" }, { field.kind, field.p.value })
 		field.p.onValueChange("Falcon Freight")
 		assert.are.same({ "Falcon Freight" }, renamed)
 		row = header.render(params)
-		assert.are.equal("TextView", row.p.children[1].kind)
+		assert.are.equal("TextView", row.p.children[2].kind)
 	end)
 
 	it("keeps an empty name out where the window does not allow it", function()
@@ -140,9 +142,9 @@ describe("minimize", function()
 		local header = fake.mount(fake.recipe("UioWindowHeader"))
 		local params = window(p).header.args[1] ---@type uo.minimize.WindowHeaderParams
 		local row = header.render(params) ---@type spec.MinimizeNode
-		row.p.children[2].p.onClick()
+		row.p.children[1].p.onClick()
 		row = header.render(params)
-		row.p.children[1].p.onValueChange("")
+		row.p.children[2].p.onValueChange("")
 		assert.are.equal(0, renamed)
 	end)
 
@@ -152,6 +154,7 @@ describe("minimize", function()
 		p.titleEditable = nil
 		local header = fake.mount(fake.recipe("UioWindowHeader"))
 		local row = header.render(window(p).header.args[1]) ---@type spec.MinimizeNode
+		assert.are.same({ "TextView", "Button" }, { row.p.children[1].kind, row.p.children[2].kind })
 		assert.are.equal(2, #row.p.children)
 	end)
 

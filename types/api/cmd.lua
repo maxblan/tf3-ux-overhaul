@@ -7,6 +7,7 @@
 ---A command for sendCommand.
 ---@class Command<T>
 
+---@class EntitySetNameCommandData: ICommandData
 ---@class GameSetSpeedCommandData: ICommandData
 ---@class LineUpdateCommandData: ICommandData
 ---@class ScriptingSendEventCommandData: ICommandData
@@ -16,6 +17,8 @@
 
 ---The commands (`api.cmd`).
 ---@class Cmd
+---When executed, the entity is renamed; unless forceSameEntity, a station sets the stem name instead.
+---@field makeEntitySetNameCmd fun(entity: Engine.Entity, name: string, forceSameEntity?: boolean): Command<EntitySetNameCommandData>
 ---@field makeGameSetSpeedCmd fun(speedup: integer): Command<GameSetSpeedCommandData>
 ---@field makeLineUpdateCmd fun(lineEntity: Engine.Entity, data: Engine.Component.Line): Command<LineUpdateCommandData>
 local Cmd = {}
