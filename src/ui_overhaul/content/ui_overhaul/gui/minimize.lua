@@ -1,7 +1,7 @@
 --- Every window with a title bar and a close button (entity windows, Statistics, Finances, Company,
--- the vehicle store, layers, the notification log, mods' windows ...) can be minimized: a round
--- button in the title bar, in the design of the close button (the game's
--- fake-builtin-window-close-button style), folds the window to its title bar; a second click
+-- the vehicle store, layers, the notification log, mods' windows ...) can be minimized: a
+-- button in the title bar, in the design of the title bar's other buttons (pin,
+-- locate), folds the window to its title bar; a second click
 -- unfolds it. The content stays mounted while folded (tabs, open sections and scroll positions are
 -- kept) and the window keeps its place. A window that is closed opens unfolded next time.
 --
@@ -222,7 +222,7 @@ local function render_header(params, folded, editing, focus_pending, refs)
 	children[#children + 1] = title
 	children[#children + 1] = builtin.Button(react.ref(refs.minimize), {
 		-- no component id: a window can be rendered twice, and ids must be unique
-		meta = { class = "fake-builtin-window-close-button, uio-minimize",
+		meta = { class = "uio-minimize",
 			tooltip = folded and _("Restore") or _("Minimize") },
 		content = builtin.ImageView{ path = folded and ICON_RESTORE or ICON_MINIMIZE,
 			scaling = builtin.type.ImageViewScaling.AutoFit },
