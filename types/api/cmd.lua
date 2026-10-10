@@ -11,6 +11,7 @@
 ---@class GameSetSpeedCommandData: ICommandData
 ---@class LineUpdateCommandData: ICommandData
 ---@class ScriptingSendEventCommandData: ICommandData
+---@class VehicleSellCommandData: ICommandData
 ---@class VehicleSendToDepotCommandData: ICommandData
 ---@class VehicleReplaceCommandData: ICommandData
 ---@class WorldBuildProposalCommandData: ICommandData
@@ -36,6 +37,11 @@ function Cmd.sendCommand(cmd, callback) end
 ---@param param any any data the receiving script accepts
 ---@return Command<ScriptingSendEventCommandData>
 function Cmd.makeScriptingSendEventCmd(src, id, name, param) end
+
+---When executed, the vehicles are sold where they are (the vehicle window's Sell).
+---@param vehicleEntities Engine.Entity[]
+---@return Command<VehicleSellCommandData>
+function Cmd.makeVehicleSellCmd(vehicleEntities) end
 
 ---@param vehicleEntity Engine.Entity
 ---@param sellOnArrival boolean

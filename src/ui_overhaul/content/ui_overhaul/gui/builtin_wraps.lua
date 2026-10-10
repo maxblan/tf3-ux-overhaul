@@ -3,11 +3,15 @@
 -- every use. But recipes can also be registered as wrappers of a builtin
 -- (react.RegisterWrapperRecipe(name, builtin.X, fn)); one registered after the field is replaced gets
 -- the replacement, which the framework does not know as a builtin, and the game crashes when it
--- renders (observed in game with builtin.Window). This module replaces the field and records the
--- replacement, and wraps react.RegisterWrapperRecipe once so it always registers against the base
--- builtin. Several wraps of the same builtin chain. Another mod may wrap the same field in the plain
--- way, before or after this mod: the base is the registered builtin recipe, which this module
--- remembers per field, not merely the end of its own chain. GUI state, before the UI starts.
+-- renders (observed in game with builtin.Window). Mods also look a builtin's recipe id up from the
+-- field (react.GetRecipeId(builtin.BoxLayout), to replace it in _react.recipeReplace): for a plain
+-- replacement that is nil, and their write under a nil key fails the game's start ("table index is
+-- nil", Town Zoning Tool). This module replaces the field and records the replacement, and wraps
+-- react.RegisterWrapperRecipe once so it always registers against the base builtin, and
+-- react.GetRecipeId and react.GetRecipeName so a replacement answers as the builtin it stands for.
+-- Several wraps of the same builtin chain. Another mod may wrap the same field in the plain way,
+-- before or after this mod: the base is the registered builtin recipe, which this module remembers
+-- per field, not merely the end of its own chain. GUI state, before the UI starts.
 -- @module ui_overhaul.gui.builtin_wraps
 local builtin = require("::/gui/main/builtin.lua")
 local react = require("::/gui/main/react.lua")
@@ -23,12 +27,15 @@ local name_of = {} ---@type table<function, string> replacement function -> the 
 local registration_wrapped = false
 -- the builtin module looked up by a field name only known at run time
 local builtin_by_name = builtin --[[@as table<string, function?>]]
+-- react.lua's own lookups, before this module wraps them (the wraps below use these)
+local get_recipe_id = react.GetRecipeId
+local get_recipe_name = react.GetRecipeName
 
 -- Whether `fn` is a recipe the framework registered (a builtin, or a recipe of a mod).
 ---@param fn function
 ---@return boolean
 local function is_recipe(fn)
-	local ok, id = pcall(react.GetRecipeId, fn)
+	local ok, id = pcall(get_recipe_id, fn)
 	return ok and id ~= nil
 end
 
@@ -44,7 +51,7 @@ local function registered_builtin(name)
 		-- the one table GetRecipeId keeps, found by its value: base scripts may carry no upvalue names
 		local ids ---@type table<function, integer>?
 		for i = 1, 16 do
-			local upvalue, value = debug.getupvalue(react.GetRecipeId, i)
+			local upvalue, value = debug.getupvalue(get_recipe_id, i)
 			if upvalue == nil then break end
 			if type(value) == "table" then
 				if ids then return nil end
@@ -101,6 +108,21 @@ local function wrap_registration()
 	react.RegisterWrapperRecipe = function(name, wrapped, ...)
 		return register(name, builtin_wraps.base(wrapped), ...)
 	end
+	-- a function the framework does not know: the builtin this module's replacement stands for
+	---@generic T
+	---@param lookup fun(fn: function): T?
+	---@return fun(fn: function): T?
+	local function through_base(lookup)
+		return function(fn)
+			local found = lookup(fn)
+			if found ~= nil or type(fn) ~= "function" then return found end
+			local ok, base = pcall(builtin_wraps.base, fn)
+			if ok and base ~= fn then return lookup(base) end
+			return nil
+		end
+	end
+	if type(get_recipe_id) == "function" then react.GetRecipeId = through_base(get_recipe_id) end
+	if type(get_recipe_name) == "function" then react.GetRecipeName = through_base(get_recipe_name) end
 	registration_wrapped = true
 end
 

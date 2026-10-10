@@ -13,6 +13,14 @@ function data()
 	add("R::UioStopCell TextView!uio-stop-index", { size = { 34, -1 }, maxSize = { 34, -1 } })
 	-- 34 + 220 + the terminal button (22, margin 10) fit the 300 wide cell
 	add("R::UioStopsTable R::UioStopCell R::NameTextView", { size = { 220, -1 }, maxSize = { 220, -1 } })
+	-- the locate button keeps its width (as in the game's tables, line_react_util.css.lua) and the name
+	-- takes the rest of the 220, so the pins line up whatever the names' lengths (the button took the
+	-- room a short name left, and its pin moved with it); PlannerLocateButton: Supply Chain Manager's
+	-- replacement of the button
+	-- (one part more than the name's rule below, which would match the button too)
+	add("R::UioStopsTable R::UioStopCell R::NameTextView R::LocateButton Button, "
+		.. "R::UioStopsTable R::UioStopCell R::NameTextView R::PlannerLocateButton Button", { gravity = { 0, -1 } })
+	add("R::UioStopsTable R::UioStopCell R::NameTextView Button", { gravity = { -1, -1 } })
 	-- a stop the line cannot reach: greyed, as the game greys what is unavailable; the alert icon
 	-- (statistics problem icon) carries the reason, so colour is not the only signal
 	add("R::UioStopCell R::Component!uio-stop-unreachable", { alphaScale = 0.6 })

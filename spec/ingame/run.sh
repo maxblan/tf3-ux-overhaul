@@ -94,6 +94,18 @@ if [ ! -f "$game_dir/steam_appid.txt" ]; then
 	exit 1
 fi
 
+# A --with-mod id the game does not know leaves it at the main menu, waiting for nothing: check each
+# against the installed mods first (mod.io mods keep it as modId in their mod.json; the game's own and
+# local mods are folders named by it).
+modio="/mnt/c/Users/Public/mod.io/10640/mods"
+for m in "${with_mods[@]}"; do
+	if ! grep -qsE "\"modId\": *\"$m\"" "$modio"/*/mod.json "$userdata"/mods/*/mod.json "$userdata"/staging_area/*/mod.json \
+		&& [ ! -d "$userdata/mods/$m" ] && [ ! -d "$game_dir/mods/release/$m" ]; then
+		echo "--with-mod $m: no installed mod has that id (the id is modId in its mod.json, e.g. $modio/<number>/mod.json)" >&2
+		exit 2
+	fi
+done
+
 if [ "$gallery" -eq 1 ] && [ -z "$save" ]; then echo "--gallery needs --save" >&2; exit 2; fi
 if [ "$vanilla" -eq 1 ] && [ "$gallery" -eq 0 ]; then echo "--vanilla needs --gallery" >&2; exit 2; fi
 

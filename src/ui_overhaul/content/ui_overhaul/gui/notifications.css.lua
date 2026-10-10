@@ -103,5 +103,10 @@ function data()
 		add("R::Component!" .. class .. " R::NotificationProgressIcon ImageView!progress",
 			{ color = colorDefault.NeutralLightest })
 	end
+
+	-- The other subsidies of a group below the hover card (notifications.lua): each the body of its own
+	-- card, sized by the base stylesheet as the card above (R::NotificationPopupContent, padding 12);
+	-- next to each other with no extra space
+	add("R::NotificationPopup BoxLayout!uio-notification-others", { innerSpacing = { 0, 0 } })
 	return result
 end

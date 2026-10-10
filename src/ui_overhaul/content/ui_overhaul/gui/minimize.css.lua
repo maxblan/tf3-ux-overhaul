@@ -1,7 +1,7 @@
 -- Minimize (minimize.lua): the window's own title is hidden; the header row in its place holds the
 -- rename button (styled by the game as Window::TitleLayout Button!rename), the title and the minimize
--- button in the close button's design (the game's fake-builtin-window-close-button style), which sits
--- right-aligned before the title bar's own buttons. A folded window's content is not drawn
+-- button, which sits right-aligned before the title bar's own buttons and looks like them (the game's
+-- Window::TitleLayout Button: the pin and locate buttons next to it). A folded window's content is not drawn
 -- and takes no space; the windows the game gives a fixed size keep their width and lose their height.
 local ssu = require("::/gui/main/stylesheetutil.lua")
 
@@ -26,12 +26,25 @@ function data()
 	-- as the game's Window::Title (builtin.css.lua): fills the row, so a long title is cut short
 	add("R::UioWindowHeader TextView!uio-window-title, R::UioWindowHeader TextInputField!uio-window-title",
 		{ margin = { 4, 4, 4, 4 }, padding = { 4, 4, 4, 4 }, gravity = { -1, 0.5 } })
-	-- the close button's measures (Window::TitleLayout Button!close: padding 8 around an 18 px symbol, no
-	-- top or bottom margin), set here in full so the title bar's rule for its other buttons (padding 4,
-	-- margin 4 above and below) does not mix in: same size and height as the close button next to it
-	add("R::UioWindowHeader Button!uio-minimize",
-		{ gravity = { 1, 0 }, padding = { 8, 8, 8, 8 }, margin = { 0, 4, 0, 4 } })
+	-- in a title bar the game's rule for its buttons applies (Window::TitleLayout Button, builtin.css.lua);
+	-- the symbol at the size of theirs
 	add("R::UioWindowHeader Button!uio-minimize ImageView", { size = { 18, 18 } })
+	-- the Line Manager's own title row lies in its content, outside a title bar: the same rule here
+	add("R::Component!uio-compact-header Button!uio-minimize", {
+		gravity = { 1, 0 },
+		padding = { 4, 4, 4, 4 },
+		margin = { 4, 0, 4, 0 },
+		backgroundImage1 = {
+			fileName = "::/gui/builtin/window/design/header_button_surface.tga",
+			horizontal = { 0, 12, 14, 26 },
+			vertical = { 0, 12, 14, 26 },
+		},
+		borderImage = {
+			fileName = "::/gui/builtin/window/design/header_button_contour.tga",
+			horizontal = { 0, 12, 14, 26 },
+			vertical = { 0, 12, 14, 26 },
+		},
+	})
 	-- the Line Manager's own title row (a compact window: no title bar): as wide as its content
 	-- (lvmWindowWidth 500, line_vehicle_mgmt.css.lua; minSize counts without the padding, so 500 - 8 - 44),
 	-- so it keeps that width while folded, and the minimize button clear of the engine's round close

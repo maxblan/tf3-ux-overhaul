@@ -115,6 +115,23 @@ describe("notifications", function()
 		assert.is_nil(notifications.subsidy_class(subsidy, 7))
 	end)
 
+	it("lists a subsidy group's other members below the hover card, in click order", function()
+		local subsidy = "::/game_mechanics/notifications/types/subvention_notification.script"
+		local function member(id, kind) return { id = id, notification = { type = kind or subsidy, params = {} } } end
+		local members = { member(1), member(2), member(3) }
+		---@param list? uo.core.notification_groups.Item[]
+		---@return integer[]
+		local function ids(list)
+			local out = {} ---@type integer[]
+			for i, m in ipairs(list or {}) do out[i] = m.id end
+			return out
+		end
+		assert.are.same({ 3, 1 }, ids(notifications.others(members, 2)))
+		assert.are.same({ 2, 3 }, ids(notifications.others(members, 1)))
+		assert.is_nil(notifications.others({ member(1) }, 1))
+		assert.is_nil(notifications.others({ member(1), member(2, "::/other.script") }, 1))
+	end)
+
 	describe("Resolve sound", function()
 		local SUBSIDY = "::/game_mechanics/notifications/types/subvention_notification.script"
 		local saved_api = _G.api

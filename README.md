@@ -59,7 +59,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Windows
 
 - Statistics, Line Manager, Finances, Company and the notification log can stay open side by side and next to entity windows. Clicking the map no longer closes them, and *Manage Line* no longer closes the line window.
-- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the close button's design, with the title bar's own buttons on the right: it folds the window to its title bar, keeps its place and its content. Finances, Company and Statistics fold too, though the game gives them a fixed size. The Line Manager, which has no title bar, gets a slim title row with its name and the button; folded, only that row stays.
+- Every window with a title bar and a close button (entity windows, Finances, Company, the vehicle store, layers, mods' windows ...) has a minimize button in its title bar, in the design of the pin and locate buttons next to it, with the title bar's own buttons on the right: it folds the window to its title bar, keeps its place and its content. Finances, Company and Statistics fold too, though the game gives them a fixed size. The Line Manager, which has no title bar, gets a slim title row with its name and the button; folded, only that row stays.
 - Sections you open in an entity window stay open the next time, and several can be open at once.
 - *Sell* in the vehicle window needs a second click.
 
@@ -100,6 +100,7 @@ Sorting is fixed where vanilla sorts by something other than what it shows: line
 ### Subsidies
 
 - Subsidy icons in the notification row and their hover card show their state: available blue, in progress orange, effect active green, failed red, a missed offer grey. Every colour keeps at least 7:1 contrast to the white symbol (WCAG AAA), also on hover. Their timer ring is drawn in plain white.
+- Several subsidies of the same state share one icon, which shows the one that runs out first. Its hover card lists the others below it, each with its text and time bar, in the order clicks show them.
 - Offers have a ring and a bar for the time until the offer ends, and the card says "Time limit: 2 years - Offer ends in 3 months". Active subsidies say "Time limit" and "1 year 3 months left"; completed ones show how long their effect lasts.
 
 ### Game bar and vehicle store
@@ -113,8 +114,9 @@ Every part of the mod can be switched off on its own, in the mod's settings: the
 
 | Setting | What it switches |
 |---|---|
-| Line Manager | line and vehicle rows, the model row, the questions before cloning or replacing several vehicles, the add-stop hint, reopening on the last line (needs Windows side by side) |
+| Line Manager | line and vehicle rows, the model row, the questions before cloning or replacing several vehicles, the add-stop hint |
 | Vehicle search | the search field above the Line Manager's vehicle list |
+| Reopen with the last line | the Line Manager opening on the line selected when it was closed (needs Windows side by side) |
 | Line Manager in two columns | lines and stops on the left, vehicles on the right |
 | Select Terminals | the terminal popover's buttons, highlighting and greying |
 | Station window: Select Terminals | the button per line stop in the station window |

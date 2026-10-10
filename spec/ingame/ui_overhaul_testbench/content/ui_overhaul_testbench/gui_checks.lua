@@ -265,12 +265,20 @@ local function oldest_vehicle(line)
 	return best
 end
 
+--- The vehicle is going to a depot or in one.
+---@param tv Engine.Component.TransportVehicle
+---@return boolean
+local function to_depot(tv)
+	local states = api.type.enum.TransportVehicleState
+	return tv.state == states.GOING_TO_DEPOT or tv.state == states.IN_DEPOT
+end
+
 --- The vehicle is still there and not on its way to be sold.
 ---@param vehicle Engine.Entity
 ---@return boolean
 local function kept(vehicle)
 	local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
-	return tv ~= nil and tv.sellOnArrival ~= true
+	return tv ~= nil and tv.sellOnArrival ~= true and not to_depot(tv)
 end
 
 --- What the checks keep between act and check, in the GUI state: serialisable values only.
@@ -301,6 +309,7 @@ end
 ---@field line? Engine.Entity
 ---@field before? integer the line's vehicles before the action
 ---@field vehicle? Engine.Entity
+---@field rescued? Engine.Entity a vehicle sent to be sold on arrival, for the entry point's rescue
 ---@field public protected? Engine.Entity a protected vehicle; `public` since the name is also a keyword
 ---@field spot_x? number the gallery's free land for the track tool
 ---@field spot_y? number
@@ -658,6 +667,24 @@ local checks = {
 			return shown, string.format("line manager visible=%s width=%.3f height=%.3f (columns off: about half as wide)",
 				tostring(shown), size.x, size.y)
 		end,
+	},
+	{
+		-- the stop's cargo filter (Load card), for the Fill Level slider: it stretches across the row like
+		-- the game's, while the wait-time sliders keep their width (sliders.css.lua)
+		name = "cargo_filter_window",
+		act = function(ctx) api.gui.fireReactEvent("uio.debug.cargo_filter", ctx.card_line) end,
+		wait = 60,
+		shot = "cargo_filter_window",
+		check = function() return true, "see the shot and the cargo filter log line" end,
+	},
+	{
+		-- a click on the stop's first cargo filter (World#1's passenger filter, 3440 x 1440 screen, seen in
+		-- the shot above) edits it: the Fill Level row
+		name = "cargo_filter_fill_level",
+		act = function() if reference_screen() then mouse(1467, 745, true) end end,
+		wait = 60,
+		shot = "cargo_filter_fill_level",
+		check = function() return true, reference_screen() and "see the shot: Fill Level spans the row" or "skipped" end,
 	},
 	{
 		-- the vehicle search: the list of all the player's vehicles, then a search for "Zug"
@@ -1489,13 +1516,48 @@ local checks = {
 		end,
 		wait = 300,
 		check = function(ctx)
-			if not ctx.vehicle then return true, "skipped: no line with vehicles" end
-			local tv = api.engine.getComponent(ctx.vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+			local vehicle = ctx.vehicle ---@type Engine.Entity?
+			if not vehicle then return true, "skipped: no line with vehicles" end
+			local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
 			if not tv then return true, "vehicle already sold" end
-			local going = tv.state == api.type.enum.TransportVehicleState.GOING_TO_DEPOT
-				or tv.state == api.type.enum.TransportVehicleState.IN_DEPOT
-			return going and tv.sellOnArrival == true, string.format("vehicle %d state=%s sellOnArrival=%s",
-				ctx.vehicle, tostring(tv.state), tostring(tv.sellOnArrival))
+			-- to the depot without the engine's sale on arrival, which can crash the game (actions.lua)
+			return to_depot(tv) and tv.sellOnArrival == false, string.format("vehicle %d state=%s sellOnArrival=%s",
+				vehicle, tostring(tv.state), tostring(tv.sellOnArrival))
+		end,
+	},
+	{
+		-- a vehicle a savegame has on its way to be sold on arrival (the flag an earlier version set): the
+		-- entry point's rescue sells it right away
+		name = "action_rescue_sell_on_arrival",
+		act = function(ctx)
+			-- a vehicle still serving the line, not the one the protection checks below pick (the oldest)
+			ctx.rescued = nil
+			local oldest = ctx.line and oldest_vehicle(ctx.line)
+			for _i, v in ipairs(ctx.line and line_vehicles(ctx.line) or {}) do
+				if v ~= oldest and kept(v) then ctx.rescued = v end
+			end
+			debugPrint("[testbench] rescue candidate ", tostring(ctx.rescued), " of line ", tostring(ctx.line))
+			if ctx.rescued then
+				api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(ctx.rescued, true))
+			end
+		end,
+		wait = 60,
+		check = function(ctx)
+			if not ctx.rescued then return true, "skipped: no line with vehicles" end
+			api.gui.fireReactEvent("uio.debug.rescue", nil)
+			return true, "flag set, rescue fired"
+		end,
+	},
+	{
+		name = "action_rescue_sell_on_arrival_result",
+		wait = 60,
+		check = function(ctx)
+			local vehicle = ctx.rescued ---@type Engine.Entity?
+			if not vehicle then return true, "skipped: no line with vehicles" end
+			local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+			if not tv then return true, string.format("vehicle %d sold", vehicle) end
+			return false, string.format("vehicle %d still there: state=%s sellOnArrival=%s",
+				vehicle, tostring(tv.state), tostring(tv.sellOnArrival))
 		end,
 	},
 	{
@@ -1549,6 +1611,25 @@ local checks = {
 			local ok = kept(ctx.protected)
 			return ok, string.format("vehicle %d kept=%s (screenshot: \"Vehicle cannot be sold at this time.\" "
 				.. "under the Vehicles card's buttons)", ctx.protected, tostring(ok))
+		end,
+	},
+	{
+		-- last: the vehicles Remove Vehicle and the rescue sent to a depot, sold there by the entry
+		-- point's step (the engine's sale on arrival crashed the game here, docs/api_cookbook.md 6.2)
+		name = "retired_vehicles_sold",
+		act = function() api.cmd.sendCommand(api.cmd.makeGameSetSpeedCmd(4)) end,
+		wait = 3600,
+		check = function(ctx)
+			local parts, retired = {}, {} ---@type string[], Engine.Entity[]
+			if ctx.vehicle then retired[#retired + 1] = ctx.vehicle end
+			if ctx.rescued then retired[#retired + 1] = ctx.rescued end
+			for _i, vehicle in ipairs(retired) do
+				local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+				local where = "sold"
+				if tv then where = "state=" .. tostring(tv.state) .. " (not there yet)" end
+				parts[#parts + 1] = string.format("%d %s", vehicle, where)
+			end
+			return true, #parts > 0 and table.concat(parts, ", ") or "skipped: nothing retired"
 		end,
 	},
 }
@@ -1821,21 +1902,40 @@ local scenes = {
 		end,
 	},
 	{
-		-- minimize: the line window and a vehicle window side by side, then both folded
+		-- minimize: a vehicle window alone (the line window of the scene before would lie under it at the
+		-- same place), then folded
 		name = "gallery_minimize_open",
 		act = function(ctx)
-			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = true }) end
+			clear()
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = false }) end
 		end,
-		wait = 150,
+		-- long enough for the window it replaces to fade out (its title showed through)
+		wait = 300,
 		shot = "gallery_minimize_open",
 		check = function() return true, "open" end,
 	},
 	{
+		-- the mouse over the vehicle window's title row first (3440 x 1440 screen): the game then shows its
+		-- pin button there, and the buttons before it move left
+		name = "gallery_minimize_hover",
+		act = function() if reference_screen() then mouse(3287, 42) end end,
+		wait = 45,
+		check = function() return true, "hover" end,
+	},
+	{
+		-- a real click on the minimize button, where it sits once the pin shows: the debug event folds
+		-- without one, and the game then shows the rename button's tooltip (its focus moves there); the
+		-- cursor leaves the window before the shot
 		name = "gallery_minimize_folded",
-		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
-		wait = 60,
+		act = function()
+			if reference_screen() then mouse(3248, 42, true) else api.gui.fireReactEvent("uio.debug.minimize_all", nil) end
+		end,
+		wait = 120,
 		shot = "gallery_minimize_folded",
-		check = function() return true, "folded" end,
+		check = function()
+			if reference_screen() then mouse(1720, 0) end
+			return true, "folded"
+		end,
 	},
 	{
 		name = "gallery_minimize_restored",
@@ -1894,8 +1994,9 @@ local scenes = {
 	},
 	{
 		name = "gallery_subsidy_hover_3",
-		-- the subsidy group (the offers spawned above), sixth in the ridge of World#1
-		act = function() mouse(1491, 43) end,
+		-- the subsidy group (the offers spawned above), second in the ridge of the gallery's savegame
+		-- (docs/gallery.md); its hover card lists the other offer below the shown one
+		act = function() mouse(1238, 43) end,
 		wait = 240,
 		shot = "gallery_subsidy_hover_3",
 		check = function() return true, "hover on icon 3" end,

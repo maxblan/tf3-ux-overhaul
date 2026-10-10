@@ -118,6 +118,7 @@ local needs = {
 				"NotificationProgressIcon",
 				"NotificationSimpleIcon",
 			},
+			["::/game_mechanics/subventions/subvention_util.tl"] = { "getSubventionAndStatusFromGameScript" },
 			["::/gui/main/engine_react_util.tl"] = { "useStepState", "useStepStateTimerWithCommit" },
 			["::/gui/main/gui_react_util.tl"] = { "Clipper", "FocusTraversalScope" },
 			["::/scripts/lang_util.tl"] = { "format" },

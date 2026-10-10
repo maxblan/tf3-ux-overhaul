@@ -13,8 +13,8 @@ Usage: tools/gallery/compose.py <screenshots dir> <out dir>
   <screenshots dir> holds gallery-mod/ and gallery-vanilla/ (spec/ingame/results)
 Writes <out dir>/NN-name.svg and <out dir>/crops.txt (the regions the cards use, which build.sh cuts
 into <screenshots dir>/gallery-crops/ before it renders the cards to PNG).
-Regions are in screenshot pixels (3440 x 1440: the captures' screen), measured on the shots of
-World#1; another savegame needs them measured again.
+Regions are in screenshot pixels (3440 x 1440: the captures' screen), measured on the shots of the
+savegame "Neues Spiel" (docs/gallery.md); another savegame needs them measured again.
 """
 import os
 import sys
@@ -194,21 +194,24 @@ TOTAL = 10
 def before_after():
     c = Card(1, TOTAL, "Line Manager", "See which lines lose money at a glance",
              "Vehicle count and 12-month balance for every line, load and age for every vehicle.")
-    crop = (100, 96, 690, 760)  # the Line Manager's title row, lines and vehicles
+    # the Line Manager's title row, lines and vehicles: one column in the game, two with the mod
+    crop_before = (100, 96, 690, 760)
+    crop_after = (100, 96, 1366, 760)
     y = TOP + 44 + 30
-    h = BOTTOM - y
-    w = round(690 * h / 760)
     gap = 130
-    left = (W - 2 * w - gap) // 2
+    scale = (W - 2 * MARGIN - gap) / (crop_before[2] + crop_after[2])
+    h = round(760 * scale)
+    w_before, w_after = round(crop_before[2] * scale), round(crop_after[2] * scale)
+    left = (W - w_before - w_after - gap) // 2
     c.chip(left, TOP + 4, "Vanilla", False)
-    c.shot(VANILLA + "gallery_line_manager.png", crop, (left, y, w, h))
-    right = left + w + gap
+    c.shot(VANILLA + "gallery_line_manager.png", crop_before, (left, y, w_before, h))
+    right = left + w_before + gap
     c.chip(right, TOP + 4, "With UI Overhaul", True)
-    m = c.shot(MOD + "gallery_line_manager.png", crop, (right, y, w, h))
-    c.outline(c.mapped(m, (486, 282, 182, 262)))   # vehicle count and balance
-    c.outline(c.mapped(m, (110, 604, 672, 52)))    # the model row
-    c.outline(c.mapped(m, (543, 664, 212, 172)))   # load, condition and age
-    c.arrow(left + w + gap / 2, y + h / 2)
+    m = c.shot(MOD + "gallery_line_manager.png", crop_after, (right, y, w_after, h))
+    c.outline(c.mapped(m, (486, 288, 182, 556)))    # vehicle count and balance
+    c.outline(c.mapped(m, (788, 335, 662, 36)))     # the model row
+    c.outline(c.mapped(m, (1187, 390, 241, 76)))    # load, condition and age
+    c.arrow(left + w_before + gap / 2, y + h / 2)
     return "01-line-manager-before-after", c
 
 
@@ -219,8 +222,8 @@ def terminals():
     box = (MARGIN, TOP + 8, W - 2 * MARGIN, BOTTOM - TOP - 8)
     context = (560, 0, 2880, round(2880 * box[3] / box[2]))
     m = c.shot(src, context, box)
-    rows = (2822, 196, 558, 240)  # the first terminal's line rows with their buttons
-    pop = (858, 212, 938, 218)    # the popover
+    rows = (2818, 140, 562, 272)  # the terminals' line rows with their buttons
+    pop = (858, 214, 938, 166)    # the popover (above the tooltip of the button that opened it)
     c.outline(c.mapped(m, rows))
     c.outline(c.mapped(m, pop))
     _mp, bp = c.zoom(src, pop, (MARGIN + 56, BOTTOM - 56 - pop[3]), 1.0)
@@ -240,7 +243,7 @@ def industry():
     box_w = W - 2 * MARGIN
     box_h = round(box_w * 1440 / 3440)
     m = c.shot(src, (0, 0, 3440, 1440), (MARGIN, TOP + 8, box_w, box_h))
-    card = (2818, 350, 564, 425)  # Development and Served by
+    card = (2816, 350, 566, 420)  # Development and Served by
     c.outline(c.mapped(m, card))
     _mi, bi = c.zoom(src, card, (MARGIN + 56, TOP + 44), 1.12)
     sc = c.mapped(m, card)
@@ -256,13 +259,13 @@ def statistics():
     box_w = W - 2 * MARGIN
     box_h = round(box_w * 1440 / 3440)
     m = c.shot(src, (0, 0, 3440, 1440), (MARGIN, TOP + 8, box_w, box_h))
-    filters = (90, 1014, 510, 56)
-    totals = (2838, 1016, 520, 56)
+    filters = (90, 1016, 510, 52)
+    totals = (2850, 1016, 510, 54)
     c.outline(c.mapped(m, filters))
     c.outline(c.mapped(m, totals))
     scale = 1.55
     _mf, bf = c.zoom(src, filters, (MARGIN + 70, TOP + 90), scale)
-    _mt, bt = c.zoom(src, totals, (W - MARGIN - 70 - round(520 * scale), TOP + 90), scale)
+    _mt, bt = c.zoom(src, totals, (W - MARGIN - 70 - round(totals[2] * scale), TOP + 90), scale)
     sf, st = c.mapped(m, filters), c.mapped(m, totals)
     c.connector((sf[0] + sf[2] / 2, sf[1] - 4), (bf[0] + bf[2] / 2, bf[1] + bf[3] + BEZEL))
     c.connector((st[0] + st[2] / 2, st[1] - 4), (bt[0] + bt[2] / 2, bt[1] + bt[3] + BEZEL))
@@ -274,17 +277,18 @@ def statistics():
 def workflow():
     c = Card(7, TOTAL, "Workflow", "Replace a vehicle model across your whole network",
              "Pick the model, pull its vehicles from every line, replace them all at once.")
-    crop = (100, 322, 690, 740)
+    vehicles = (780, 236, 690, 740)  # the Line Manager's vehicle column
+    lines = (100, 236, 690, 740)     # its line column, where it asks
     steps = [
-        (MOD + "gallery_models_select.png", "Click the model", (110, 604, 672, 52)),
-        (MOD + "gallery_models_all_lines.png", "“In all lines” adds every one", (110, 610, 666, 266)),
-        (MOD + "gallery_models_replace.png", "Replace them all in one go", (166, 893, 560, 112)),
+        (MOD + "gallery_models_select.png", "Click the model", vehicles, (788, 335, 662, 36)),
+        (MOD + "gallery_models_all_lines.png", "“In all lines” adds every one", vehicles, (788, 326, 662, 640)),
+        (MOD + "gallery_models_replace.png", "Replace them all in one go", lines, (170, 858, 550, 112)),
     ]
     gap = 52
     w = (W - 2 * MARGIN - 2 * gap) // 3
     h = round(w * 740 / 690)
     y = TOP + 76
-    for i, (src, caption, mark) in enumerate(steps):
+    for i, (src, caption, crop, mark) in enumerate(steps):
         x = MARGIN + i * (w + gap)
         m = c.shot(src, crop, (x, y, w, h))
         c.outline(c.mapped(m, mark))
@@ -348,9 +352,9 @@ def line_window():
     c = Card(2, TOTAL, "Line window", "Add or remove a vehicle without the Line Manager",
              "Load and condition per vehicle, Add Vehicle and Remove Vehicle, and a Stops card with who waits where.")
     m, _box, _b = pair(c, (2800, 400, 610, 820), VANILLA + "gallery_line_window.png", MOD + "gallery_line_window.png")
-    c.outline(c.mapped(m, (3080, 488, 146, 134)))   # load and condition
-    c.outline(c.mapped(m, (2836, 660, 424, 52)))    # Add Vehicle, Remove Vehicle
-    c.outline(c.mapped(m, (2822, 720, 556, 262)))   # the Stops card
+    c.outline(c.mapped(m, (3078, 492, 140, 124)))   # load and condition
+    c.outline(c.mapped(m, (2836, 652, 420, 42)))    # Add Vehicle, Remove Vehicle
+    c.outline(c.mapped(m, (2822, 722, 556, 244)))   # the Stops card
     return "02-line-window-before-after", c
 
 
@@ -358,7 +362,7 @@ def vehicle_hover():
     c = Card(3, TOTAL, "Vehicles on the map", "Hover a vehicle, see how it is doing",
              "Line, next stop, speed, load, condition and delivery quality, right where the vehicle is.")
     m, _box, _b = pair(c, (1560, 600, 760, 480), VANILLA + "gallery_vehicle_hover.png", MOD + "gallery_vehicle_hover.png")
-    c.outline(c.mapped(m, (1736, 816, 450, 198)))
+    c.outline(c.mapped(m, (1734, 812, 478, 198)))
     return "03-vehicle-hover-before-after", c
 
 
@@ -383,8 +387,8 @@ def warehouses():
 def notifications():
     c = Card(9, TOTAL, "Notifications", "Fewer icons, clearer colours, offers that say when they end",
              "Notifications of one kind share an icon with a count; every colour has 7:1 contrast to its symbol.")
-    vanilla_ridge = (1140, 8, 450, 70)
-    mod_ridge = (1140, 8, 322, 70)
+    vanilla_ridge = (1140, 8, 512, 70)
+    mod_ridge = (1140, 8, 380, 70)
     scale = 1.25
     y = TOP + 60
     c.chip(MARGIN, y, "Vanilla", False)
@@ -392,11 +396,11 @@ def notifications():
     y2 = y + 70 + round(70 * scale) + 70
     c.chip(MARGIN, y2, "With UI Overhaul", True)
     c.zoom(MOD + "gallery_vehicle_hover.png", mod_ridge, (MARGIN, y2 + 70), scale)
-    card = (1296, 88, 512, 318)
-    s2 = 1.6
+    card = (1036, 88, 514, 472)  # two offers in one group: the one that ends first, the other below
+    s2 = 1.18
     _mc, bc = c.zoom(MOD + "gallery_subsidy_hover_3.png", card, (W - MARGIN - round(card[2] * s2), TOP + 40), s2)
-    c.plate(bc[0], bc[1] + bc[3] + 26, "A subsidy offer, with the time it has left")
-    c.text(MARGIN, y2 + 70 + round(70 * scale) + 74, "Seven icons become five groups, in high-contrast colours.", 24,
+    c.plate(bc[0], bc[1] + bc[3] + 26, "The offer that ends first comes first")
+    c.text(MARGIN, y2 + 70 + round(70 * scale) + 74, "Eight icons become six groups, in high-contrast colours.", 24,
            MUTED, 400)
     return "09-notifications", c
 
@@ -424,8 +428,8 @@ def minimize():
     crop = (2280, 0, 1160, 1220)
     after, _box, before = pair(c, crop, MOD + "gallery_minimize_open.png", MOD + "gallery_minimize_folded.png",
                                ("Open", "Minimized"))
-    c.outline(c.mapped(before, (3222, 20, 42, 42)), radius=21)
-    c.outline(c.mapped(after, (2796, 8, 612, 84)))
+    c.outline(c.mapped(before, (3266, 20, 42, 42)), radius=21)
+    c.outline(c.mapped(after, (2796, 12, 616, 84)))
     return "10-minimize", c
 
 

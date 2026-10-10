@@ -1,6 +1,13 @@
 --- Player actions behind the mod's buttons. Wherever possible they go through the base game's own
 -- events, so the base checks (mission locks, money, depots) apply. GUI thread only.
 -- API references: docs/api_cookbook.md §6.
+--
+-- A vehicle is retired the way the game's own buttons allow: sent to a depot ("Send to Depot"), then
+-- sold with the game's Sell once it is there (step). The engine's own sale on arrival
+-- (makeVehicleSendToDepotCmd's sellOnArrival, which no base button uses) can crash the simulation
+-- when the vehicle arrives, also without mods (docs/api_cookbook.md §6.2). A vehicle a savegame still
+-- has on its way with that flag is sold right away (rescue): sending it again does not clear the flag
+-- (observed in game).
 -- @module ui_overhaul.gui.actions
 local react = require("::/gui/main/react.lua")
 
@@ -18,6 +25,11 @@ local TAG = "[ui_overhaul]"
 -- game's filters listen to (game.tl).
 ---@type uo.actions.Protected
 local protected_entities = {}
+
+-- Vehicles this session sent to a depot to be sold there: vehicle -> true. Not saved: after loading a
+-- savegame, a vehicle on its way stays in the depot unsold, as after the game's "Send to Depot".
+---@type table<Engine.Entity, true>
+local retiring = {}
 
 --- Takes the entities a campaign mission protects, as the "setProtectedEntities" event sends them.
 ---@param entities? uo.actions.Protected
@@ -108,8 +120,8 @@ function actions.clone_vehicle(vehicle, add_feedback)
 	return true
 end
 
---- Sends the vehicle to a depot, where it is sold on arrival. A vehicle a mission protects is not
--- sold, as the vehicle window's "Sell" refuses it (vehicle.tl): `protected` is
+--- Sends the vehicle to a depot, where step sells it once it is there. A vehicle a mission protects
+-- is not sold, as the vehicle window's "Sell" refuses it (vehicle.tl): `protected` is
 -- gameCtx.filters:get().protectedEntities where the caller has it, else the copy kept from the event.
 ---@param vehicle? Engine.Entity
 ---@param add_feedback? uo.actions.Feedback
@@ -122,10 +134,63 @@ function actions.retire_vehicle(vehicle, add_feedback, protected)
 		add_feedback(_("Vehicle cannot be sold at this time."), nil, nil, nil)
 		return false
 	end
-	api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(vehicle, true), function(_c, success)
-		if not success then add_feedback(_("Vehicle could not be sent to depot."), nil, nil, nil) end
+	api.cmd.sendCommand(api.cmd.makeVehicleSendToDepotCmd(vehicle, false), function(_c, success)
+		if success then
+			retiring[vehicle] = true
+		else
+			add_feedback(_("Vehicle could not be sent to depot."), nil, nil, nil)
+		end
 	end)
 	return true
+end
+
+--- Per-frame step of the entry point: sells the vehicles sent to be sold once they are in a depot.
+-- One the player sent back onto a line (no longer on its way) is left alone; one a mission protects
+-- meanwhile stays in the depot.
+function actions.step()
+	if next(retiring) == nil then return end
+	local states = api.type.enum.TransportVehicleState
+	local sell = {} ---@type Engine.Entity[]
+	for vehicle in pairs(retiring) do
+		local tv = api.engine.entityExists(vehicle)
+			and api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE) or nil
+		if not tv or (tv.state ~= states.GOING_TO_DEPOT and tv.state ~= states.IN_DEPOT) then
+			retiring[vehicle] = nil
+		elseif tv.state == states.IN_DEPOT then
+			retiring[vehicle] = nil
+			-- no _() here: a step is no render (CONTRIBUTING, GUI-thread calls)
+			if is_protected(vehicle) then
+				log_feedback("vehicle " .. tostring(vehicle) .. " is protected now: left in the depot")
+			else
+				sell[#sell + 1] = vehicle
+			end
+		end
+	end
+	if #sell > 0 then
+		api.cmd.sendCommand(api.cmd.makeVehicleSellCmd(sell), function(_c, success)
+			if not success then log_feedback("selling vehicles in the depot failed") end
+		end)
+	end
+end
+
+--- Once per session, after loading: vehicles still on their way to a depot to be sold on arrival
+-- (sent so by an earlier version of this mod or another mod) are sold right away with the game's
+-- Sell, before the engine's sale on arrival can crash the game. Ones a mission protects stay as they
+-- are. Returns how many were sold.
+---@return integer
+function actions.rescue()
+	local sell = {} ---@type Engine.Entity[]
+	local owned = { requireOwnedByPlayer = api.engine.util.getPlayer() }
+	for _i, vehicle in ipairs(api.engine.getEntitiesWithComponent(api.type.ComponentType.TRANSPORT_VEHICLE, owned)) do
+		local tv = api.engine.getComponent(vehicle, api.type.ComponentType.TRANSPORT_VEHICLE)
+		if tv and tv.sellOnArrival == true and not is_protected(vehicle) then sell[#sell + 1] = vehicle end
+	end
+	if #sell > 0 then
+		api.cmd.sendCommand(api.cmd.makeVehicleSellCmd(sell), function(_c, success)
+			debugPrint(TAG, " ", #sell, " vehicles to be sold on arrival: ", success and "sold now" or "not sold")
+		end)
+	end
+	return #sell
 end
 
 --- One more vehicle like the line's newest. Returns false if the line has no vehicle to copy.

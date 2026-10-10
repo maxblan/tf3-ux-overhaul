@@ -1,5 +1,6 @@
 --- Plugin body for ::ModEntryPointExtension: an invisible root that runs the one-time cleanup, keeps
--- the mission's protected entities for actions.lua and owns the mod's "uio.action" event
+-- the mission's protected entities for actions.lua, sells retired vehicles once they are in a depot
+-- (actions.step, after actions.rescue on mount) and owns the mod's "uio.action" event
 -- ({ name, entity }: add_vehicle, remove_vehicle, clone_vehicle, retire_vehicle, open_entity,
 -- open_line_manager), which other mods and the testbench use. Rendered by the guarded stub
 -- entry.script.lua.
@@ -123,7 +124,11 @@ function entry.render()
 				(remembered and collapsed and next_window) and " ok" or " check failed")
 		end)
 	end)
+	react.onMount(function() safely("vehicles to be sold on arrival", actions.rescue) end)
+	-- testbench: the same once more, for a vehicle it has just sent with the flag
+	react.onEvent("uio.debug.rescue", function() safely("vehicles to be sold on arrival", actions.rescue) end)
 	react.onStep(function()
+		safely("retired vehicles", actions.step)
 		safely("cleanup", cleanup.step)
 		safely("Line Manager step", lvm_tweaks.step)
 	end)
