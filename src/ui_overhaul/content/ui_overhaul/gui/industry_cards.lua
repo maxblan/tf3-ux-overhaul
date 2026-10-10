@@ -271,7 +271,7 @@ end
 ---@param f uo.industry_cards.Facts
 ---@return string?
 local function blocker_text(key, f)
-	if key == "max_level" then return _("Industry is expanded to it's full potential.") end
+	if key == "max_level" then return _("Industry is expanded to its full potential.") end
 	if key == "blocked" then return _("Industry is blocked from further expansion.") end
 	if key == "manual" then return _("It only changes when developed by hand.") end
 	if key == "player_owned" then return _("You own it: it does not expand by itself.") end
