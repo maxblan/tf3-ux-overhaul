@@ -16,6 +16,9 @@ local stand_ins = {
 		---@param fn function
 		---@return integer?
 		GetRecipeId = function(fn) return recipeFnToRecipeId[fn] end,
+		---@param fn function
+		---@return string?
+		GetRecipeName = function(fn) return recipeFnToRecipeId[fn] and "builtin" .. recipeFnToRecipeId[fn] or nil end,
 	},
 }
 local loaded = package.loaded ---@type table<string, any> module name -> module, of any type
@@ -56,6 +59,14 @@ describe("builtin_wraps", function()
 		react.RegisterWrapperRecipe("LateWindow", builtin.Window, function() end)
 		assert.are.equal(base_window, registered.LateWindow)
 		assert.are.equal(base_window, builtin_wraps.base(builtin.Window))
+	end)
+
+	it("answers recipe id and name of a replaced builtin as the builtin's (Town Zoning Tool looks them up)", function()
+		assert.is_false(base_window == builtin.Window)
+		assert.are.equal(1, react.GetRecipeId(builtin.Window))
+		assert.are.equal("builtin1", react.GetRecipeName(builtin.Window))
+		assert.are.equal(1, react.GetRecipeId(base_window))
+		assert.is_nil(react.GetRecipeId(function() end))
 	end)
 
 	it("unwinds past another mod's plain wrap, above or below this module's", function()
