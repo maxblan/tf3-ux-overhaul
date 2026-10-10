@@ -29,15 +29,19 @@ local OLD, NEW = 1, 2
 
 ---@class spec.actions.Engine
 ---@field entityExists fun(e: integer): boolean
----@field getComponent fun(e: integer): spec.actions.Vehicle
+---@field getComponent fun(e: integer): spec.actions.Vehicle?
+---@field getEntitiesWithComponent fun(): integer[]
 ---@field system { transportVehicleSystem: { getLineVehicles: fun(): integer[] } }
+---@field util { getPlayer: fun(): integer }
 
 ---@class spec.actions.Vehicle
 ---@field state integer
+---@field sellOnArrival boolean
 ---@field transportVehicleConfig { vehicles: { purchaseTime: integer }[] }
 
 ---@class spec.actions.Cmd
 ---@field makeVehicleSendToDepotCmd fun(v: integer, sell: boolean): { vehicle: integer, sell: boolean }
+---@field makeVehicleSellCmd fun(vs: integer[]): { sold: integer[] }
 ---@field sendCommand fun(cmd: table, callback: fun(res: nil, success: boolean))
 
 describe("actions", function()
@@ -46,12 +50,14 @@ describe("actions", function()
 	---@type table[], string[], boolean
 	local commands, log, send_ok
 	local states ---@type table<integer, integer> vehicle -> TransportVehicleState
+	local flagged ---@type table<integer, boolean> vehicle -> sellOnArrival
 	local EN_ROUTE, GOING_TO_DEPOT, IN_DEPOT = 1, 2, 3
 
 	before_each(function()
 		saved.api, saved.tr, saved.debug_print = _G.api, _G._, _G.debugPrint
 		fired, commands, log, send_ok = {}, {}, {}, true
 		states = { [OLD] = EN_ROUTE, [NEW] = EN_ROUTE }
+		flagged = {}
 		local purchased = { [OLD] = 10, [NEW] = 20 }
 		---@type spec.actions.Api
 		local mock = {
@@ -63,14 +69,19 @@ describe("actions", function()
 			engine = {
 				entityExists = function(e) return purchased[e] ~= nil end,
 				getComponent = function(e)
+					if purchased[e] == nil then return nil end
 					---@type spec.actions.Vehicle
-					local tv = { state = states[e], transportVehicleConfig = { vehicles = { { purchaseTime = purchased[e] } } } }
+					local tv = { state = states[e], sellOnArrival = flagged[e] == true,
+						transportVehicleConfig = { vehicles = { { purchaseTime = purchased[e] } } } }
 					return tv
 				end,
+				getEntitiesWithComponent = function() return { NEW, OLD } end,
 				system = { transportVehicleSystem = { getLineVehicles = function() return { NEW, OLD } end } },
+				util = { getPlayer = function() return 7 end },
 			},
 			cmd = {
 				makeVehicleSendToDepotCmd = function(v, sell) return { vehicle = v, sell = sell } end,
+				makeVehicleSellCmd = function(vs) return { sold = vs } end,
 				sendCommand = function(cmd, callback)
 					commands[#commands + 1] = cmd
 					callback(nil, send_ok)
@@ -113,17 +124,50 @@ describe("actions", function()
 		assert.are.same({ "Could not clone vehicles (not enough money)." }, messages)
 	end)
 
-	it("sends the oldest vehicle to a depot to be sold", function()
+	it("sends the oldest vehicle to a depot and sells it there with the game's Sell, not on arrival", function()
 		local messages, add_feedback = collect()
 		assert.is_true(actions.remove_vehicle(LINE, add_feedback))
 		assert.are.same({}, messages)
-		assert.are.same({ { vehicle = OLD, sell = true } }, commands)
+		assert.are.same({ { vehicle = OLD, sell = false } }, commands)
+		states[OLD] = GOING_TO_DEPOT
+		actions.step()
+		assert.are.equal(1, #commands) -- on its way: nothing yet
+		states[OLD] = IN_DEPOT
+		actions.step()
+		assert.are.same({ sold = { OLD } }, commands[2])
+		actions.step()
+		assert.are.equal(2, #commands) -- sold once
+	end)
+
+	it("leaves a retired vehicle alone once the player sends it back onto a line", function()
+		actions.remove_vehicle(LINE)
+		states[OLD] = EN_ROUTE
+		actions.step()
+		states[OLD] = IN_DEPOT
+		actions.step()
+		assert.are.equal(1, #commands)
+	end)
+
+	it("keeps a retired vehicle in the depot when a mission protects it meanwhile", function()
+		actions.remove_vehicle(LINE)
+		actions.set_protected_entities({ [OLD] = true })
+		states[OLD] = IN_DEPOT
+		actions.step()
+		assert.are.equal(1, #commands)
+	end)
+
+	it("sells a savegame's vehicles to be sold on arrival right away, except protected ones", function()
+		flagged[OLD], states[OLD] = true, GOING_TO_DEPOT
+		flagged[NEW], states[NEW] = true, GOING_TO_DEPOT
+		actions.set_protected_entities({ [NEW] = true })
+		assert.are.equal(1, actions.rescue())
+		assert.are.same({ { sold = { OLD } } }, commands)
 	end)
 
 	it("skips vehicles already going to or in a depot, so a second click removes the next one", function()
 		states[OLD] = GOING_TO_DEPOT
 		assert.is_true(actions.remove_vehicle(LINE))
-		assert.are.same({ { vehicle = NEW, sell = true } }, commands)
+		assert.are.same({ { vehicle = NEW, sell = false } }, commands)
 		states[NEW] = IN_DEPOT
 		assert.is_false(actions.remove_vehicle(LINE))
 		assert.is_false(actions.add_vehicle(LINE))
@@ -160,7 +204,7 @@ describe("actions", function()
 		actions.set_protected_entities({ [OLD] = true })
 		actions.set_protected_entities({})
 		actions.run({ name = "remove_vehicle", entity = LINE })
-		assert.are.same({ { vehicle = OLD, sell = true } }, commands)
+		assert.are.same({ { vehicle = OLD, sell = false } }, commands)
 	end)
 
 	it("tells the line window when Remove Vehicle would be refused, so its button stays silent", function()
