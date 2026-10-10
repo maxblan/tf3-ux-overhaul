@@ -116,6 +116,38 @@ describe("notification_groups", function()
 			groups.build(items)
 			assert.are.equal(2, items[1].id)
 		end)
+
+		it("puts the subsidy whose time runs out first first, those without a time after them", function()
+			local function subsidy(id, timestamp, ends)
+				local result = item(id, timestamp, SUBVENTION, { uid = id, status = 1 })
+				result.ends = ends
+				return result
+			end
+			local result = groups.build({
+				subsidy(1, 10, 900), subsidy(2, 20, 300), subsidy(3, 30, nil), subsidy(4, 40, 600), subsidy(5, 50, nil),
+			})
+			assert.are.same({ "2,4,1,5,3" }, keys_and_ids(result))
+			assert.are.equal(10, result[1].oldest) -- the icon keeps its place by its oldest member
+		end)
+	end)
+
+	describe("subsidy_ends", function()
+		local data = { expireDurationProposed = 100, expireDuration = 1000, effectDuration = 5000 }
+		it("ends an offer when it expires", function()
+			assert.are.equal(150, groups.subsidy_ends({ spawnTime = 50, data = data }))
+		end)
+		it("ends an accepted subsidy at its time limit", function()
+			assert.are.equal(1070, groups.subsidy_ends({ spawnTime = 50, acceptedTime = 70, data = data }))
+		end)
+		it("ends a completed subsidy's effect", function()
+			assert.are.equal(5090, groups.subsidy_ends({ spawnTime = 50, acceptedTime = 70, completedTime = 90, data = data }))
+		end)
+		it("has no end for an offer that does not expire or data of another shape", function()
+			assert.is_nil(groups.subsidy_ends({ spawnTime = 50, data = { expireDurationProposed = -1 } }))
+			assert.is_nil(groups.subsidy_ends({ spawnTime = 50 }))
+			assert.is_nil(groups.subsidy_ends({ acceptedTime = 70, data = {} }))
+			assert.is_nil(groups.subsidy_ends(nil))
+		end)
 	end)
 
 	describe("cursor", function()

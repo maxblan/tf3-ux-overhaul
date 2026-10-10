@@ -1,10 +1,12 @@
 --- Grouping for the notification ridge (gui/notifications.lua): notifications of the same kind
 -- share one icon. Pure Lua, no engine access.
 --
--- An item is { id = notification id, timestamp = game ms, notification = { type, params } }.
+-- An item is { id = notification id, timestamp = game ms, notification = { type, params } } and,
+-- for a notification with a time limit (a subsidy), ends = game ms when that time runs out.
 -- Items of the same type with the same distinguishing parameter (town rating key, line problem,
 -- number or string param) and the same status form a group. Parameters of an unknown shape are not
--- grouped, so different problems never share an icon.
+-- grouped, so different problems never share an icon. A group shows the member whose time runs out
+-- first; without times, the newest.
 -- @module ui_overhaul.core.notification_groups
 local groups = {}
 
@@ -21,10 +23,11 @@ local groups = {}
 ---@field id integer notification id
 ---@field timestamp? number game ms
 ---@field notification? uo.core.notification_groups.AnyNotification
+---@field ends? number game ms when its time limit runs out (subsidies), see groups.subsidy_ends
 
 ---@class uo.core.notification_groups.Group
 ---@field key string
----@field members uo.core.notification_groups.Item[] newest first
+---@field members uo.core.notification_groups.Item[] soonest end first (those without one after), then newest first
 ---@field oldest? number timestamp of the oldest member
 ---@field tile? string the icon that shows the group (set by groups.place)
 
@@ -87,8 +90,29 @@ local function older(a, b)
 	return a.id < b.id
 end
 
+--- Members whose time runs out first come first, those without a time after them; otherwise newest
+-- first (the order build made).
+---@param members uo.core.notification_groups.Item[]
+local function soonest_first(members)
+	local timed = false
+	local position = {} ---@type table<uo.core.notification_groups.Item, integer>
+	for i, member in ipairs(members) do
+		position[member] = i
+		timed = timed or member.ends ~= nil
+	end
+	if not timed then return end
+	table.sort(members, function(a, b)
+		if a.ends ~= b.ends then
+			if a.ends == nil or b.ends == nil then return b.ends == nil end
+			return a.ends < b.ends
+		end
+		return position[a] < position[b]
+	end)
+end
+
 --- Groups `items`. Returns a list of { key, members, oldest }: groups ordered by their oldest
--- member (so an icon keeps its place when newer members arrive), members newest first.
+-- member (so an icon keeps its place when newer members arrive), members with the soonest end first,
+-- otherwise newest first.
 ---@param items? uo.core.notification_groups.Item[]
 ---@return uo.core.notification_groups.Group[]
 function groups.build(items)
@@ -107,10 +131,42 @@ function groups.build(items)
 		end
 		table.insert(group.members, 1, item)
 	end
+	for _i, group in ipairs(result) do soonest_first(group.members) end
 	return result
 end
 
---- Index of the member with id `current` in `group`, or 1 (the newest) if it is not there.
+---A subsidy as the subsidy game script keeps it (subvention.d.tl ISubvention), the fields read here.
+---@class uo.core.notification_groups.Subsidy
+---@field spawnTime? number
+---@field acceptedTime? number
+---@field completedTime? number
+---@field data? { expireDurationProposed?: number, expireDuration?: number, effectDuration?: number }
+
+--- Game ms when a subsidy's current time runs out: the offer, the time limit once accepted, the
+-- effect once completed (the three times subvention_util.tl checks for its timeout, and the ones
+-- its card shows). nil for an offer without an end or data of another shape.
+---@param subsidy? uo.core.notification_groups.Subsidy
+---@return number?
+function groups.subsidy_ends(subsidy)
+	if type(subsidy) ~= "table" then return nil end
+	local data = subsidy.data
+	if type(data) ~= "table" then return nil end
+	---@param a any
+	---@param b any
+	---@return number?
+	local function sum(a, b)
+		if type(a) == "number" and type(b) == "number" then return a + b end
+		return nil
+	end
+	if subsidy.completedTime then return sum(subsidy.completedTime, data.effectDuration) end
+	if subsidy.acceptedTime then return sum(subsidy.acceptedTime, data.expireDuration) end
+	if type(data.expireDurationProposed) == "number" and data.expireDurationProposed > -1 then
+		return sum(subsidy.spawnTime, data.expireDurationProposed)
+	end
+	return nil
+end
+
+--- Index of the member with id `current` in `group`, or 1 (the first) if it is not there.
 ---@param group uo.core.notification_groups.Group
 ---@param current? integer
 ---@return integer
@@ -121,7 +177,7 @@ function groups.index(group, current)
 	return 1
 end
 
---- The id of the member after `current` (towards older ones), wrapping to the newest.
+--- The id of the member after `current` (towards older ones or later ends), wrapping to the first.
 ---@param group uo.core.notification_groups.Group
 ---@param current? integer
 ---@return integer?
@@ -132,7 +188,7 @@ function groups.next_id(group, current)
 	return group.members[i].id
 end
 
---- Ids of all members, newest first.
+--- Ids of all members, in their order.
 ---@param group uo.core.notification_groups.Group
 ---@return integer[]
 function groups.ids(group)

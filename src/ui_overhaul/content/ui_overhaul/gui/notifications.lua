@@ -1,9 +1,13 @@
 --- Notification ridge (the row of icons at the top centre) with one icon per kind of notification.
 -- Notifications of the same kind (core/notification_groups.lua) share an icon with a count badge:
+--   * the icon shows the newest notification of its group; in a group of subsidies, the one whose
+--     time (offer, time limit or effect) runs out first
 --   * left-click does what a click on the shown notification does in the base game, then shows
---     the next one of the group (newest first, wrapping), so repeated clicks visit each
+--     the next one of the group (in that order, wrapping), so repeated clicks visit each
 --   * right-click (gamepad: IA_OPTION2) dismisses the whole group
---   * the hover card is the base card of the shown notification, with "2 of 3" next to the title
+--   * the hover card is the base card of the shown notification, with "2 of 3" next to the title;
+--     for a group of subsidies it lists the others below it (icon, text and time bar of each, as
+--     their own cards show them), in the order the clicks show them
 -- A group of one looks and behaves like the base icon. An icon follows its notifications, as the
 -- base keys icons by id (groups.place): it keeps its node and place while one of them is shown, and
 -- Resolve plays only when a notification leaves the ridge or the ridge itself goes, as in the base.
@@ -28,6 +32,7 @@ local react = require("::/gui/main/react.lua")
 local table_util = require("::/scripts/table_util.tl")
 local util = require("::/scripts/util.tl")
 local base_popups = require("::/game_mechanics/notifications/gui/notification_popups.tl")
+local subvention_util = require("::/game_mechanics/subventions/subvention_util.tl")
 local groups = require("/ui_overhaul/core/notification_groups.lua")
 local fallback = require("/ui_overhaul/gui/fallback.lua")
 local guard = require("ui_overhaul_1::/ui_overhaul/gui/guard.lua")
@@ -50,6 +55,7 @@ local notifications = {}
 ---@field entry game.game_mechanics.notifications.notifications.NotificationsState.Entry
 ---@field id integer
 ---@field type uo.gui.notifications.GuiType
+---@field ends? number game ms when a subsidy's current time runs out (groups.subsidy_ends)
 
 --- Counts of the last render, for the in-game checks: raw notifications shown, icons, largest group.
 ---@type { raw: integer, groups: integer, largest: integer }
@@ -129,14 +135,13 @@ local function with_state(node, class)
 	}
 end
 
+-- The card's body: icon, text and progress bars, as a button that does what a click on the icon does.
 ---@param params uo.gui.notifications.GuiData
 ---@param guiType uo.gui.notifications.GuiType
----@param position? string "2 of 3"
 ---@param subsidyClass? string
 ---@return react.TreeNodeId
-local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent", function(params, guiType, position,
-		subsidyClass)
-	local mainContent = builtin.Button {
+local function card_body(params, guiType, subsidyClass)
+	return builtin.Button {
 		content = builtin.BoxLayout{
 			orientation = builtin.type.Orientation.Horizontal,
 			children = {
@@ -161,6 +166,16 @@ local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent"
 		},
 		onClick = params.onClick
 	}
+end
+
+---@param params uo.gui.notifications.GuiData
+---@param guiType uo.gui.notifications.GuiType
+---@param position? string "2 of 3"
+---@param subsidyClass? string
+---@return react.TreeNodeId
+local NotificationPopupContent = react.RegisterRecipe("NotificationPopupContent", function(params, guiType, position,
+		subsidyClass)
+	local mainContent = card_body(params, guiType, subsidyClass)
 
 	return builtin.BoxLayout {
 		orientation = builtin.type.Orientation.Vertical,
@@ -187,6 +202,35 @@ end)
 ---@field notification uo.gui.notifications.Notification
 ---@field index? integer position in the group
 ---@field count? integer members of the group
+---@field others? uo.core.notification_groups.Item[] the group's other members to list below the card
+
+-- Another member of the hovered group, below the card: the body of its own card. Registered under the
+-- base name too, so the base stylesheet sizes it like the card above (R::NotificationPopupContent).
+---@class uo.gui.notifications.OtherParam: react.Param
+---@field notification uo.gui.notifications.Notification
+
+---@param params uo.gui.notifications.OtherParam
+---@return react.TreeNodeId
+local function render_other(params)
+	local notification = params.notification
+	local dataStateFn = util.useFn(notification.type .. "@useDataState")
+	local dataState = dataStateFn and dataStateFn(notification.params, notification.simParams) or nil
+	if not dataState then return empty() end
+	local guiType = notification_util.getGuiTypeFromNotificationType(notification.type)
+	local status = type(notification.params) == "table" and notification.params.status or nil
+	return builtin.BoxLayout{ children = {
+		card_body(dataState, guiType, notifications.subsidy_class(notification.type, status)),
+	} }
+end
+
+---@param params uo.gui.notifications.OtherParam
+---@return react.TreeNodeId
+local NotificationOther = react.RegisterRecipe("NotificationPopupContent", function(params)
+	local ok, node = pcall(render_other, params)
+	if ok then return node end
+	report("hover card entry", node)
+	return empty()
+end)
 
 ---@param params uo.gui.notifications.PopupParam
 ---@return react.TreeNodeId
@@ -207,6 +251,18 @@ local NotificationPopup = react.RegisterRecipe("NotificationPopup", function(par
 		report("hover card", subsidyClass)
 		subsidyClass, position = nil, nil
 	end
+	local others = nil ---@type react.TreeNodeId?
+	if dataState and params.others and #params.others > 0 then
+		local rows = {} ---@type react.TreeNodeId[]
+		for i, other in ipairs(params.others) do
+			rows[i] = NotificationOther{ meta = { localKey = tostring(other.id) }, notification = other.notification }
+		end
+		others = builtin.BoxLayout{
+			meta = { class = "uio-notification-others" },
+			orientation = builtin.type.Orientation.Vertical,
+			children = rows,
+		}
+	end
 
 	return builtin.BoxLayout{orientation = builtin.type.Orientation.Vertical, children = {
 		builtin.Component {
@@ -217,21 +273,25 @@ local NotificationPopup = react.RegisterRecipe("NotificationPopup", function(par
 			layout = builtin.BoxLayout{
 				orientation = builtin.type.Orientation.Vertical,
 				children = {
-					dataState and NotificationPopupContent(dataState, guiType, position, subsidyClass) or nil
+					dataState and NotificationPopupContent(dataState, guiType, position, subsidyClass) or nil,
+					others,
 				},
 			},
 		},
 	}}
 end)
 
+---@class uo.gui.notifications.InfoGroup
+---@field index? integer position of the shown member in the group
+---@field count? integer members of the group
+---@field others? uo.core.notification_groups.Item[] members to list below the card
+
 ---@param number number[] { list left, list right, icon left, icon right } (the base's name)
 ---@param notificationId integer
 ---@param notification? uo.gui.notifications.Notification
----@param index? integer
----@param count? integer
+---@param group? uo.gui.notifications.InfoGroup
 ---@return react.TreeNodeId
-local NotificationInfo = react.RegisterRecipe("NotificationInfo", function(number, notificationId, notification, index,
-		count)
+local NotificationInfo = react.RegisterRecipe("NotificationInfo", function(number, notificationId, notification, group)
 	react.setMouseTransparent(true)
 
 	local notificationPopupRef = react.useNodeRef(builtin.Component)
@@ -275,8 +335,9 @@ local NotificationInfo = react.RegisterRecipe("NotificationInfo", function(numbe
 						class = offsetState:old() == 0 and "hide" or nil
 					},
 					notification = notification,
-					index = index,
-					count = count,
+					index = group and group.index,
+					count = group and group.count,
+					others = group and group.others,
 				})
 			},
 		},
@@ -300,6 +361,21 @@ function notifications.subsidy_class(notification_type, status)
 	if notification_type == SUBSIDY_FAILED then return "uio-subsidy-failed" end
 	if notification_type ~= SUBSIDY then return nil end
 	return SUBSIDY_STATUS[status]
+end
+
+--- The members of a group the hover card lists below the shown one (the one at `index`): for a
+-- group of subsidies, the others in the order the clicks show them; nil for other groups.
+---@param members uo.core.notification_groups.Item[]
+---@param index integer
+---@return uo.core.notification_groups.Item[]?
+function notifications.others(members, index)
+	if #members < 2 then return nil end
+	for _i, member in ipairs(members) do
+		if not (member.notification and member.notification.type == SUBSIDY) then return nil end
+	end
+	local list = {} ---@type uo.core.notification_groups.Item[]
+	for k = 1, #members - 1 do list[k] = members[(index - 1 + k) % #members + 1] end
+	return list
 end
 
 ---@param dataState uo.gui.notifications.GuiData
@@ -519,6 +595,29 @@ end)
 
 -- Ridge -------------------------------------------------------------------------------------------
 
+local SUBSIDY_SCRIPT = "::/game_mechanics/subventions/subventions.gs"
+
+--- Game ms when the subsidy of notification `notification` runs out (offer, time limit or effect),
+-- read from the subsidy game script as the subsidy notification reads it; nil for other notifications
+-- or where it cannot be read. Runs in the ridge's timer: engine reads only.
+---@param notification? uo.gui.notifications.Notification
+---@return number?
+local function subsidy_ends(notification)
+	if not (notification and notification.type == SUBSIDY and type(notification.params) == "table") then return nil end
+	local uid = notification.params.uid
+	if type(uid) ~= "number" then return nil end
+	local ok, ends = pcall(function()
+		local script = api.engine.system.gameScriptSystem.getEntityForGameScript(SUBSIDY_SCRIPT)
+		if not script then return nil end
+		local subsidy = subvention_util.getSubventionAndStatusFromGameScript(script, uid)
+		return subsidy and groups.subsidy_ends({
+			spawnTime = subsidy.spawnTime, acceptedTime = subsidy.acceptedTime,
+			completedTime = subsidy.completedTime, data = subsidy.data,
+		})
+	end)
+	return ok and ends or nil
+end
+
 ---@return uo.gui.notifications.GuiNotification[]
 local function read_notifications()
 	local notificationsStateNative = notification_util.externalGetNotificationsStateNative()
@@ -540,6 +639,7 @@ local function read_notifications()
 				entry = entry,
 				id = id,
 				type = notification_util.getGuiTypeFromNotificationType(entry.notification.type),
+				ends = subsidy_ends(entry.notification),
 			}
 		end
 	end
@@ -562,7 +662,8 @@ local function make_groups(guiNotifications)
 	for _i, guiNotification in ipairs(guiNotifications) do
 		local entry = guiNotification.entry
 		if entry.notification and not entry.dismissed then
-			items[#items + 1] = { id = guiNotification.id, timestamp = entry.timestamp, notification = entry.notification }
+			items[#items + 1] = { id = guiNotification.id, timestamp = entry.timestamp, notification = entry.notification,
+				ends = guiNotification.ends }
 		end
 	end
 	local result = groups.build(items)
@@ -726,6 +827,12 @@ local function render()
 	local hoveredIndex = hovered and current_index(hovered) or nil
 	local hoveredMember = hovered and hovered.members[hoveredIndex] or nil
 	local hoveredCount = hovered and #hovered.members or nil
+	local hoveredOthers = nil ---@type uo.core.notification_groups.Item[]?
+	if hovered and hoveredIndex then
+		local ok, others = pcall(notifications.others, hovered.members, hoveredIndex)
+		hoveredOthers = ok and others or nil
+		if not ok then report("hover card list", others) end
+	end
 	return builtin.BoxLayout {
 		orientation = builtin.type.Orientation.Vertical,
 		children = {
@@ -770,8 +877,8 @@ local function render()
 				meta = { class = animated and "notification-animated" or nil },
 				layout = builtin.BoxLayout{
 					children = {
-						NotificationInfo(offsetState:old(), hoveredMember.id, hoveredMember.notification, hoveredIndex,
-							hoveredCount),
+						NotificationInfo(offsetState:old(), hoveredMember.id, hoveredMember.notification,
+							{ index = hoveredIndex, count = hoveredCount, others = hoveredOthers }),
 					},
 				}
 			} or nil,
