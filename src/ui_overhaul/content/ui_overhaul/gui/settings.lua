@@ -16,6 +16,7 @@ settings.MOD_ID = "ui_overhaul_1"
 settings.FEATURES = {
 	"line_manager", -- Line Manager: line and vehicle rows, model row, confirmations, add-stop hint
 	"vehicle_search", -- Line Manager: search field above the vehicle list
+	"reopen_line", -- Line Manager: reopening selects the line that was selected when it was closed
 	"lvm_columns", -- Line Manager in two columns: lines and stops left, vehicles right
 	"terminals", -- Select Terminals popover: three buttons per terminal, greyed terminals
 	"station_terminals", -- Station window: Select Terminals button per line stop
@@ -50,6 +51,7 @@ settings.FORMERLY = {
 	town_growth = "entity_windows",
 	promotion_pending = "entity_windows",
 	bulldozer_warning = "construction",
+	reopen_line = "line_manager",
 }
 
 local known = {} ---@type table<string, true>

@@ -13,6 +13,13 @@
 ---@field flatStationTerminalIndex1? integer 1-based index in all station/terminal pairs of the group
 
 ---What the Line Manager passes to its parts (CommonActionParams), the fields this repo uses.
+---A stop of a line picked in the Line Manager (LineUtil.StopSelectionDetails), the fields the mod sets.
+---@class game.gui.line_vehicle_mgmt.line_util.StopSelectionDetails
+---@field station? game.gui.line_vehicle_mgmt.line_util.StationSelectionDetails
+---@field line Engine.Entity
+---@field stopNumber integer 1-based index of the via
+---@field apiStopIndex0 integer
+
 ---@class game.gui.line_vehicle_mgmt.line_util.CommonActionParams
 ---@field gameCtx game.gui.main.game_context.GameContext
 ---@field lineState react.State<game.gui.line_vehicle_mgmt.line.ReactLine>
@@ -23,6 +30,7 @@
 ---@field getModeState fun(): [game.gui.line_vehicle_mgmt.line_util.LVMMode, any] any: the mode's data, e.g. the stop number of a SEGMENT
 ---@field addFeedback fun(message: string, mode: string, dialogData?: game.gui.line_vehicle_mgmt.feedback_list_util.FeedbackDialogParam, id?: number)
 ---@field newLine fun(newLineStartingWithStation: game.gui.line_vehicle_mgmt.line_util.StationSelectionDetails, vehicleEntities: Engine.Entity[])
+---@field openCargoFilter fun(where: game.gui.line_vehicle_mgmt.line_util.StopSelectionDetails, pos: Vec2f, onClose?: fun())
 
 ---@class game.gui.line_vehicle_mgmt.line_util
 local M = {}

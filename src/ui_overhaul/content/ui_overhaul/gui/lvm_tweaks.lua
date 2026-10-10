@@ -8,7 +8,7 @@
 --     already does before selling): clicking a line selects all its vehicles, so "Clone" used to
 --     double the whole fleet without asking
 --   * reopening the Line Manager without a target (game bar button, hotkey) selects the line that
---     was selected when it was closed, instead of starting empty
+--     was selected when it was closed, instead of starting empty (a switch of its own, install_reopen)
 --   * the "Add stop at ..." hover says when vehicles could not get there: no path from the stop
 --     before the insert position, or onward to the next stop (the engine's path search with the
 --     line's transport modes), in the game's own words
@@ -243,6 +243,16 @@ local VehicleList = react.RegisterRecipe("VehicleList", function(params)
 		lvm_search.set_text(type(param) == "string" and param or "")
 		typed:set(typed:old() + 1)
 	end)
+	-- testbench: "uio.debug.cargo_filter" with a line opens the cargo filter of its first stop, as the
+	-- stop's cargo button does, at a fixed place (Fill Level slider, sliders.css.lua)
+	react.onEvent("uio.debug.cargo_filter", function(_e, line)
+		local ok, err = pcall(function()
+			local common = params and params.commonParams
+			if type(line) ~= "number" or not (common and common.openCargoFilter) then error("no line or no Line Manager") end
+			common.openCargoFilter({ line = line, apiStopIndex0 = 0, stopNumber = 1 }, api.type.Vec2f.new(0.4, 0.8), nil)
+		end)
+		debugPrint("[ui_overhaul] cargo filter ", ok and "opened" or ("failed: " .. tostring(err)))
+	end)
 	react.onStep(function()
 		if not (search and params and params.commonParams and params.commonParams.vehicleManagerStateRef) then return end
 		local ok, err = pcall(lvm_search.step, params)
@@ -453,8 +463,8 @@ end
 -- on the next step (after the base handler has reset it).
 ---@param param? game.gui.line_vehicle_mgmt.manager_window.ManagerWindowEventParam
 function lvm_tweaks.on_open(param)
-	-- the Line Manager feature switched off or given up to a mod that comes first (priority.lua)
-	if not priority.active("line_manager") then return end
+	-- the feature switched off or given up to a mod that comes first (priority.lua)
+	if not priority.active("reopen_line") then return end
 	param = param or {}
 	if param.openWithLineEntity or param.openWithVehicleEntities or param.openWithDepotEntity or param.sendToLineMode then
 		return
@@ -475,9 +485,15 @@ end
 function lvm_tweaks.install(replacement_api)
 	install_confirmation()
 	patch_handle_vehicle_changes()
-	table.insert(tool_stack.on_pop, remember_selection)
 	replacement_api.ReplaceRecipe(base_vehicle_list, VehicleList)
 	replacement_api.ReplaceRecipe(base_add_stop, AddStopTooltip)
+end
+
+--- Reopening with the last line, a feature of its own (installer.lua): some players want the Line
+-- Manager to start empty, as in the base game.
+---@param _replacement_api react.ReplacementApi
+function lvm_tweaks.install_reopen(_replacement_api)
+	table.insert(tool_stack.on_pop, remember_selection)
 end
 
 --- The vehicle search, a feature of its own (installer.lua): its field is in the same vehicle list,

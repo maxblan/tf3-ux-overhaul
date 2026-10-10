@@ -62,6 +62,8 @@ installer.INSTALLS = {
 		label = "promotion pending text" },
 	{ feature = "line_manager", module = "lvm_tweaks", label = "Line Manager tweaks" },
 	{ feature = "vehicle_search", module = "lvm_tweaks", fn = "install_search", label = "Line Manager vehicle search" },
+	{ feature = "reopen_line", module = "lvm_tweaks", fn = "install_reopen",
+		label = "Line Manager reopening with the last line" },
 	{ feature = "lvm_columns", module = "lvm_columns", label = "Line Manager columns" },
 }
 
