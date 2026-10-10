@@ -27,6 +27,17 @@
             "defaultIndex": 0
         },
         {
+            "key": "uio_reopen_line",
+            "name": "Reopen with the last line",
+            "tooltip": "Opening the Line Manager from the game bar selects the line that was selected when it was closed.",
+            "uiType": "Button",
+            "values": [
+                "On",
+                "Off"
+            ],
+            "defaultIndex": 0
+        },
+        {
             "key": "uio_lvm_columns",
             "name": "Line Manager in two columns",
             "tooltip": "The Line Manager twice as wide: the lines and the selected line's stops on the left, the vehicles on the right. With a gamepad it stays as it is.",
@@ -286,7 +297,7 @@
     "preRunScript": {
         "fileName": ""
     },
-    "revision": 3,
+    "revision": 4,
     "runScript": {
         "fileName": ""
     },

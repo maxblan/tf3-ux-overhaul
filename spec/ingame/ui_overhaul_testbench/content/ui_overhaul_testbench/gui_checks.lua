@@ -660,6 +660,24 @@ local checks = {
 		end,
 	},
 	{
+		-- the stop's cargo filter (Load card), for the Fill Level slider: it stretches across the row like
+		-- the game's, while the wait-time sliders keep their width (sliders.css.lua)
+		name = "cargo_filter_window",
+		act = function(ctx) api.gui.fireReactEvent("uio.debug.cargo_filter", ctx.card_line) end,
+		wait = 60,
+		shot = "cargo_filter_window",
+		check = function() return true, "see the shot and the cargo filter log line" end,
+	},
+	{
+		-- a click on the stop's first cargo filter (World#1's passenger filter, 3440 x 1440 screen, seen in
+		-- the shot above) edits it: the Fill Level row
+		name = "cargo_filter_fill_level",
+		act = function() if reference_screen() then mouse(1467, 745, true) end end,
+		wait = 60,
+		shot = "cargo_filter_fill_level",
+		check = function() return true, reference_screen() and "see the shot: Fill Level spans the row" or "skipped" end,
+	},
+	{
 		-- the vehicle search: the list of all the player's vehicles, then a search for "Zug"
 		name = "vehicle_search_list",
 		act = function(ctx)
@@ -1821,21 +1839,40 @@ local scenes = {
 		end,
 	},
 	{
-		-- minimize: the line window and a vehicle window side by side, then both folded
+		-- minimize: a vehicle window alone (the line window of the scene before would lie under it at the
+		-- same place), then folded
 		name = "gallery_minimize_open",
 		act = function(ctx)
-			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = true }) end
+			clear()
+			if ctx.card_vehicle then api.gui.fireReactEvent("selectEntity", { entity = ctx.card_vehicle, stack = false }) end
 		end,
-		wait = 150,
+		-- long enough for the window it replaces to fade out (its title showed through)
+		wait = 300,
 		shot = "gallery_minimize_open",
 		check = function() return true, "open" end,
 	},
 	{
+		-- the mouse over the vehicle window's title row first (3440 x 1440 screen): the game then shows its
+		-- pin button there, and the buttons before it move left
+		name = "gallery_minimize_hover",
+		act = function() if reference_screen() then mouse(3287, 42) end end,
+		wait = 45,
+		check = function() return true, "hover" end,
+	},
+	{
+		-- a real click on the minimize button, where it sits once the pin shows: the debug event folds
+		-- without one, and the game then shows the rename button's tooltip (its focus moves there); the
+		-- cursor leaves the window before the shot
 		name = "gallery_minimize_folded",
-		act = function() api.gui.fireReactEvent("uio.debug.minimize_all", nil) end,
-		wait = 60,
+		act = function()
+			if reference_screen() then mouse(3248, 42, true) else api.gui.fireReactEvent("uio.debug.minimize_all", nil) end
+		end,
+		wait = 120,
 		shot = "gallery_minimize_folded",
-		check = function() return true, "folded" end,
+		check = function()
+			if reference_screen() then mouse(1720, 0) end
+			return true, "folded"
+		end,
 	},
 	{
 		name = "gallery_minimize_restored",
@@ -1894,8 +1931,9 @@ local scenes = {
 	},
 	{
 		name = "gallery_subsidy_hover_3",
-		-- the subsidy group (the offers spawned above), sixth in the ridge of World#1
-		act = function() mouse(1491, 43) end,
+		-- the subsidy group (the offers spawned above), second in the ridge of the gallery's savegame
+		-- (docs/gallery.md); its hover card lists the other offer below the shown one
+		act = function() mouse(1238, 43) end,
 		wait = 240,
 		shot = "gallery_subsidy_hover_3",
 		check = function() return true, "hover on icon 3" end,

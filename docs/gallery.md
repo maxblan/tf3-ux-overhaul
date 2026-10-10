@@ -14,8 +14,8 @@ workflow, the overview.
    the game to English and large text for the run and put your settings back afterwards:
 
    ```bash
-   spec/ingame/run.sh --save "World#1" --gallery --language en
-   spec/ingame/run.sh --save "World#1" --gallery --language en --vanilla
+   spec/ingame/run.sh --save "Neues Spiel" --gallery --language en
+   spec/ingame/run.sh --save "Neues Spiel" --gallery --language en --vanilla
    ```
 
    The scenes are the `gallery_*` entries in `gui_checks.lua`; the shots land in
@@ -27,8 +27,10 @@ workflow, the overview.
    `src/ui_overhaul/_metadata/1.png` … `10.png` (`0.png` is the logo). `make deploy` takes them to the
    staging copy, where the mod manager shows them, and Publish uploads them.
 
-The frames are measured on the shots of `World#1` (screenshot pixels, 3440 x 1440). Another savegame
-or screen size shows other lines and places: measure the regions in `compose.py` again on its shots.
+The frames are measured on the shots of `Neues Spiel` (a 1976 map with 18,000 inhabitants; screenshot
+pixels, 3440 x 1440). Another savegame or screen size shows other lines and places: measure the regions
+in `compose.py` again on its shots, and the scenes' mouse positions in `gui_checks.lua` (the subsidy
+group in the ridge, the vehicle window's minimize button).
 
 ## Page text
 
@@ -74,6 +76,7 @@ the 10 images.
    stations on the map, each switched on its own, whenever no tool draws its own overlay.
 9. **Notifications.** Notifications of the same kind share one icon with a count; click to visit
    each, right-click to dismiss the group. Every icon colour, subsidies included, has at least 7:1
-   contrast to its white symbol, and subsidy offers say when they end.
+   contrast to its white symbol, and subsidy offers say when they end. A group of subsidies shows the
+   one that ends first, and its hover card lists the others.
 10. **Windows.** Every window with a close button gets a minimize button next to it. A minimized
     window folds to its title bar and keeps its place, tabs and scroll position.
